@@ -9,6 +9,7 @@ description = "Cross-platform contracts and deterministic CLI primitives for loc
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+  "filelock>=3.16,<4",
   "jsonschema>=4.23,<5",
   "PyYAML>=6.0,<7",
 ]

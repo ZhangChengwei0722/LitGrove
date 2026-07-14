@@ -1,0 +1,11 @@
+{
+  "fixture_origin": "synthetic_from_scratch",
+  "papers": 3,
+  "parsed_papers": 3,
+  "paper_cards": 3,
+  "evidence": 3,
+  "review_queue": 3,
+  "duplicate_records": 2,
+  "process_events_after_written_guardian": 16,
+  "guardian_status": "success"
+}

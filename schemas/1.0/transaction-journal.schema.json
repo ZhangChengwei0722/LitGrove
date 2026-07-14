@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:transaction-journal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "operation", "actor", "target_store", "target_relative_path", "before_sha256", "after_sha256", "input_refs", "output_refs", "phase", "result", "created_at", "updated_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "event_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/event_id"},
+    "operation": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+    "actor": {"enum": ["agent", "cli", "user"]},
+    "target_store": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+    "target_relative_path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+    },
+    "before_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "after_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "input_refs": {"type": "array", "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/record_id"}, "uniqueItems": true},
+    "output_refs": {"type": "array", "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/record_id"}, "uniqueItems": true},
+    "phase": {"enum": ["prepared", "target_replaced", "event_recorded", "complete", "needs_resolution"]},
+    "result": {"enum": [null, "success", "failure", "needs_resolution"]},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "updated_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"phase": {"enum": ["prepared", "target_replaced"]}}, "required": ["phase"]},
+      "then": {"properties": {"result": {"type": "null"}}}
+    },
+    {
+      "if": {"properties": {"phase": {"enum": ["event_recorded", "complete"]}}, "required": ["phase"]},
+      "then": {"properties": {"result": {"enum": ["success", "failure"]}}}
+    },
+    {
+      "if": {"properties": {"phase": {"const": "needs_resolution"}}, "required": ["phase"]},
+      "then": {"properties": {"result": {"const": "needs_resolution"}}}
+    }
+  ]
+}

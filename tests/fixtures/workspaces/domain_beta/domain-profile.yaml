@@ -1,0 +1,19 @@
+contract_version: "1.0"
+domain_profile:
+  id: domain-beta
+  name: Invented Acoustic Membrane Studies
+  version: "1.0"
+paper_card_sections:
+  - {section_id: research_background_significance, label: Acoustic setting and significance}
+  - {section_id: research_problem, label: Membrane resonance question}
+  - {section_id: method_principle_advantages, label: Frequency sweep principle}
+  - {section_id: conclusions_applications, label: Resonance findings and use}
+  - {section_id: innovation, label: Acoustic contribution}
+  - {section_id: limitations, label: Membrane validity limits}
+  - {section_id: future_outlook, label: Follow-up frequency studies}
+evidence_axes: [frequency_input, membrane_motion, reference_surface]
+question_types: [mechanism, prediction]
+terminology:
+  sample: membrane
+  intervention: acoustic sweep
+step7_extensions: {}

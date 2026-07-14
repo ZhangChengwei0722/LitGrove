@@ -28,7 +28,7 @@ from research_kb.errors import (
 from research_kb.paths import normalize_relative_path, validate_config_relative_path
 
 
-CONFIG_KINDS = {"workspace", "domain-profile"}
+CONFIG_KINDS = {"workspace", "domain-profile", "mutation-request"}
 HUMAN_ONLY_REVIEW_STATES = {"human_checked", "verified"}
 NON_SUPPORTING_UNIT_STATES = {"interpretive", "background_only", "needs_resolution"}
 
@@ -111,6 +111,8 @@ def validate_bundle(
 
 
 def _authority_diagnostics(kind: str, record: dict[str, Any], actor: str) -> list[Diagnostic]:
+    if actor == "stored":
+        return []
     diagnostics: list[Diagnostic] = []
     review_status = record.get("review_status")
     if actor != "user" and review_status in HUMAN_ONLY_REVIEW_STATES:

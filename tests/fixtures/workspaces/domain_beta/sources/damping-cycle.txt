@@ -1,0 +1,2 @@
+fixture_origin: synthetic_from_scratch
+An invented damping cycle lowered membrane motion in the fabricated comparison.The synthetic observation did not establish long-term stability.

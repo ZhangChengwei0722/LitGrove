@@ -1,0 +1,2 @@
+fixture_origin: synthetic_from_scratch
+An invented frequency sweep shifted the membrane peak relative to the fabricated reference surface.The invented method measured motion at three synthetic frequencies.
