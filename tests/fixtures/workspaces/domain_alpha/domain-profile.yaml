@@ -1,0 +1,19 @@
+contract_version: "1.0"
+domain_profile:
+  id: domain-alpha
+  name: Invented Optical Chamber Studies
+  version: "1.0"
+paper_card_sections:
+  - {section_id: research_background_significance, label: Optical setting and significance}
+  - {section_id: research_problem, label: Chamber response question}
+  - {section_id: method_principle_advantages, label: Pulse measurement principle}
+  - {section_id: conclusions_applications, label: Chamber findings and use}
+  - {section_id: innovation, label: Optical contribution}
+  - {section_id: limitations, label: Chamber validity limits}
+  - {section_id: future_outlook, label: Follow-up pulse studies}
+evidence_axes: [pulse_input, chamber_response, matched_control]
+question_types: [mechanism, comparison]
+terminology:
+  sample: chamber
+  intervention: light pulse
+step7_extensions: {}

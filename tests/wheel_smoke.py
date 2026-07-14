@@ -20,6 +20,17 @@ def main() -> int:
         subprocess.run([str(python), "-m", "research_kb", "--version"], cwd=temporary, check=True)
         subprocess.run(
             [
+                str(python), "-c",
+                "from research_kb.contracts.registry import SchemaRegistry; "
+                "from research_kb.guardian import GuardianService; "
+                "from research_kb.services import ParseService, RecordService, RegistryService; "
+                "assert SchemaRegistry().schema('mutation-request')['$id'].endswith('mutation-request')",
+            ],
+            cwd=temporary,
+            check=True,
+        )
+        subprocess.run(
+            [
                 str(python), "-m", "research_kb", "contract", "validate",
                 "--kind", "workspace", "--input", str(root / "templates" / "workspace.example.yaml"),
             ],

@@ -25,3 +25,10 @@ def test_user_may_assign_human_review_and_final_screening() -> None:
     paper["screening_status"] = "excluded"
     paper["review_status"] = "human_checked"
     assert validate_record("registry-paper", paper, actor="user") == []
+
+
+def test_stored_context_accepts_existing_human_review_state() -> None:
+    evidence = next(entry["record"] for entry in make_bundle("alpha")["records"] if entry["kind"] == "evidence")
+    evidence["review_status"] = "verified"
+
+    assert validate_record("evidence", evidence, actor="stored") == []

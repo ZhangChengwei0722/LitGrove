@@ -1,0 +1,2 @@
+fixture_origin: synthetic_from_scratch
+An invented recovery window reduced the chamber signal after the fabricated pulse.The synthetic comparison did not establish a molecular mechanism.

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:mutation-request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "operation", "record_kind", "target_record_id", "context", "payload"],
+  "properties": {
+    "contract_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/contract_version"},
+    "operation": {"enum": ["append", "replace"]},
+    "record_kind": {"enum": ["registry-paper", "paper-card", "evidence", "review-queue"]},
+    "target_record_id": {
+      "anyOf": [
+        {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/record_id"},
+        {"type": "null"}
+      ]
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paper_id"],
+      "properties": {
+        "paper_id": {
+          "anyOf": [
+            {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "payload": {"type": "object"},
+    "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"operation": {"const": "append"}}, "required": ["operation"]},
+      "then": {"properties": {"target_record_id": {"type": "null"}}}
+    },
+    {
+      "if": {"properties": {"operation": {"const": "replace"}}, "required": ["operation"]},
+      "then": {"properties": {"target_record_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/record_id"}}}
+    }
+  ]
+}
