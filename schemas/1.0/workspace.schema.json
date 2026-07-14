@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:workspace",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "workspace", "runtime"],
+  "properties": {
+    "contract_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/contract_version"},
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "knowledge_root", "source_roots", "local_inbox", "domain_profile"],
+      "properties": {
+        "id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+        "knowledge_root": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "source_roots": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["root_id", "path", "read_only_assets"],
+            "properties": {
+              "root_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+              "path": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+              "read_only_assets": {"const": true}
+            }
+          }
+        },
+        "local_inbox": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "domain_profile": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_serialization", "default_encoding", "line_ending"],
+      "properties": {
+        "path_serialization": {"const": "workspace_relative_posix"},
+        "default_encoding": {"const": "utf-8"},
+        "line_ending": {"const": "lf"}
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "entries": [
+    {
+      "path": "tests/fixtures/invalid/privacy_cases.txt",
+      "expected": {
+        "windows_absolute_path": 1,
+        "unc_path": 1,
+        "posix_home_path": 1,
+        "credential_like": 1,
+        "private_marker": 2,
+        "pdf_signature": 1
+      }
+    }
+  ]
+}

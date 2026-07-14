@@ -1,0 +1,24 @@
+contract_version: "1.0"
+domain_profile:
+  id: example-domain
+  name: Example Research Domain
+  version: "1.0"
+paper_card_sections:
+  - section_id: research_background_significance
+    label: Research background and significance
+  - section_id: research_problem
+    label: Research problem
+  - section_id: method_principle_advantages
+    label: Method principles and advantages
+  - section_id: conclusions_applications
+    label: Conclusions and applications
+  - section_id: innovation
+    label: Innovation
+  - section_id: limitations
+    label: Limitations
+  - section_id: future_outlook
+    label: Future outlook
+evidence_axes: []
+question_types: []
+terminology: {}
+step7_extensions: {}

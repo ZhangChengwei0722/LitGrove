@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:step7-synthesis",
+  "allOf": [
+    {"$ref": "urn:research-kb:schema:1.0:step7-common"},
+    {
+      "type": "object",
+      "required": ["claim", "scope", "agreement_pattern", "conflict_pattern", "boundary_statement"],
+      "properties": {
+        "candidate_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/synthesis_id"},
+        "type": {"const": "synthesis"},
+        "paper_card_base": {"minItems": 2},
+        "claim": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "scope": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "agreement_pattern": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "conflict_pattern": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "boundary_statement": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

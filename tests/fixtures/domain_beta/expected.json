@@ -1,0 +1,6 @@
+{
+  "fixture_origin": "synthetic_from_scratch",
+  "factory": "tests.fixture_factory.make_bundle",
+  "domain": "beta",
+  "expected_status": "valid"
+}

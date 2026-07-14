@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:step7-review-angle",
+  "allOf": [
+    {"$ref": "urn:research-kb:schema:1.0:step7-common"},
+    {
+      "type": "object",
+      "required": ["thesis", "organizing_axes", "included_clusters", "excluded_scope", "why_this_angle_adds_value"],
+      "properties": {
+        "candidate_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/angle_id"},
+        "type": {"const": "review_angle"},
+        "thesis": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "organizing_axes": {"type": "array", "minItems": 1, "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}, "uniqueItems": true},
+        "included_clusters": {"type": "array", "minItems": 1, "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}, "uniqueItems": true},
+        "excluded_scope": {"type": "array", "minItems": 1, "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}, "uniqueItems": true},
+        "why_this_angle_adds_value": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

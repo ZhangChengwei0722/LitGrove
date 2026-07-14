@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:guardian-report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "guardian_report_id", "workspace_id", "status", "findings", "created_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "guardian_report_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/guardian_id"},
+    "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "status": {"enum": ["success", "warning", "failure"]},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "severity", "record_ref", "message", "remediation"],
+        "properties": {
+          "code": {"type": "string", "pattern": "^RKBC-[0-9]{3}$"},
+          "severity": {"enum": ["info", "warning", "error"]},
+          "record_ref": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/record_id"}, {"type": "null"}]},
+          "message": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+          "remediation": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}
+        }
+      }
+    },
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "success"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "findings": {
+            "not": {"contains": {"properties": {"severity": {"enum": ["warning", "error"]}}, "required": ["severity"]}}
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "warning"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "findings": {
+            "contains": {"properties": {"severity": {"const": "warning"}}, "required": ["severity"]},
+            "minContains": 1,
+            "not": {"contains": {"properties": {"severity": {"const": "error"}}, "required": ["severity"]}}
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "failure"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "findings": {
+            "contains": {"properties": {"severity": {"const": "error"}}, "required": ["severity"]},
+            "minContains": 1
+          }
+        }
+      }
+    }
+  ]
+}

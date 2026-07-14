@@ -1,0 +1,6 @@
+C:\Users\Example\private.txt
+\\server\share\private.txt
+/Users/example/private.txt
+sk-examplecredentialvalue
+Q001 and TPD
+%PDF-1.7

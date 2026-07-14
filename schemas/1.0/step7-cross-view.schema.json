@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:step7-cross-view",
+  "allOf": [
+    {"$ref": "urn:research-kb:schema:1.0:step7-common"},
+    {
+      "type": "object",
+      "required": ["source_views", "relation_type", "why_interesting", "shared_dimension", "non_equivalence_warning"],
+      "properties": {
+        "candidate_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/crossview_id"},
+        "type": {"const": "cross_view"},
+        "source_views": {"type": "array", "minItems": 1, "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/step7_candidate_id"}, "uniqueItems": true},
+        "relation_type": {"enum": ["supports", "contrasts", "complements", "transfers", "challenges", "shares_gap"]},
+        "why_interesting": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "shared_dimension": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "non_equivalence_warning": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

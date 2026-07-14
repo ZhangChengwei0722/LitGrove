@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:paper-card",
+  "$defs": {
+    "card_unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit_id", "section_id", "statement", "statement_type", "grounding_status", "evidence_ids", "boundary_refs", "source_page", "confidence"],
+      "properties": {
+        "unit_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/unit_id"},
+        "section_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+        "statement": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "statement_type": {"enum": ["reported_result", "author_conclusion", "method_description", "limitation", "interpretation", "future_direction", "background"]},
+        "grounding_status": {"enum": ["grounded", "revised", "interpretive", "background_only", "needs_resolution"]},
+        "evidence_ids": {"type": "array", "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/evidence_id"}, "uniqueItems": true},
+        "boundary_refs": {"type": "array", "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/queue_id"}, "uniqueItems": true},
+        "source_page": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_page"}, {"type": "null"}]},
+        "confidence": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/confidence"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"grounding_status": {"enum": ["grounded", "revised"]}}, "required": ["grounding_status"]},
+          "then": {"properties": {"evidence_ids": {"minItems": 1}}}
+        },
+        {
+          "if": {"properties": {"grounding_status": {"enum": ["interpretive", "background_only", "needs_resolution"]}}, "required": ["grounding_status"]},
+          "then": {"properties": {"evidence_ids": {"maxItems": 0}}}
+        }
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "paper_id", "domain_profile_id", "card_status", "review_status", "automation_status", "sections", "created_at", "updated_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "paper_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+    "domain_profile_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+    "card_status": {"enum": ["ai_draft", "calibrated", "needs_resolution"]},
+    "review_status": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/review_status"},
+    "automation_status": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/automation_status"},
+    "sections": {
+      "type": "array",
+      "minItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["section_id", "units"],
+        "properties": {
+          "section_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+          "units": {"type": "array", "items": {"$ref": "#/$defs/card_unit"}}
+        }
+      }
+    },
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "updated_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}
+  }
+}

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "research-kb-core"
+version = "0.1.0"
+description = "Cross-platform contracts and deterministic CLI primitives for local-first research knowledge bases"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "jsonschema>=4.23,<5",
+  "PyYAML>=6.0,<7",
+]
+
+[project.optional-dependencies]
+test = [
+  "build>=1.2,<2",
+  "pytest>=8.3,<10",
+]
+
+[project.scripts]
+research-kb = "research_kb.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/research_kb"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"schemas" = "research_kb/_data/schemas"
+"templates" = "research_kb/_data/templates"
+
+[tool.hatch.build]
+exclude = [
+  "tests/fixtures/invalid/privacy_cases.txt",
+]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]

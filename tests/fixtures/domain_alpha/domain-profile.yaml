@@ -1,0 +1,17 @@
+contract_version: "1.0"
+domain_profile:
+  id: domain-alpha
+  name: Fictional Laboratory Systems
+  version: "1.0"
+paper_card_sections:
+  - {section_id: research_background_significance, label: Background and significance}
+  - {section_id: research_problem, label: Experimental question}
+  - {section_id: method_principle_advantages, label: Method principles}
+  - {section_id: conclusions_applications, label: Findings and applications}
+  - {section_id: innovation, label: Contribution}
+  - {section_id: limitations, label: Validity limits}
+  - {section_id: future_outlook, label: Follow-up studies}
+evidence_axes: [intervention, response, control]
+question_types: [mechanism, comparison]
+terminology: {sample: chamber}
+step7_extensions: {}

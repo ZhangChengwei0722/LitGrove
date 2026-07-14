@@ -1,0 +1,17 @@
+contract_version: "1.0"
+domain_profile:
+  id: domain-beta
+  name: Fictional Service Allocation Studies
+  version: "1.0"
+paper_card_sections:
+  - {section_id: research_background_significance, label: Context and decision stakes}
+  - {section_id: research_problem, label: Empirical question}
+  - {section_id: method_principle_advantages, label: Study design and identification}
+  - {section_id: conclusions_applications, label: Findings and implications}
+  - {section_id: innovation, label: Contribution}
+  - {section_id: limitations, label: Validity limits}
+  - {section_id: future_outlook, label: Follow-up studies}
+evidence_axes: [population, intervention, outcome]
+question_types: [comparison, transfer]
+terminology: {sample: district}
+step7_extensions: {}

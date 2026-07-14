@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:definitions",
+  "$defs": {
+    "schema_version": {"const": "1.0"},
+    "contract_version": {"const": "1.0"},
+    "slug": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$"},
+    "uuid4": {"type": "string", "pattern": "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"},
+    "workspace_id": {"type": "string", "pattern": "^workspace_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "paper_id": {"type": "string", "pattern": "^paper_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "unit_id": {"type": "string", "pattern": "^unit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "evidence_id": {"type": "string", "pattern": "^evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "queue_id": {"type": "string", "pattern": "^queue_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "question_id": {"type": "string", "pattern": "^question_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "qlink_id": {"type": "string", "pattern": "^qlink_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "synthesis_id": {"type": "string", "pattern": "^synthesis_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "angle_id": {"type": "string", "pattern": "^angle_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "insight_id": {"type": "string", "pattern": "^insight_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "crossview_id": {"type": "string", "pattern": "^crossview_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "event_id": {"type": "string", "pattern": "^event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "guardian_id": {"type": "string", "pattern": "^guardian_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "record_id": {"type": "string", "pattern": "^(workspace|paper|unit|evidence|queue|question|qlink|synthesis|angle|insight|crossview|event|guardian)_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "step7_candidate_id": {"type": "string", "pattern": "^(synthesis|angle|insight|crossview)_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "non_empty_string": {"type": "string", "minLength": 1},
+    "review_status": {"enum": ["ai_draft", "ai_checked", "human_checked", "verified"]},
+    "automation_status": {"enum": ["pending", "passed_auto_checks", "failed_auto_checks"]},
+    "fixture_origin": {"const": "synthetic_from_scratch"},
+    "confidence": {"enum": ["high", "medium", "low"]},
+    "source_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root_id", "relative_path"],
+      "properties": {
+        "root_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+        "relative_path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+        }
+      }
+    },
+    "source_page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pdf_page"],
+      "properties": {
+        "pdf_page": {"type": "integer", "minimum": 1},
+        "printed_page": {"type": ["string", "null"]},
+        "section": {"type": ["string", "null"]},
+        "figure_or_table": {"type": ["string", "null"]}
+      }
+    },
+    "source_fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "value"],
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "value": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

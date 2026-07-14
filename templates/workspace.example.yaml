@@ -1,0 +1,14 @@
+contract_version: "1.0"
+workspace:
+  id: workspace_11111111-1111-4111-8111-111111111111
+  knowledge_root: ./knowledge
+  source_roots:
+    - root_id: sources
+      path: ./sources
+      read_only_assets: true
+  local_inbox: ./inbox
+  domain_profile: ./domain-profile.example.yaml
+runtime:
+  path_serialization: workspace_relative_posix
+  default_encoding: utf-8
+  line_ending: lf

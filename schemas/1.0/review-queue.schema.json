@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:review-queue",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "queue_id", "paper_id", "issue_type", "claim_candidate", "reason", "source_page", "locator", "resolution_status", "not_evidence", "review_status", "automation_status", "created_at", "updated_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "queue_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/queue_id"},
+    "paper_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+    "issue_type": {"enum": ["unsupported", "ambiguous", "overclaim", "contradiction", "source_reopen", "locator_missing"]},
+    "claim_candidate": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+    "reason": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+    "source_page": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_page"}, {"type": "null"}]},
+    "locator": {"type": ["string", "null"]},
+    "resolution_status": {"enum": ["needs_resolution", "resolved_by_narrowing", "needs_source_reopen"]},
+    "not_evidence": {"const": true},
+    "review_status": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/review_status"},
+    "automation_status": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/automation_status"},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "updated_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}
+  }
+}

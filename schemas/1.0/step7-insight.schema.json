@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:step7-insight",
+  "allOf": [
+    {"$ref": "urn:research-kb:schema:1.0:step7-common"},
+    {
+      "type": "object",
+      "required": ["insight_type", "hypothesis_or_idea", "rationale", "falsification_condition", "minimum_test"],
+      "properties": {
+        "candidate_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/insight_id"},
+        "type": {"const": "insight"},
+        "insight_type": {"enum": ["mechanism_hypothesis", "method_transfer", "experimental_idea", "comparison_idea", "application_idea"]},
+        "hypothesis_or_idea": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "rationale": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "falsification_condition": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "minimum_test": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

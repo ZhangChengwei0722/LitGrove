@@ -1,0 +1,29 @@
+{
+  "fixture_origin": "synthetic_from_scratch",
+  "cases": {
+    "unsupported_version": "RKBC-001",
+    "duplicate_id": "RKBC-004",
+    "unresolved_reference": "RKBC-005",
+    "grounding_mismatch": "RKBC-009",
+    "queue_as_evidence": "RKBC-010",
+    "unauthorized_state": "RKBC-006",
+    "duplicate_paper_card": "RKBC-013",
+    "evidence_expansion_mismatch": "RKBC-014",
+    "profile_unresolved": "RKBC-005",
+    "source_view_unresolved": "RKBC-005",
+    "step7_boundary": "RKBC-002",
+    "snapshot_mismatch": "RKBC-014",
+    "unit_cross_paper_evidence": "RKBC-009",
+    "wrong_paper_unit": "RKBC-011",
+    "ambiguous_source_path": "RKBC-007",
+    "unknown_source_root": "RKBC-007",
+    "fingerprint_mismatch": "RKBC-009",
+    "card_sections_profile_mismatch": "RKBC-009",
+    "card_boundary_cross_paper": "RKBC-009",
+    "question_boundary_cross_paper": "RKBC-009",
+    "step7_boundary_cross_paper": "RKBC-011",
+    "synthesis_same_paper_twice": "RKBC-011",
+    "crossview_self_reference": "RKBC-011",
+    "guardian_status_mismatch": "RKBC-002"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:domain-profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "domain_profile", "paper_card_sections", "evidence_axes", "question_types", "terminology", "step7_extensions"],
+  "properties": {
+    "contract_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/contract_version"},
+    "domain_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "version"],
+      "properties": {
+        "id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+        "name": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "version": {"const": "1.0"}
+      }
+    },
+    "paper_card_sections": {
+      "type": "array",
+      "minItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["section_id", "label"],
+        "properties": {
+          "section_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+          "label": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}
+        }
+      },
+      "allOf": [
+        {"contains": {"properties": {"section_id": {"const": "research_background_significance"}}, "required": ["section_id"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"section_id": {"const": "research_problem"}}, "required": ["section_id"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"section_id": {"const": "method_principle_advantages"}}, "required": ["section_id"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"section_id": {"const": "conclusions_applications"}}, "required": ["section_id"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"section_id": {"const": "innovation"}}, "required": ["section_id"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"section_id": {"const": "limitations"}}, "required": ["section_id"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"section_id": {"const": "future_outlook"}}, "required": ["section_id"]}, "minContains": 1, "maxContains": 1}
+      ]
+    },
+    "evidence_axes": {"type": "array", "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"}, "uniqueItems": true},
+    "question_types": {"type": "array", "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"}, "uniqueItems": true},
+    "terminology": {"type": "object", "additionalProperties": {"type": "string"}},
+    "step7_extensions": {"type": "object", "additionalProperties": true}
+  }
+}

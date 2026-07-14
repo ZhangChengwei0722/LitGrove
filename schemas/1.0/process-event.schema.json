@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:process-event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "operation", "actor", "result", "input_refs", "output_refs", "created_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "event_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/event_id"},
+    "operation": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+    "actor": {"enum": ["agent", "cli", "user"]},
+    "result": {"enum": ["success", "failure", "needs_resolution"]},
+    "input_refs": {"type": "array", "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/record_id"}, "uniqueItems": true},
+    "output_refs": {"type": "array", "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/record_id"}, "uniqueItems": true},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}
+  }
+}
