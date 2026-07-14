@@ -16,7 +16,7 @@ from research_kb.errors import (
 from research_kb.identifiers import Namespace, allocate_id
 from research_kb.process_events import timestamp
 from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl, serialize_jsonl
-from research_kb.storage.transactions import TransactionManager, TransactionResult
+from research_kb.storage.transactions import TransactionManager, TransactionResult, build_journal_event
 from research_kb.workspace import WorkspaceLayout
 
 
@@ -52,7 +52,8 @@ class GuardianService:
             )
             diagnostics.extend(self._source_diagnostics(entries))
         diagnostics.extend(self._canonical_path_diagnostics())
-        diagnostics.extend(self._transaction_diagnostics())
+        process_events = [record for kind, record in entries if kind == "process-event"]
+        diagnostics.extend(self._transaction_diagnostics(process_events))
         diagnostics = _deduplicate(diagnostics)
         defined_ids = _defined_ids(entries)
         findings = [_finding_from_diagnostic(item, defined_ids) for item in diagnostics]
@@ -123,10 +124,13 @@ class GuardianService:
                 )
         return diagnostics
 
-    def _transaction_diagnostics(self) -> list[Diagnostic]:
+    def _transaction_diagnostics(self, process_events: list[dict[str, Any]]) -> list[Diagnostic]:
         diagnostics: list[Diagnostic] = []
         if not self.layout.transactions_root.exists():
             return diagnostics
+        events_by_id: dict[str, list[dict[str, Any]]] = {}
+        for event in process_events:
+            events_by_id.setdefault(event["event_id"], []).append(event)
         for path in sorted(self.layout.transactions_root.glob("*.json"), key=lambda item: item.name):
             try:
                 journal = read_json_document(path, record_kind="transaction-journal")
@@ -135,7 +139,9 @@ class GuardianService:
                 diagnostics.append(error.diagnostic)
                 continue
             diagnostics.extend(journal_diagnostics)
-            if not journal_diagnostics and journal["phase"] != "complete":
+            if journal_diagnostics:
+                continue
+            if journal["phase"] != "complete":
                 diagnostics.append(
                     Diagnostic(
                         INCOMPLETE_TRANSACTION,
@@ -143,6 +149,30 @@ class GuardianService:
                         journal["event_id"],
                         "/phase",
                         f"transaction journal is not complete: {journal['phase']}",
+                    )
+                )
+                continue
+            matching_events = events_by_id.get(journal["event_id"], [])
+            if len(matching_events) != 1:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "transaction-journal",
+                        journal["event_id"],
+                        "/event_id",
+                        f"completed transaction must have exactly one process event; found {len(matching_events)}",
+                    )
+                )
+                continue
+            expected_event = build_journal_event(journal, journal["result"])
+            if matching_events[0] != expected_event:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "transaction-journal",
+                        journal["event_id"],
+                        "/event_id",
+                        "completed transaction process event does not match its journal",
                     )
                 )
         return diagnostics

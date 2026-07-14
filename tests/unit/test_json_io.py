@@ -1,3 +1,5 @@
+import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -49,3 +51,24 @@ def test_atomic_write_replaces_complete_bytes(tmp_path: Path) -> None:
     atomic_write_bytes(target, b'{"value":1}\n', "write-id")
     assert target.read_bytes() == b'{"value":1}\n'
     assert not list(target.parent.glob("*.tmp"))
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission contract")
+def test_atomic_write_preserves_existing_private_file_mode(tmp_path: Path) -> None:
+    target = tmp_path / "records.jsonl"
+    target.write_bytes(b'{"old":true}\n')
+    target.chmod(0o600)
+
+    atomic_write_bytes(target, b'{"new":true}\n', "write-id")
+
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission contract")
+def test_atomic_write_creates_private_target_and_immediate_parent(tmp_path: Path) -> None:
+    target = tmp_path / "private" / "records.jsonl"
+
+    atomic_write_bytes(target, b'{"value":1}\n', "write-id")
+
+    assert stat.S_IMODE(target.parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600

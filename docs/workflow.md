@@ -38,8 +38,12 @@ Every mutation uses an explicit workspace config. No command accepts a raw `know
 
 - Validation failure preserves the previous target bytes.
 - A pre-replacement failure records a failure event when possible.
+- Source-dependent services recheck source stability after replacement and before emitting success.
+- A failed post-replacement source check emits no success event, records `needs_resolution`, and requires manual inspection.
 - A post-replacement event failure leaves an incomplete journal and returns a recovery-required error.
-- Recovery compares before/after/current digests and never guesses through an ambiguous state.
+- Completed journals record their final result and must match exactly one journal-derived process event; Guardian reports missing or altered events.
+- Recovery compares before/after/current digests and exact event content. It never guesses through an ambiguous or `needs_resolution` state.
+- Existing POSIX target modes are preserved; new canonical files and newly created immediate private parents use `0600` and `0700` respectively.
 
 ## Reading Views
 

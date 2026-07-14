@@ -114,11 +114,14 @@ class RegistryService:
             proposed.append(updated)
         proposed.append(record)
 
-        def validate_temp(path: Path) -> None:
+        def validate_source_stability() -> None:
             if file_sha256(source) != source_hash:
                 raise ResearchKBError(
                     Diagnostic(GROUNDING_MISMATCH, "registry-paper", paper_id, "/source_fingerprint", "source changed during Registry operation")
                 )
+
+        def validate_temp(path: Path) -> None:
+            validate_source_stability()
             temporary_records = read_jsonl(path, record_kind="registry-paper", missing_ok=False, id_field="paper_id")
             entries = load_workspace_entries(
                 self.layout,
@@ -136,12 +139,9 @@ class RegistryService:
             input_refs=duplicate_ids,
             output_refs=output_refs,
             validator=validate_temp,
+            post_replace_validator=validate_source_stability,
             expected_before_sha256=registry_before,
         )
-        if file_sha256(source) != source_hash:
-            raise ResearchKBError(
-                Diagnostic(GROUNDING_MISMATCH, "registry-paper", paper_id, "/source_fingerprint", "source changed during Registry operation")
-            )
         return record, result
 
     def replace(
@@ -211,11 +211,14 @@ class RegistryService:
         updated["automation_status"] = "passed_auto_checks"
         proposed = [updated if record["paper_id"] == paper_id else record for record in current]
 
-        def validate_temp(path: Path) -> None:
+        def validate_source_stability() -> None:
             if file_sha256(source) != source_hash:
                 raise ResearchKBError(
                     Diagnostic(GROUNDING_MISMATCH, "registry-paper", paper_id, "/source_fingerprint", "source changed during Registry operation")
                 )
+
+        def validate_temp(path: Path) -> None:
+            validate_source_stability()
             temporary_records = read_jsonl(path, record_kind="registry-paper", missing_ok=False, id_field="paper_id")
             entries = load_workspace_entries(
                 self.layout,
@@ -232,10 +235,7 @@ class RegistryService:
             input_refs=[paper_id],
             output_refs=[paper_id],
             validator=validate_temp,
+            post_replace_validator=validate_source_stability,
             expected_before_sha256=registry_before,
         )
-        if file_sha256(source) != source_hash:
-            raise ResearchKBError(
-                Diagnostic(GROUNDING_MISMATCH, "registry-paper", paper_id, "/source_fingerprint", "source changed during Registry operation")
-            )
         return updated, result

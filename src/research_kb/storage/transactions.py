@@ -24,6 +24,7 @@ from research_kb.workspace import WorkspaceLayout
 
 PhaseHook = Callable[[str], None]
 TemporaryValidator = Callable[[Path], None]
+PostReplaceValidator = Callable[[], None]
 EventIdFactory = Callable[[], str]
 
 
@@ -60,6 +61,7 @@ class TransactionManager:
         input_refs: list[str],
         output_refs: list[str],
         validator: TemporaryValidator | None = None,
+        post_replace_validator: PostReplaceValidator | None = None,
         expected_before_sha256: str | None = None,
         phase_hook: PhaseHook | None = None,
         event_id: str | None = None,
@@ -72,6 +74,7 @@ class TransactionManager:
                     Diagnostic(WRITE_CONFLICT, "transaction", None, "", "canonical target changed before promotion")
                 )
             event_id = event_id or self.event_id_factory()
+            self._ensure_event_id_available(event_id)
             created_at = timestamp(self.clock)
             after_sha256 = sha256_bytes(content)
             journal = {
@@ -86,6 +89,7 @@ class TransactionManager:
                 "input_refs": input_refs,
                 "output_refs": output_refs,
                 "phase": "prepared",
+                "result": None,
                 "created_at": created_at,
                 "updated_at": created_at,
             }
@@ -102,23 +106,29 @@ class TransactionManager:
                 self._set_phase(journal, "target_replaced")
                 if phase_hook is not None:
                     phase_hook("target_replaced")
-                event = build_process_event(
-                    event_id=event_id,
-                    operation=operation,
-                    actor=actor,
-                    result="success",
-                    input_refs=input_refs,
-                    output_refs=output_refs,
-                    created_at=created_at,
-                )
+                if post_replace_validator is not None:
+                    try:
+                        post_replace_validator()
+                    except Exception as validation_error:
+                        self._set_state(journal, phase="needs_resolution", result="needs_resolution")
+                        raise ResearchKBError(
+                            Diagnostic(
+                                INCOMPLETE_TRANSACTION,
+                                "transaction",
+                                event_id,
+                                "",
+                                "post-replacement validation failed; manual resolution is required",
+                            )
+                        ) from validation_error
+                event = build_journal_event(journal, "success")
                 append_process_event(self.layout.process_events_path, event, write_id=event_id)
-                self._set_phase(journal, "event_recorded")
-                self._set_phase(journal, "complete")
+                self._set_state(journal, phase="event_recorded", result="success")
+                self._set_state(journal, phase="complete")
                 return TransactionResult(event_id, resolved_target, before_sha256, after_sha256)
             except BaseException as error:
                 if temporary is not None:
                     temporary.unlink(missing_ok=True)
-                if isinstance(error, Exception):
+                if isinstance(error, Exception) and journal["phase"] != "needs_resolution":
                     self._handle_failure(error, journal, resolved_target)
                 raise
 
@@ -132,6 +142,7 @@ class TransactionManager:
     ) -> str:
         with workspace_lock(self.layout.lock_path, timeout=self.lock_timeout):
             resolved_event_id = event_id or self.event_id_factory()
+            self._ensure_event_id_available(resolved_event_id)
             event = build_process_event(
                 event_id=resolved_event_id,
                 operation=operation,
@@ -153,7 +164,16 @@ class TransactionManager:
             for path in sorted(self.layout.transactions_root.glob("*.json"), key=lambda item: item.name):
                 journal = read_json_document(path, record_kind="transaction-journal")
                 self._validate_journal(journal)
+                existing_event = events.get(journal["event_id"])
                 if journal["phase"] == "complete":
+                    expected_event = build_journal_event(journal, journal["result"])
+                    if existing_event is None:
+                        actions.append(self._needs_resolution(journal, dry_run, "completed_event_missing"))
+                    elif existing_event != expected_event:
+                        actions.append(self._needs_resolution(journal, dry_run, "event_content_mismatch"))
+                    continue
+                if journal["phase"] == "needs_resolution":
+                    actions.append({"event_id": journal["event_id"], "action": "manual_resolution_required"})
                     continue
                 target = self.layout.ensure_writable_target(
                     self.layout.knowledge_root / Path(*journal["target_relative_path"].split("/"))
@@ -162,13 +182,16 @@ class TransactionManager:
                 if current not in {journal["before_sha256"], journal["after_sha256"]}:
                     actions.append(self._needs_resolution(journal, dry_run, "target_digest_ambiguous"))
                     continue
-                existing_event = events.get(journal["event_id"])
+                expected_result = "success" if current == journal["after_sha256"] else "failure"
+                if journal["result"] not in {None, expected_result}:
+                    actions.append(self._needs_resolution(journal, dry_run, "journal_result_mismatch"))
+                    continue
                 if existing_event is not None:
-                    expected_result = "success" if current == journal["after_sha256"] else "failure"
-                    if existing_event["result"] != expected_result:
-                        actions.append(self._needs_resolution(journal, dry_run, "event_result_mismatch"))
+                    expected_event = build_journal_event(journal, expected_result)
+                    if existing_event != expected_event:
+                        actions.append(self._needs_resolution(journal, dry_run, "event_content_mismatch"))
                     else:
-                        actions.append(self._complete_recovery(journal, dry_run, "event_already_recorded"))
+                        actions.append(self._complete_recovery(journal, dry_run, expected_result, "event_already_recorded"))
                     continue
                 if current == journal["after_sha256"]:
                     actions.append(self._recover_event(journal, dry_run, "success", "append_missing_success_event"))
@@ -180,29 +203,20 @@ class TransactionManager:
         current = file_sha256(target)
         if current == journal["before_sha256"]:
             try:
-                event = build_process_event(
-                    event_id=journal["event_id"],
-                    operation=journal["operation"],
-                    actor=journal["actor"],
-                    result="failure",
-                    input_refs=journal["input_refs"],
-                    output_refs=[],
-                    created_at=journal["created_at"],
-                )
+                event = build_journal_event(journal, "failure")
                 append_process_event(self.layout.process_events_path, event, write_id=journal["event_id"])
-                self._set_phase(journal, "event_recorded")
-                self._set_phase(journal, "complete")
+                self._set_state(journal, phase="event_recorded", result="failure")
+                self._set_state(journal, phase="complete")
                 return
             except Exception as event_error:
                 raise ResearchKBError(
                     Diagnostic(INCOMPLETE_TRANSACTION, "transaction", journal["event_id"], "", "failure event could not be recorded")
                 ) from event_error
         if current == journal["after_sha256"]:
-            self._set_phase(journal, "target_replaced")
             raise ResearchKBError(
                 Diagnostic(INCOMPLETE_TRANSACTION, "transaction", journal["event_id"], "", "target was replaced but process event is incomplete")
             ) from error
-        self._set_phase(journal, "needs_resolution")
+        self._set_state(journal, phase="needs_resolution", result="needs_resolution")
         raise ResearchKBError(
             Diagnostic(INCOMPLETE_TRANSACTION, "transaction", journal["event_id"], "", "transaction target digest is ambiguous")
         ) from error
@@ -215,34 +229,44 @@ class TransactionManager:
         action: str,
     ) -> dict[str, str]:
         if not dry_run:
-            event = build_process_event(
-                event_id=journal["event_id"],
-                operation=journal["operation"],
-                actor=journal["actor"],
-                result=result,
-                input_refs=journal["input_refs"],
-                output_refs=journal["output_refs"] if result == "success" else [],
-                created_at=journal["created_at"],
-            )
+            event = build_journal_event(journal, result)
             append_process_event(self.layout.process_events_path, event, write_id=journal["event_id"])
-            self._set_phase(journal, "event_recorded")
-            self._set_phase(journal, "complete")
+            self._set_state(journal, phase="event_recorded", result=result)
+            self._set_state(journal, phase="complete")
         return {"event_id": journal["event_id"], "action": action}
 
-    def _complete_recovery(self, journal: dict[str, Any], dry_run: bool, action: str) -> dict[str, str]:
+    def _complete_recovery(
+        self,
+        journal: dict[str, Any],
+        dry_run: bool,
+        result: str,
+        action: str,
+    ) -> dict[str, str]:
         if not dry_run:
-            self._set_phase(journal, "complete")
+            self._set_state(journal, phase="complete", result=result)
         return {"event_id": journal["event_id"], "action": action}
 
     def _needs_resolution(self, journal: dict[str, Any], dry_run: bool, action: str) -> dict[str, str]:
         if not dry_run:
-            self._set_phase(journal, "needs_resolution")
+            self._set_state(journal, phase="needs_resolution", result="needs_resolution")
         return {"event_id": journal["event_id"], "action": action}
 
     def _set_phase(self, journal: dict[str, Any], phase: str) -> None:
+        self._set_state(journal, phase=phase)
+
+    def _set_state(self, journal: dict[str, Any], *, phase: str, result: str | None = None) -> None:
         journal["phase"] = phase
+        if result is not None:
+            journal["result"] = result
         journal["updated_at"] = timestamp(self.clock)
         self._write_journal(journal)
+
+    def _ensure_event_id_available(self, event_id: str) -> None:
+        event_exists = any(item["event_id"] == event_id for item in read_process_events(self.layout.process_events_path))
+        if event_exists or self.layout.journal_path(event_id).exists():
+            raise ResearchKBError(
+                Diagnostic(WRITE_CONFLICT, "transaction", event_id, "/event_id", "event ID is already in use")
+            )
 
     def _write_journal(self, journal: dict[str, Any]) -> None:
         self._validate_journal(journal)
@@ -254,3 +278,15 @@ class TransactionManager:
         diagnostics = validate_record("transaction-journal", journal, actor="cli")
         if diagnostics:
             raise ResearchKBError(diagnostics[0])
+
+
+def build_journal_event(journal: dict[str, Any], result: str) -> dict[str, Any]:
+    return build_process_event(
+        event_id=journal["event_id"],
+        operation=journal["operation"],
+        actor=journal["actor"],
+        result=result,
+        input_refs=journal["input_refs"],
+        output_refs=journal["output_refs"] if result == "success" else [],
+        created_at=journal["created_at"],
+    )

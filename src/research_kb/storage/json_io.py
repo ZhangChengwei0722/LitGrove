@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -80,13 +81,24 @@ def serialize_jsonl(records: Iterable[dict[str, Any]]) -> bytes:
 
 
 def write_fsynced_temp(target: Path, content: bytes, write_id: str) -> Path:
-    target.parent.mkdir(parents=True, exist_ok=True)
+    ensure_private_directory(target.parent)
     temporary = target.parent / f".{target.name}.{write_id}.tmp"
-    with temporary.open("xb") as handle:
+    target_mode = stat.S_IMODE(target.stat().st_mode) if os.name == "posix" and target.exists() else 0o600
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "wb") as handle:
         handle.write(content)
         handle.flush()
+        if os.name == "posix":
+            os.fchmod(handle.fileno(), target_mode)
         os.fsync(handle.fileno())
     return temporary
+
+
+def ensure_private_directory(path: Path) -> None:
+    existed = path.exists()
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if os.name == "posix" and not existed:
+        path.chmod(0o700)
 
 
 def replace_temp(temporary: Path, target: Path) -> None:

@@ -49,7 +49,9 @@ def test_successful_transaction_replaces_target_records_event_and_retains_journa
     assert result.event_id == EVENT_ID
     assert target.read_bytes() == serialize_jsonl([{"paper_id": PAPER_ID}])
     assert read_process_events(layout.process_events_path)[0]["result"] == "success"
-    assert read_json_document(layout.journal_path(EVENT_ID))["phase"] == "complete"
+    journal = read_json_document(layout.journal_path(EVENT_ID))
+    assert journal["phase"] == "complete"
+    assert journal["result"] == "success"
 
 
 def test_validation_failure_preserves_original_and_records_failure(tmp_path: Path) -> None:
@@ -76,7 +78,9 @@ def test_validation_failure_preserves_original_and_records_failure(tmp_path: Pat
     assert caught.value.diagnostic.code == "RKBC-002"
     assert target.read_bytes() == before
     assert read_process_events(layout.process_events_path)[0]["result"] == "failure"
-    assert read_json_document(layout.journal_path(EVENT_ID))["phase"] == "complete"
+    journal = read_json_document(layout.journal_path(EVENT_ID))
+    assert journal["phase"] == "complete"
+    assert journal["result"] == "failure"
 
 
 def test_lock_timeout_and_digest_conflict_do_not_mutate_target(tmp_path: Path) -> None:
@@ -198,6 +202,108 @@ def test_ambiguous_recovery_never_overwrites_target(tmp_path: Path) -> None:
     assert manager(layout).recover(dry_run=False)[0]["action"] == "target_digest_ambiguous"
     assert target.read_bytes() == before
     assert read_json_document(layout.journal_path(EVENT_ID))["phase"] == "needs_resolution"
+
+
+def test_event_id_reuse_is_rejected_before_target_mutation(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    first_target = layout.registry_path
+    manager(layout).promote_bytes(
+        target=first_target,
+        content=b'{"first":true}\n',
+        target_store="registry",
+        operation="registry_append",
+        actor="cli",
+        input_refs=[],
+        output_refs=[PAPER_ID],
+    )
+    journal_before = layout.journal_path(EVENT_ID).read_bytes()
+    second_target = layout.review_queue_path
+
+    with pytest.raises(ResearchKBError) as caught:
+        manager(layout).promote_bytes(
+            target=second_target,
+            content=b'{"second":true}\n',
+            target_store="review_queue",
+            operation="queue_append",
+            actor="cli",
+            input_refs=[],
+            output_refs=[],
+        )
+
+    assert caught.value.diagnostic.code == "RKBC-017"
+    assert not second_target.exists()
+    assert layout.journal_path(EVENT_ID).read_bytes() == journal_before
+    assert len(read_process_events(layout.process_events_path)) == 1
+
+
+def test_recovery_rejects_existing_event_with_tampered_content(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    target = layout.registry_path
+
+    def crash(phase: str) -> None:
+        if phase == "target_replaced":
+            raise InjectedCrash()
+
+    with pytest.raises(InjectedCrash):
+        manager(layout).promote_bytes(
+            target=target,
+            content=b'{"new":true}\n',
+            target_store="registry",
+            operation="registry_append",
+            actor="cli",
+            input_refs=[],
+            output_refs=[PAPER_ID],
+            phase_hook=crash,
+        )
+    tampered = {
+        "schema_version": "1.0",
+        "event_id": EVENT_ID,
+        "operation": "tampered_operation",
+        "actor": "cli",
+        "result": "success",
+        "input_refs": [],
+        "output_refs": [PAPER_ID],
+        "created_at": "2026-01-01T00:00:00Z",
+    }
+    layout.process_events_path.parent.mkdir(parents=True, exist_ok=True)
+    layout.process_events_path.write_bytes(serialize_jsonl([tampered]))
+
+    assert manager(layout).recover(dry_run=True)[0]["action"] == "event_content_mismatch"
+    assert manager(layout).recover(dry_run=False)[0]["action"] == "event_content_mismatch"
+    journal = read_json_document(layout.journal_path(EVENT_ID))
+    assert journal["phase"] == "needs_resolution"
+    assert journal["result"] == "needs_resolution"
+
+
+def test_needs_resolution_journal_is_never_auto_completed(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    target = layout.registry_path
+    content = b'{"new":true}\n'
+
+    def crash(phase: str) -> None:
+        if phase == "target_replaced":
+            raise InjectedCrash()
+
+    with pytest.raises(InjectedCrash):
+        manager(layout).promote_bytes(
+            target=target,
+            content=content,
+            target_store="registry",
+            operation="registry_append",
+            actor="cli",
+            input_refs=[],
+            output_refs=[PAPER_ID],
+            phase_hook=crash,
+        )
+    target.write_bytes(b'{"ambiguous":true}\n')
+    assert manager(layout).recover(dry_run=False)[0]["action"] == "target_digest_ambiguous"
+    target.write_bytes(content)
+
+    assert manager(layout).recover(dry_run=False)[0]["action"] == "manual_resolution_required"
+    journal = read_json_document(layout.journal_path(EVENT_ID))
+    assert journal["phase"] == "needs_resolution"
+    assert journal["result"] == "needs_resolution"
+    assert read_process_events(layout.process_events_path) == []
 
 
 def file_sha256_value(content: bytes) -> str:

@@ -90,11 +90,14 @@ class ParseService:
         target = self.layout.parse_path(paper_id)
         target_before = file_sha256(target)
 
-        def validate_temp(path: Path) -> None:
+        def validate_source_stability() -> None:
             if file_sha256(source) != expected_hash:
                 raise ResearchKBError(
                     Diagnostic(GROUNDING_MISMATCH, "parsed-page", paper_id, "/paper_id", "source changed during parse")
                 )
+
+        def validate_temp(path: Path) -> None:
+            validate_source_stability()
             temporary_pages = read_jsonl(path, record_kind="parsed-page", missing_ok=False)
             entries = load_workspace_entries(
                 self.layout,
@@ -112,11 +115,8 @@ class ParseService:
             input_refs=[paper_id],
             output_refs=[paper_id],
             validator=validate_temp,
+            post_replace_validator=validate_source_stability,
             expected_before_sha256=target_before,
             event_id=event_id,
         )
-        if file_sha256(source) != expected_hash:
-            raise ResearchKBError(
-                Diagnostic(GROUNDING_MISMATCH, "parsed-page", paper_id, "/paper_id", "source changed during parse")
-            )
         return pages, result

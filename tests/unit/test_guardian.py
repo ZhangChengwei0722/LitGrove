@@ -4,7 +4,7 @@ import pytest
 
 from research_kb.guardian import GuardianService, status_for_findings
 from research_kb.services.registry import RegistryService
-from research_kb.storage.json_io import file_sha256, read_jsonl
+from research_kb.storage.json_io import file_sha256, read_jsonl, serialize_jsonl
 from research_kb.storage.transactions import TransactionManager
 from tests.runtime_helpers import make_runtime_workspace
 
@@ -93,3 +93,27 @@ def test_guardian_status_is_derived_from_finding_severity() -> None:
     assert status_for_findings([]) == "success"
     assert status_for_findings([{"severity": "warning"}]) == "warning"
     assert status_for_findings([{"severity": "warning"}, {"severity": "error"}]) == "failure"
+
+
+def test_guardian_detects_missing_event_for_completed_journal(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    _register_source(layout)
+    layout.process_events_path.unlink()
+
+    result = GuardianService(layout).check()
+
+    assert result.report["status"] == "failure"
+    assert "RKBC-018" in {item["code"] for item in result.report["findings"]}
+
+
+def test_guardian_detects_tampered_event_for_completed_journal(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    _register_source(layout)
+    events = read_jsonl(layout.process_events_path, record_kind="process-event", id_field="event_id")
+    events[0]["operation"] = "tampered_operation"
+    layout.process_events_path.write_bytes(serialize_jsonl(events))
+
+    result = GuardianService(layout).check()
+
+    assert result.report["status"] == "failure"
+    assert "RKBC-018" in {item["code"] for item in result.report["findings"]}

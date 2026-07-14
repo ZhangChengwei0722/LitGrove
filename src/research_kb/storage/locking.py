@@ -7,11 +7,12 @@ from pathlib import Path
 from filelock import FileLock, Timeout
 
 from research_kb.errors import LOCK_TIMEOUT, Diagnostic, ResearchKBError
+from research_kb.storage.json_io import ensure_private_directory
 
 
 @contextmanager
 def workspace_lock(path: Path, *, timeout: float = 30.0) -> Iterator[None]:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_private_directory(path.parent)
     lock = FileLock(path, timeout=timeout)
     try:
         with lock:

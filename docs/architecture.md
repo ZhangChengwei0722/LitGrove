@@ -29,12 +29,15 @@ candidate mutation request
 -> schema and cross-record validation
 -> workspace lock
 -> same-directory fsynced temp file
--> digest-checked os.replace
--> process event
--> completed recovery journal
+-> mode-preserving, digest-checked os.replace
+-> post-replacement source stability check where required
+-> journal-derived process event
+-> completed recovery journal with final result
 ```
 
 Registry, SyntheticText Parse, Paper Card, Evidence, review queue, and Guardian services use the same workspace resolver and transaction kernel. Source references are persisted as `root_id + relative_path`; local absolute paths are never canonical data.
+
+Guardian requires every completed journal to have exactly one matching process event. Missing or altered events and all `needs_resolution` journals fail closed instead of being inferred from target state alone.
 
 Existing canonical records are validated with the internal `stored` context. This bypasses submitter-state checks only while reading already persisted state; it grants no mutation authority and is not exposed by CLI actor choices.
 

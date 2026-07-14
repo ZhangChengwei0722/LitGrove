@@ -4,7 +4,7 @@
 
 ## Decision
 
-Canonical JSON and JSONL stores use a workspace-wide `filelock`, same-directory fsynced temporary files, digest checks, and `os.replace`. Each mutation retains a transaction journal under `knowledge_root/.research-kb/transactions/` and appends a process event after target replacement.
+Canonical JSON and JSONL stores use a workspace-wide `filelock`, same-directory fsynced temporary files, digest checks, and `os.replace`. Each mutation retains a transaction journal under `knowledge_root/.research-kb/transactions/` and appends a process event after target replacement. Existing POSIX file modes are preserved; a new canonical file is `0600`, and its newly created immediate private parent is `0700`.
 
 The write sequence is:
 
@@ -16,20 +16,24 @@ lock workspace
 -> validate temporary canonical content
 -> os.replace target
 -> mark target_replaced
+-> run any source-stability check required by the service
 -> append process event through a non-recursive atomic rewrite
--> mark complete
+-> record the final result and mark complete
 ```
 
-Completed journals are retained as deterministic recovery metadata. Journals and events never include candidate scientific payloads.
+The event ID is reserved before mutation. A completed journal records `result: success | failure` and must bind to exactly one process event whose full deterministic content matches the journal. Guardian enforces this binding. Completed journals are retained as deterministic recovery metadata. Journals and events never include candidate scientific payloads.
+
+If a source-dependent service detects that its source changed after target replacement but before the success event, it emits no success event and records `phase: needs_resolution` with `result: needs_resolution`. That state requires manual inspection and is never auto-completed.
 
 ## Recovery
 
 Recovery compares the journal's before/after digests with the current target:
 
-- current equals before: append a missing failure event;
-- current equals after: append a missing success event;
+- current equals before: require or append the exact journal-derived failure event;
+- current equals after: require or append the exact journal-derived success event;
 - current equals neither: mark `needs_resolution` and do not guess;
-- an existing event with the wrong result also requires resolution.
+- a missing or altered event for a completed journal requires resolution;
+- any event content mismatch, reused event ID, journal/result mismatch, or existing `needs_resolution` state requires manual resolution.
 
 `--dry-run` reports actions without changing the target, journal, or event store.
 

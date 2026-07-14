@@ -4,7 +4,7 @@ import pytest
 
 from research_kb.errors import ResearchKBError
 from research_kb.services.registry import RegistryService
-from research_kb.storage.json_io import file_sha256, read_jsonl
+from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl
 from tests.runtime_helpers import make_runtime_workspace
 
 
@@ -93,3 +93,63 @@ def test_registry_rejects_non_object_bibliography(tmp_path: Path) -> None:
         )
 
     assert caught.value.diagnostic.code == "RKBC-002"
+
+
+def test_registry_source_change_at_commit_requires_manual_resolution(tmp_path: Path, monkeypatch) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = layout.source_roots["alpha-sources"] / "study.txt"
+    source.write_text("Invented stable source.\n", encoding="utf-8", newline="\n")
+    from research_kb.storage import transactions
+
+    original_replace = transactions.replace_temp
+
+    def replace_and_change_source(temporary: Path, target: Path) -> None:
+        original_replace(temporary, target)
+        source.write_text("Invented changed source.\n", encoding="utf-8", newline="\n")
+
+    monkeypatch.setattr(transactions, "replace_temp", replace_and_change_source)
+
+    with pytest.raises(ResearchKBError) as caught:
+        RegistryService(layout).add(root_id="alpha-sources", relative_path="study.txt", metadata={})
+
+    assert caught.value.diagnostic.code == "RKBC-018"
+    assert read_jsonl(layout.process_events_path, record_kind="process-event", id_field="event_id") == []
+    journals = list(layout.transactions_root.glob("*.json"))
+    assert len(journals) == 1
+    journal = read_json_document(journals[0], record_kind="transaction-journal")
+    assert journal["phase"] == "needs_resolution"
+    assert journal["result"] == "needs_resolution"
+
+
+def test_registry_replace_source_change_at_commit_requires_manual_resolution(tmp_path: Path, monkeypatch) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = layout.source_roots["alpha-sources"] / "study.txt"
+    source.write_text("Invented stable source.\n", encoding="utf-8", newline="\n")
+    service = RegistryService(layout)
+    paper, _ = service.add(root_id="alpha-sources", relative_path="study.txt", metadata={})
+    from research_kb.storage import transactions
+
+    original_replace = transactions.replace_temp
+
+    def replace_and_change_source(temporary: Path, target: Path) -> None:
+        original_replace(temporary, target)
+        source.write_text("Invented changed source.\n", encoding="utf-8", newline="\n")
+
+    monkeypatch.setattr(transactions, "replace_temp", replace_and_change_source)
+
+    with pytest.raises(ResearchKBError) as caught:
+        service.replace(
+            paper_id=paper["paper_id"],
+            changes={"bibliography": {"title": "Invented replacement title"}},
+        )
+
+    assert caught.value.diagnostic.code == "RKBC-018"
+    journals = [
+        read_json_document(path, record_kind="transaction-journal")
+        for path in layout.transactions_root.glob("*.json")
+    ]
+    replace_journal = next(item for item in journals if item["operation"] == "registry_replace")
+    assert replace_journal["phase"] == "needs_resolution"
+    assert replace_journal["result"] == "needs_resolution"
+    events = read_jsonl(layout.process_events_path, record_kind="process-event", id_field="event_id")
+    assert replace_journal["event_id"] not in {item["event_id"] for item in events}
