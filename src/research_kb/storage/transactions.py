@@ -27,6 +27,14 @@ TemporaryValidator = Callable[[Path], None]
 PostReplaceValidator = Callable[[], None]
 EventIdFactory = Callable[[], str]
 
+MANUAL_RESOLUTION_ACTIONS = frozenset({
+    "completed_event_missing",
+    "event_content_mismatch",
+    "journal_result_mismatch",
+    "manual_resolution_required",
+    "target_digest_ambiguous",
+})
+
 
 @dataclass(frozen=True, slots=True)
 class TransactionResult:

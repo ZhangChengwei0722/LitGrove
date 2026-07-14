@@ -20,7 +20,7 @@ from research_kb.services.records import RecordService
 from research_kb.services.registry import RegistryService
 from research_kb.services.parse import ParseService
 from research_kb.storage.json_io import read_jsonl
-from research_kb.storage.transactions import TransactionManager
+from research_kb.storage.transactions import MANUAL_RESOLUTION_ACTIONS, TransactionManager
 from research_kb.workspace import WorkspaceLayout
 
 
@@ -192,7 +192,7 @@ def _data_check_jsonl(args: argparse.Namespace) -> int:
 def _transaction_recover(args: argparse.Namespace) -> int:
     layout = WorkspaceLayout.load(args.workspace)
     actions = TransactionManager(layout).recover(dry_run=args.dry_run)
-    needs_resolution = any(item["action"] in {"target_digest_ambiguous", "event_result_mismatch"} for item in actions)
+    needs_resolution = any(item["action"] in MANUAL_RESOLUTION_ACTIONS for item in actions)
     _write_json({
         "status": "needs_resolution" if needs_resolution else "success",
         "dry_run": args.dry_run,

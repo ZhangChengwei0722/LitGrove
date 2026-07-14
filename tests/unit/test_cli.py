@@ -127,6 +127,31 @@ def test_transaction_recover_cli_dry_run_is_read_only(tmp_path, capsys) -> None:
     assert layout.journal_path(event_id).read_bytes() == journal_before
 
 
+def test_transaction_recover_cli_reports_missing_completed_event_as_needs_resolution(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    event_id = "event_a1111111-1111-4111-8111-111111111111"
+    manager = TransactionManager(layout, event_id_factory=lambda: event_id)
+    manager.promote_bytes(
+        target=layout.registry_path,
+        content=b'{"value":1}\n',
+        target_store="registry",
+        operation="registry_append",
+        actor="cli",
+        input_refs=[],
+        output_refs=["paper_a1111111-1111-4111-8111-111111111111"],
+    )
+    layout.process_events_path.unlink()
+    journal_before = layout.journal_path(event_id).read_bytes()
+
+    result = main(["transaction", "recover", "--workspace", str(layout.config.path), "--dry-run"])
+    output = json.loads(capsys.readouterr().out)
+
+    assert result == 4
+    assert output["status"] == "needs_resolution"
+    assert output["actions"] == [{"event_id": event_id, "action": "completed_event_missing"}]
+    assert layout.journal_path(event_id).read_bytes() == journal_before
+
+
 def test_m1b_cli_runs_registry_parse_record_and_guardian(tmp_path, capsys) -> None:
     layout = make_runtime_workspace(tmp_path)
     source = layout.source_roots["alpha-sources"] / "study.txt"
