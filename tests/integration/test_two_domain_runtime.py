@@ -11,6 +11,7 @@ from research_kb.parse.synthetic_text import SyntheticTextAdapter
 from research_kb.services.parse import ParseService
 from research_kb.services.records import RecordService
 from research_kb.services.registry import RegistryService
+from research_kb.services.bootstrap import WorkspaceBootstrapService
 from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl
 from research_kb.workspace import WorkspaceLayout
 
@@ -24,6 +25,8 @@ def test_two_domains_run_same_core_from_intake_to_guardian(tmp_path: Path, domai
     source_fixture = FIXTURE_ROOT / domain
     runtime_root = tmp_path / domain
     shutil.copytree(source_fixture, runtime_root)
+    bootstrap = WorkspaceBootstrapService(runtime_root / "workspace.yaml").run()
+    assert bootstrap.result == "initialized"
     layout = WorkspaceLayout.load(runtime_root / "workspace.yaml")
     expected = json.loads((runtime_root / "expected.json").read_text(encoding="utf-8"))
     source_paths = sorted((runtime_root / "sources").glob("*.txt"))

@@ -24,6 +24,9 @@ def test_workspace_rejects_write_outside_knowledge_root(tmp_path: Path) -> None:
 def test_workspace_rejects_overlapping_source_and_knowledge_roots(tmp_path: Path) -> None:
     root = tmp_path / "overlap"
     root.mkdir()
+    (root / "shared").mkdir()
+    fixture_profile = Path(__file__).resolve().parents[1] / "fixtures" / "domain_alpha" / "domain-profile.yaml"
+    (root / "domain-profile.yaml").write_bytes(fixture_profile.read_bytes())
     config = {
         "contract_version": "1.0",
         "workspace": {

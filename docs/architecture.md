@@ -8,7 +8,7 @@ Shared Core + CLI
 -> Separate private workspaces
 ```
 
-Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, and Guardian checks. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Rendering remains deferred after Milestone 1B.
+Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, and Guardian checks. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Rendering remains deferred after M2A-1.
 
 ## Knowledge Flow
 
@@ -40,5 +40,21 @@ Registry, SyntheticText Parse, Paper Card, Evidence, review queue, and Guardian 
 Guardian requires every completed journal to have exactly one matching process event. Missing or altered events and all `needs_resolution` journals fail closed instead of being inferred from target state alone.
 
 Existing canonical records are validated with the internal `stored` context. This bypasses submitter-state checks only while reading already persisted state; it grants no mutation authority and is not exposed by CLI actor choices.
+
+## M2A-1 Workspace Boundary
+
+```text
+existing workspace config + domain profile
+-> shared semantic validation
+-> read-only preflight
+-> workspace lock and repeated preflight
+-> exact managed directory scaffold
+-> deterministic workspace identity marker
+-> initialized runtime
+```
+
+`WorkspaceLayout.load` is the single initialized-workspace gate used by Registry, Parse, Record, Guardian, and Recovery commands. Bootstrap alone may resolve an unbound config. A marker mismatch, unsafe layout, unknown managed content, source/root conflict, or missing marker fails closed.
+
+`.research-kb/workspace.json` contains only workspace/profile identities, the layout contract version, and a SHA-256 config fingerprint. It is operational metadata, not canonical scientific state, and emits no process event or transaction journal. A markerless populated M1B store is adopted only after its complete structured bundle and transaction state validate without rewriting records.
 
 Question Mapping, Step 7 runtime, Markdown rendering, real PDF parsing, and Agent Skill orchestration are intentionally absent.

@@ -11,7 +11,14 @@ import yaml
 from research_kb import __version__
 from research_kb.contracts.registry import SchemaRegistry
 from research_kb.contracts.validator import validate_bundle, validate_record
-from research_kb.errors import ResearchKBError
+from research_kb.errors import (
+    UNSAFE_DIRECTORY_MODE,
+    WORKSPACE_IDENTITY_CONFLICT,
+    WORKSPACE_LAYOUT_CONFLICT,
+    WORKSPACE_NOT_INITIALIZED,
+    ResearchKBError,
+    redact_absolute_paths,
+)
 from research_kb.guardian import GuardianService
 from research_kb.mutation import load_mutation_request
 from research_kb.parse.synthetic_text import SyntheticTextAdapter
@@ -19,6 +26,7 @@ from research_kb.privacy import scan_repository
 from research_kb.services.records import RecordService
 from research_kb.services.registry import RegistryService
 from research_kb.services.parse import ParseService
+from research_kb.services.bootstrap import WorkspaceBootstrapService
 from research_kb.storage.json_io import read_jsonl
 from research_kb.storage.transactions import MANUAL_RESOLUTION_ACTIONS, TransactionManager
 from research_kb.workspace import WorkspaceLayout
@@ -37,6 +45,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="research-kb")
     parser.add_argument("--version", action="version", version=f"research-kb {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
+
+    workspace = commands.add_parser("workspace", help="initialize deterministic workspace layout")
+    workspace_commands = workspace.add_subparsers(dest="workspace_command", required=True)
+    workspace_init = workspace_commands.add_parser("init", help="validate and initialize one workspace")
+    workspace_init.add_argument("--workspace", required=True, type=Path)
+    workspace_init.add_argument("--dry-run", action="store_true")
 
     contract = commands.add_parser("contract", help="validate public contract records")
     contract_commands = contract.add_subparsers(dest="contract_command", required=True)
@@ -100,6 +114,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if args.command == "workspace" and args.workspace_command == "init":
+            return _workspace_init(args)
         if args.command == "contract" and args.contract_command == "validate":
             return _contract_validate(args)
         if args.command == "privacy" and args.privacy_command == "scan":
@@ -120,14 +136,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         _write_json({"status": "error", "diagnostic": error.diagnostic.to_dict()}, stream=sys.stderr)
         if error.diagnostic.code in {"RKBC-001", "RKBC-003"}:
             return 3
-        if error.diagnostic.code in {"RKBC-016", "RKBC-017", "RKBC-018"}:
+        if error.diagnostic.code in {
+            "RKBC-016",
+            "RKBC-017",
+            "RKBC-018",
+            WORKSPACE_NOT_INITIALIZED,
+            WORKSPACE_IDENTITY_CONFLICT,
+            WORKSPACE_LAYOUT_CONFLICT,
+            UNSAFE_DIRECTORY_MODE,
+        }:
             return 4
         return 2
     except (OSError, ValueError, json.JSONDecodeError, yaml.YAMLError) as error:
-        _write_json({"status": "error", "error": str(error)}, stream=sys.stderr)
+        _write_json({"status": "error", "error": redact_absolute_paths(str(error))}, stream=sys.stderr)
         return 2
     parser.error("unsupported command")
     return 2
+
+
+def _workspace_init(args: argparse.Namespace) -> int:
+    result = WorkspaceBootstrapService(args.workspace).run(dry_run=args.dry_run)
+    _write_json(result.to_dict())
+    return result.exit_code
 
 
 def _contract_validate(args: argparse.Namespace) -> int:

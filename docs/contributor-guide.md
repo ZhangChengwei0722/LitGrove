@@ -18,7 +18,7 @@ Use the repository virtual environment so the editable package and bounded depen
 Release-resource smoke after `python -m build`:
 
 ```powershell
-python tests/wheel_smoke.py
+.\.venv\Scripts\python tests/wheel_smoke.py
 ```
 
 Schema, state, ID, path, and directory-protocol changes require explicit user approval, focused self-review, targeted tests, and the full Windows validation gate. External collaborator review is optional.
@@ -30,6 +30,7 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Never derive fixtures by editing private research records.
 - Intentional privacy failures must be exact-file allowlisted with an expected code and count.
 - Runtime fixtures must execute in a temporary copy; tests must not write canonical state into the repository fixture tree.
+- Runtime fixtures must run `WorkspaceBootstrapService` before `WorkspaceLayout.load`; contract-only fixtures remain read-only and markerless.
 - Record source hashes before a runtime scenario and assert that every hash is unchanged afterward.
 
 ## Mutation Service Rules

@@ -16,13 +16,15 @@ Milestone 1B implements this deterministic storage lifecycle for Registry, synth
 
 ## Runtime Sequence
 
-1. `registry add` resolves a declared source root, hashes the source read-only, and preserves exact duplicates as reciprocal candidates.
-2. `parse run` uses only `SyntheticTextAdapter` in M1B and writes validated page records without creating a full-text copy.
-3. `record promote` loads a private mutation request, injects IDs/timestamps/fingerprints, enforces actor authority, and promotes one canonical store.
-4. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
-5. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
+1. `workspace init --dry-run` validates an existing config and reports planned managed actions without deliberate filesystem mutation.
+2. `workspace init` binds the managed root with a deterministic marker. Repeating it with the same config returns `no_change`.
+3. `registry add` resolves a declared source root, hashes the source read-only, and preserves exact duplicates as reciprocal candidates.
+4. `parse run` uses only `SyntheticTextAdapter` in M1B and writes validated page records without creating a full-text copy.
+5. `record promote` loads a private mutation request, injects IDs/timestamps/fingerprints, enforces actor authority, and promotes one canonical store.
+6. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
+7. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
 
-Every mutation uses an explicit workspace config. No command accepts a raw `knowledge_root` override or a source-write operation.
+Every runtime command uses the same semantic validator and requires a matching workspace marker. No command accepts a raw `knowledge_root` override or a source-write operation. `local_inbox` remains user-owned and is never created or scanned by bootstrap.
 
 ## Authority
 
@@ -36,6 +38,8 @@ Every mutation uses an explicit workspace config. No command accepts a raw `know
 
 ## Failure Boundary
 
+- Bootstrap performs a complete read-only preflight before creating its lock scaffold, then repeats mutation-sensitive checks while holding the workspace lock.
+- A conflicting marker, unknown managed content, incomplete transaction, unsafe path type, or invalid markerless bundle blocks initialization without rewriting canonical records.
 - Validation failure preserves the previous target bytes.
 - A pre-replacement failure records a failure event when possible.
 - Source-dependent services recheck source stability after replacement and before emitting success.

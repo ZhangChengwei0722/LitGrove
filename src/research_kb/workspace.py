@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from research_kb.config.loader import ConfigDocument, load_config, resolve_config_path
+from research_kb.config.loader import ConfigDocument
 from research_kb.errors import PATH_ESCAPE, Diagnostic, ResearchKBError
 from research_kb.paths import SourceRef, make_source_ref, resolve_source_ref
+from research_kb.workspace_validation import WorkspaceContext, validate_initialized_workspace
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,20 +18,17 @@ class WorkspaceLayout:
 
     @classmethod
     def load(cls, config_path: Path) -> "WorkspaceLayout":
-        document = load_config(config_path, "workspace")
-        workspace = document.data["workspace"]
-        knowledge_root = resolve_config_path(document, workspace["knowledge_root"])
-        domain_profile_path = resolve_config_path(document, workspace["domain_profile"])
-        roots = {
-            item["root_id"]: resolve_config_path(document, item["path"])
-            for item in workspace["source_roots"]
-        }
-        for root in roots.values():
-            if knowledge_root == root or knowledge_root.is_relative_to(root) or root.is_relative_to(knowledge_root):
-                raise ResearchKBError(
-                    Diagnostic(PATH_ESCAPE, "workspace", workspace["id"], "/workspace/source_roots", "knowledge_root and source roots must not overlap")
-                )
-        return cls(document, knowledge_root, domain_profile_path, roots)
+        context = validate_initialized_workspace(config_path).require_valid()
+        return cls._from_context(context)
+
+    @classmethod
+    def _from_context(cls, context: WorkspaceContext) -> "WorkspaceLayout":
+        return cls(
+            context.config,
+            context.knowledge_root,
+            context.domain_profile.path,
+            context.source_roots,
+        )
 
     @property
     def workspace_id(self) -> str:
@@ -55,6 +53,10 @@ class WorkspaceLayout:
     @property
     def lock_path(self) -> Path:
         return self.knowledge_root / ".research-kb" / "locks" / "workspace.lock"
+
+    @property
+    def marker_path(self) -> Path:
+        return self.knowledge_root / ".research-kb" / "workspace.json"
 
     @property
     def transactions_root(self) -> Path:
