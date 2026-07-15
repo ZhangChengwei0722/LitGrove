@@ -57,4 +57,18 @@ existing workspace config + domain profile
 
 `.research-kb/workspace.json` contains only workspace/profile identities, the layout contract version, and a SHA-256 config fingerprint. It is operational metadata, not canonical scientific state, and emits no process event or transaction journal. A markerless populated M1B store is adopted only after its complete structured bundle and transaction state validate without rewriting records.
 
-Question Mapping, Step 7 runtime, Markdown rendering, real PDF parsing, and Agent Skill orchestration are intentionally absent.
+## M2A-2 Read-Only Compatibility Boundary
+
+```text
+initialized workspace + explicitly injected LegacyReaderAdapter
+-> protected source snapshots
+-> normalized legacy inventory and deterministic differences
+-> public compatibility-report on stdout
+-> protected source snapshots repeated in finally
+```
+
+Shared Core owns adapter metadata validation, source-reference confinement, difference IDs, blocking policy, report schemas, ordering, and exit codes. The adapter owns only private legacy interpretation and candidate inventory. The installed CLI has an empty adapter registry: there is no module-path loading, plugin discovery, entry-point scan, or production private adapter in this repository.
+
+Compatibility inspection is not migration. It allocates no replacement canonical IDs, writes no report or process event, and does not alter the legacy source of truth. If declared protected input changes, disappears, changes type, or becomes unsafe during inspection, the run fails with `RKBC-026` even when the adapter also raises.
+
+Question Mapping, Step 7 runtime, Markdown rendering, real PDF parsing, migration, and Agent Skill orchestration are intentionally absent.

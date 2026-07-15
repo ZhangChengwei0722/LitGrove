@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:compatibility-report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "workspace_id", "adapter_id", "adapter_version", "source_system", "read_only", "status",
+    "source_snapshot_before", "source_snapshot_after", "items", "differences", "item_counts_by_kind",
+    "item_counts_by_disposition", "difference_counts_by_type", "blocking_difference_count",
+    "protected_inputs_unchanged"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "adapter_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+    "adapter_version": {"type": "string", "minLength": 1, "maxLength": 64},
+    "source_system": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+    "read_only": {"const": true},
+    "status": {"enum": ["success", "blocking_differences"]},
+    "source_snapshot_before": {
+      "type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/source_snapshot"}
+    },
+    "source_snapshot_after": {
+      "type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/source_snapshot"}
+    },
+    "items": {"type": "array", "items": {"$ref": "#/$defs/inventory_item"}},
+    "differences": {
+      "type": "array",
+      "items": {"$ref": "urn:research-kb:schema:1.0:compatibility-difference"}
+    },
+    "item_counts_by_kind": {"$ref": "#/$defs/count_map"},
+    "item_counts_by_disposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["direct_read", "adapter_projection", "unsupported_for_now", "legacy_reading_view"],
+      "properties": {
+        "direct_read": {"type": "integer", "minimum": 0},
+        "adapter_projection": {"type": "integer", "minimum": 0},
+        "unsupported_for_now": {"type": "integer", "minimum": 0},
+        "legacy_reading_view": {"type": "integer", "minimum": 0}
+      }
+    },
+    "difference_counts_by_type": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "representation_only", "field_mapping_loss", "provenance_break", "semantic_mismatch",
+        "status_authority_mismatch", "unsupported_legacy_view"
+      ],
+      "properties": {
+        "representation_only": {"type": "integer", "minimum": 0},
+        "field_mapping_loss": {"type": "integer", "minimum": 0},
+        "provenance_break": {"type": "integer", "minimum": 0},
+        "semantic_mismatch": {"type": "integer", "minimum": 0},
+        "status_authority_mismatch": {"type": "integer", "minimum": 0},
+        "unsupported_legacy_view": {"type": "integer", "minimum": 0}
+      }
+    },
+    "blocking_difference_count": {"type": "integer", "minimum": 0},
+    "protected_inputs_unchanged": {"const": true}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "success"}}, "required": ["status"]},
+      "then": {"properties": {"blocking_difference_count": {"const": 0}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "blocking_differences"}}, "required": ["status"]},
+      "then": {"properties": {"blocking_difference_count": {"minimum": 1}}}
+    }
+  ],
+  "$defs": {
+    "compatibility_source_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root_role", "relative_path"],
+      "properties": {
+        "root_role": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+        "relative_path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!~(?:/|$))(?![A-Za-z]:/)(?!.*\\\\)(?!(?:.*?/)?\\.{1,2}(?:/|$))[^/]+(?:/[^/]+)*$"
+        }
+      }
+    },
+    "legacy_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_system", "record_kind", "legacy_id"],
+      "properties": {
+        "source_system": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+        "record_kind": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+        "legacy_id": {"type": "string", "minLength": 1, "maxLength": 512}
+      }
+    },
+    "json_pointer": {
+      "type": "string",
+      "pattern": "^/(?:[^~/]|~[01])*(?:/(?:[^~/]|~[01])*)*$"
+    },
+    "source_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_ref", "source_kind", "algorithm", "value"],
+      "properties": {
+        "source_ref": {"$ref": "#/$defs/compatibility_source_ref"},
+        "source_kind": {"enum": ["file", "tree"]},
+        "algorithm": {"const": "sha256"},
+        "value": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "inventory_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "legacy_identity", "source_ref", "disposition", "projected_kind", "projection_status", "record_role",
+        "unsupported_fields", "diagnostic_codes"
+      ],
+      "properties": {
+        "legacy_identity": {"$ref": "#/$defs/legacy_identity"},
+        "source_ref": {"$ref": "#/$defs/compatibility_source_ref"},
+        "disposition": {
+          "enum": ["direct_read", "adapter_projection", "unsupported_for_now", "legacy_reading_view"]
+        },
+        "projected_kind": {
+          "anyOf": [
+            {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+            {"type": "null"}
+          ]
+        },
+        "projection_status": {"enum": ["complete", "partial", "not_attempted"]},
+        "record_role": {"enum": ["canonical", "candidate", "reading_view", "other"]},
+        "unsupported_fields": {
+          "type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/json_pointer"}
+        },
+        "diagnostic_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_-]{1,63}$"}
+        }
+      }
+    },
+    "count_map": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_-]{0,63}$"},
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    }
+  }
+}

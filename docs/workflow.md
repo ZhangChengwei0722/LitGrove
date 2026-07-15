@@ -18,13 +18,16 @@ Milestone 1B implements this deterministic storage lifecycle for Registry, synth
 
 1. `workspace init --dry-run` validates an existing config and reports planned managed actions without deliberate filesystem mutation.
 2. `workspace init` binds the managed root with a deterministic marker. Repeating it with the same config returns `no_change`.
-3. `registry add` resolves a declared source root, hashes the source read-only, and preserves exact duplicates as reciprocal candidates.
-4. `parse run` uses only `SyntheticTextAdapter` in M1B and writes validated page records without creating a full-text copy.
-5. `record promote` loads a private mutation request, injects IDs/timestamps/fingerprints, enforces actor authority, and promotes one canonical store.
-6. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
-7. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
+3. `compatibility inspect` uses only adapters explicitly injected by a private in-process caller. It emits a read-only report to stdout and never persists compatibility state.
+4. `registry add` resolves a declared source root, hashes the source read-only, and preserves exact duplicates as reciprocal candidates.
+5. `parse run` uses only `SyntheticTextAdapter` in M1B and writes validated page records without creating a full-text copy.
+6. `record promote` loads a private mutation request, injects IDs/timestamps/fingerprints, enforces actor authority, and promotes one canonical store.
+7. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
+8. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
 
 Every runtime command uses the same semantic validator and requires a matching workspace marker. No command accepts a raw `knowledge_root` override or a source-write operation. `local_inbox` remains user-owned and is never created or scanned by bootstrap.
+
+Compatibility reports classify what can be read directly, projected through an adapter, left unsupported, or retained as a legacy reading view. They do not select a migration target or change authority. Core rechecks all declared protected files and trees in a `finally` path; source change takes precedence over an ordinary adapter failure.
 
 ## Authority
 

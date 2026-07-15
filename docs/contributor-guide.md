@@ -42,6 +42,15 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Emit no process event payload containing candidate scientific text.
 - Add a failure, conflict, and source-immutability test for each new mutating service.
 
+## Compatibility Adapter Rules
+
+- Keep private and domain-specific adapters outside Shared Core.
+- Inject adapters explicitly in process; do not add import strings, plugin discovery, entry-point loading, or an installed default registry.
+- Return bounded metadata, structured source references, digests, and public diagnostics only. Never return raw legacy payloads or absolute paths.
+- Declare every protected input and test byte-identical source and knowledge state before and after a successful inspection.
+- Treat compatibility output as a transient read-only report. Do not create report files, process events, journals, canonical records, or migration IDs.
+- Use synthetic-from-scratch fixtures for every shared test, including adapter errors and protected-input mutation detection.
+
 ## Platform Rules
 
 Tests must include Windows-shaped and POSIX-shaped paths independent of the host. Persisted relative paths always use `/`.

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -13,6 +14,7 @@ from research_kb.contracts.registry import SchemaRegistry
 from research_kb.contracts.validator import validate_bundle, validate_record
 from research_kb.errors import (
     UNSAFE_DIRECTORY_MODE,
+    PROTECTED_INPUT_CHANGED,
     WORKSPACE_IDENTITY_CONFLICT,
     WORKSPACE_LAYOUT_CONFLICT,
     WORKSPACE_NOT_INITIALIZED,
@@ -27,6 +29,8 @@ from research_kb.services.records import RecordService
 from research_kb.services.registry import RegistryService
 from research_kb.services.parse import ParseService
 from research_kb.services.bootstrap import WorkspaceBootstrapService
+from research_kb.services.compatibility import CompatibilityAdapterRegistry, CompatibilityInspectionService
+from research_kb.compatibility import LegacyReaderAdapter
 from research_kb.storage.json_io import read_jsonl
 from research_kb.storage.transactions import MANUAL_RESOLUTION_ACTIONS, TransactionManager
 from research_kb.workspace import WorkspaceLayout
@@ -51,6 +55,12 @@ def build_parser() -> argparse.ArgumentParser:
     workspace_init = workspace_commands.add_parser("init", help="validate and initialize one workspace")
     workspace_init.add_argument("--workspace", required=True, type=Path)
     workspace_init.add_argument("--dry-run", action="store_true")
+
+    compatibility = commands.add_parser("compatibility", help="inspect legacy data through explicit read-only adapters")
+    compatibility_commands = compatibility.add_subparsers(dest="compatibility_command", required=True)
+    compatibility_inspect = compatibility_commands.add_parser("inspect", help="emit one deterministic compatibility report")
+    compatibility_inspect.add_argument("--workspace", required=True, type=Path)
+    compatibility_inspect.add_argument("--adapter", required=True)
 
     contract = commands.add_parser("contract", help="validate public contract records")
     contract_commands = contract.add_subparsers(dest="contract_command", required=True)
@@ -109,13 +119,19 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    compatibility_adapters: Iterable[LegacyReaderAdapter] = (),
+) -> int:
     _configure_standard_streams()
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
         if args.command == "workspace" and args.workspace_command == "init":
             return _workspace_init(args)
+        if args.command == "compatibility" and args.compatibility_command == "inspect":
+            return _compatibility_inspect(args, compatibility_adapters)
         if args.command == "contract" and args.contract_command == "validate":
             return _contract_validate(args)
         if args.command == "privacy" and args.privacy_command == "scan":
@@ -144,6 +160,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             WORKSPACE_IDENTITY_CONFLICT,
             WORKSPACE_LAYOUT_CONFLICT,
             UNSAFE_DIRECTORY_MODE,
+            PROTECTED_INPUT_CHANGED,
         }:
             return 4
         return 2
@@ -157,6 +174,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _workspace_init(args: argparse.Namespace) -> int:
     result = WorkspaceBootstrapService(args.workspace).run(dry_run=args.dry_run)
     _write_json(result.to_dict())
+    return result.exit_code
+
+
+def _compatibility_inspect(
+    args: argparse.Namespace,
+    adapters: Iterable[LegacyReaderAdapter],
+) -> int:
+    layout = WorkspaceLayout.load(args.workspace)
+    registry = CompatibilityAdapterRegistry(adapters)
+    result = CompatibilityInspectionService(layout, registry).inspect(args.adapter)
+    _write_json(result.report)
     return result.exit_code
 
 
