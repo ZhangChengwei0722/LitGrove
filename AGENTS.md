@@ -24,7 +24,7 @@ This repository contains cross-platform Core/CLI code, public contracts, synthet
 - Do not add a remote, commit, push, publish, or create CI configuration without explicit user approval.
 - Run targeted tests, then the full suite, before reporting completion.
 
-## Milestone 1A Commands
+## Validation Commands
 
 ```powershell
 python -m pytest -q

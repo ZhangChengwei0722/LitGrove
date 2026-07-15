@@ -8,7 +8,7 @@ Shared Core + CLI
 -> Separate private workspaces
 ```
 
-Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, and Guardian checks. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Rendering remains deferred after Milestone 1B.
+Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, and Guardian checks. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Rendering remains deferred after M2A-1.
 
 ## Knowledge Flow
 

@@ -14,7 +14,7 @@ Milestone 1B and M2A-1 provide:
 - a synthetic text parse adapter for invented test sources;
 - deterministic Paper Card, Evidence, and review queue record promotion;
 - check-only or explicitly persisted Guardian reports;
-- two fully synthetic cross-domain runtime fixtures.
+- two fully synthetic cross-domain runtime fixtures;
 - config-first workspace bootstrap with shared semantic validation;
 - a deterministic, non-canonical workspace identity marker;
 - initialized-workspace enforcement for every runtime command.
