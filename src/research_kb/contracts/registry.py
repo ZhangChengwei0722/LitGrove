@@ -15,6 +15,8 @@ SCHEMA_FILES: dict[str, str] = {
     "definitions": "definitions.schema.json",
     "workspace": "workspace.schema.json",
     "workspace-marker": "workspace-marker.schema.json",
+    "compatibility-difference": "compatibility-difference.schema.json",
+    "compatibility-report": "compatibility-report.schema.json",
     "domain-profile": "domain-profile.schema.json",
     "registry-paper": "registry-paper.schema.json",
     "parsed-page": "parsed-page.schema.json",

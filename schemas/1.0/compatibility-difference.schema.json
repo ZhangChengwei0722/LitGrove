@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:compatibility-difference",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "difference_id", "legacy_identity", "difference_type", "severity", "blocking",
+    "field_path", "legacy_value_digest", "projected_value_digest", "loss_scope", "message", "risk",
+    "recommended_action", "private_detail_ref"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "difference_id": {"type": "string", "pattern": "^diff_sha256_[0-9a-f]{64}$"},
+    "legacy_identity": {"$ref": "#/$defs/legacy_identity"},
+    "difference_type": {
+      "enum": [
+        "representation_only", "field_mapping_loss", "provenance_break", "semantic_mismatch",
+        "status_authority_mismatch", "unsupported_legacy_view"
+      ]
+    },
+    "severity": {"enum": ["info", "warning", "error"]},
+    "blocking": {"type": "boolean"},
+    "field_path": {"$ref": "#/$defs/json_pointer"},
+    "legacy_value_digest": {"$ref": "#/$defs/nullable_digest"},
+    "projected_value_digest": {"$ref": "#/$defs/nullable_digest"},
+    "loss_scope": {
+      "type": ["string", "null"],
+      "enum": ["identity", "provenance", "authority", "evidence_support", "other", null]
+    },
+    "message": {"$ref": "#/$defs/bounded_text"},
+    "risk": {"$ref": "#/$defs/bounded_text"},
+    "recommended_action": {"$ref": "#/$defs/bounded_text"},
+    "private_detail_ref": {
+      "anyOf": [{"$ref": "#/$defs/compatibility_source_ref"}, {"type": "null"}]
+    }
+  },
+  "$defs": {
+    "legacy_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_system", "record_kind", "legacy_id"],
+      "properties": {
+        "source_system": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+        "record_kind": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+        "legacy_id": {"type": "string", "minLength": 1, "maxLength": 512}
+      }
+    },
+    "compatibility_source_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root_role", "relative_path"],
+      "properties": {
+        "root_role": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+        "relative_path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!~(?:/|$))(?![A-Za-z]:/)(?!.*\\\\)(?!(?:.*?/)?\\.{1,2}(?:/|$))[^/]+(?:/[^/]+)*$"
+        }
+      }
+    },
+    "json_pointer": {
+      "type": "string",
+      "pattern": "^/(?:[^~/]|~[01])*(?:/(?:[^~/]|~[01])*)*$"
+    },
+    "nullable_digest": {
+      "anyOf": [
+        {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        {"type": "null"}
+      ]
+    },
+    "bounded_text": {"type": "string", "minLength": 1, "maxLength": 512}
+  }
+}

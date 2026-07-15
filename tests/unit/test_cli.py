@@ -267,6 +267,7 @@ def test_workspace_init_cli_dry_run_apply_and_no_change(tmp_path, capsys) -> Non
         ["registry", "add", "--root-id", "alpha-sources", "--relative-path", "x.txt", "--metadata", "missing.json"],
         ["parse", "run", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111", "--adapter", "synthetic-text"],
         ["record", "promote", "--request", "missing.json", "--actor", "agent"],
+        ["compatibility", "inspect", "--adapter", "missing-adapter"],
         ["guardian", "check"],
         ["transaction", "recover", "--dry-run"],
     ],

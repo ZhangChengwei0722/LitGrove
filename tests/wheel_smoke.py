@@ -22,10 +22,18 @@ def main() -> int:
         subprocess.run(
             [
                 str(python), "-c",
+                "from research_kb.compatibility import CompatibilitySourceRef, LegacyReaderAdapter; "
                 "from research_kb.contracts.registry import SchemaRegistry; "
                 "from research_kb.guardian import GuardianService; "
-                "from research_kb.services import ParseService, RecordService, RegistryService; "
-                "assert SchemaRegistry().schema('mutation-request')['$id'].endswith('mutation-request')",
+                "from research_kb.services import CompatibilityAdapterRegistry, CompatibilityInspectionService, ParseService, RecordService, RegistryService; "
+                "registry = SchemaRegistry(); "
+                "assert registry.schema('mutation-request')['$id'].endswith('mutation-request'); "
+                "assert registry.schema('compatibility-difference')['$id'].endswith('compatibility-difference'); "
+                "assert registry.schema('compatibility-report')['$id'].endswith('compatibility-report'); "
+                "assert LegacyReaderAdapter.__name__ == 'LegacyReaderAdapter'; "
+                "assert CompatibilitySourceRef.__name__ == 'CompatibilitySourceRef'; "
+                "assert CompatibilityAdapterRegistry.__name__ == 'CompatibilityAdapterRegistry'; "
+                "assert CompatibilityInspectionService.__name__ == 'CompatibilityInspectionService'",
             ],
             cwd=temporary,
             check=True,
