@@ -19,7 +19,8 @@ This repository contains cross-platform Core/CLI code, public contracts, synthet
 - Persist source locations as `root_id + relative_path` using POSIX `/`.
 - Use UTF-8 and LF for repository text.
 - Keep changes small and tied to an approved issue or plan.
-- Schema, state, path, ID, and directory-contract changes require review from both collaborators.
+- Schema, state, path, ID, and directory-contract changes require explicit user approval, a focused review, and targeted plus full validation. External collaborator review is optional and is not an acceptance gate.
+- Windows is the required live acceptance platform. Keep host-independent POSIX path tests and `pathlib` portability; live macOS validation is best-effort unless a future milestone explicitly requires it.
 - Do not add a remote, commit, push, publish, or create CI configuration without explicit user approval.
 - Run targeted tests, then the full suite, before reporting completion.
 
