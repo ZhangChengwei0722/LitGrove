@@ -21,7 +21,7 @@ Release-resource smoke after `python -m build`:
 python tests/wheel_smoke.py
 ```
 
-Schema, state, ID, path, and directory-protocol changes require both collaborators' review.
+Schema, state, ID, path, and directory-protocol changes require explicit user approval, focused self-review, targeted tests, and the full Windows validation gate. External collaborator review is optional.
 
 ## Fixture Rules
 
@@ -44,3 +44,5 @@ Schema, state, ID, path, and directory-protocol changes require both collaborato
 ## Platform Rules
 
 Tests must include Windows-shaped and POSIX-shaped paths independent of the host. Persisted relative paths always use `/`.
+
+Windows is the required live acceptance platform. macOS compatibility remains a design target and may be checked when available, but a live macOS run is not a release gate unless a later approved milestone says otherwise.
