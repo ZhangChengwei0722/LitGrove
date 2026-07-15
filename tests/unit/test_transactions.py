@@ -57,7 +57,7 @@ def test_successful_transaction_replaces_target_records_event_and_retains_journa
 def test_validation_failure_preserves_original_and_records_failure(tmp_path: Path) -> None:
     layout = make_runtime_workspace(tmp_path)
     target = layout.registry_path
-    target.parent.mkdir(parents=True)
+    target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(b'{"old":true}\n')
     before = target.read_bytes()
 
@@ -86,7 +86,7 @@ def test_validation_failure_preserves_original_and_records_failure(tmp_path: Pat
 def test_lock_timeout_and_digest_conflict_do_not_mutate_target(tmp_path: Path) -> None:
     layout = make_runtime_workspace(tmp_path)
     target = layout.registry_path
-    target.parent.mkdir(parents=True)
+    target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(b'{"old":true}\n')
     before = target.read_bytes()
     lock = FileLock(layout.lock_path)
@@ -123,7 +123,7 @@ def test_lock_timeout_and_digest_conflict_do_not_mutate_target(tmp_path: Path) -
 def test_recovery_after_crash_before_replace_records_failure(tmp_path: Path) -> None:
     layout = make_runtime_workspace(tmp_path)
     target = layout.registry_path
-    target.parent.mkdir(parents=True)
+    target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(b'{"old":true}\n')
 
     def crash(phase: str) -> None:

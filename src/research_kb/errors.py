@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass
 from typing import Any, Iterable
 
@@ -22,6 +23,11 @@ JSONL_FORMAT_ERROR = "RKBC-015"
 LOCK_TIMEOUT = "RKBC-016"
 WRITE_CONFLICT = "RKBC-017"
 INCOMPLETE_TRANSACTION = "RKBC-018"
+WORKSPACE_NOT_INITIALIZED = "RKBC-019"
+WORKSPACE_IDENTITY_CONFLICT = "RKBC-020"
+WORKSPACE_LAYOUT_CONFLICT = "RKBC-021"
+UNSAFE_DIRECTORY_MODE = "RKBC-022"
+WORKSPACE_PATH_WARNING = "RKBC-023"
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,7 +40,9 @@ class Diagnostic:
     severity: str = "error"
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        value = asdict(self)
+        value["message"] = redact_absolute_paths(value["message"])
+        return value
 
 
 class ResearchKBError(ValueError):
@@ -49,3 +57,25 @@ def json_pointer(parts: Iterable[object]) -> str:
         value = str(part).replace("~", "~0").replace("/", "~1")
         escaped.append(value)
     return "/" + "/".join(escaped) if escaped else ""
+
+
+_QUOTED_VALUE = re.compile(r"(?P<quote>['\"])(?P<value>.*?)(?P=quote)")
+_UNQUOTED_WINDOWS_PATH = re.compile(r"(?i)(?<![a-z0-9_])(?:[a-z]:[\\/]|\\\\)[^\s'\",;)\]]+")
+
+
+def redact_absolute_paths(message: str) -> str:
+    def redact_quoted(match: re.Match[str]) -> str:
+        value = match.group("value")
+        if _looks_like_absolute_path(value):
+            return f"{match.group('quote')}<redacted-path>{match.group('quote')}"
+        return match.group(0)
+
+    redacted = _QUOTED_VALUE.sub(redact_quoted, message)
+    return _UNQUOTED_WINDOWS_PATH.sub("<redacted-path>", redacted)
+
+
+def _looks_like_absolute_path(value: str) -> bool:
+    return bool(
+        re.match(r"(?i)^[a-z]:[\\/]", value)
+        or value.startswith(("/", "\\\\", "//", "~/"))
+    )

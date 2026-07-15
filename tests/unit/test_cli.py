@@ -3,14 +3,31 @@ from io import BytesIO, TextIOWrapper
 from pathlib import Path
 
 import pytest
+import yaml
 
 from research_kb.cli import _configure_standard_streams, _write_json, main
+from research_kb.errors import Diagnostic
 from research_kb.storage.transactions import TransactionManager
 from tests.fixture_factory import make_bundle
 from tests.runtime_helpers import make_runtime_workspace
 
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.mark.parametrize(
+    "private_value",
+    [
+        "Z:" + "/private/research",
+        "\\" * 2 + "server\\share\\file",
+        "/" + "home/private/file",
+        "~" + "/private/file",
+    ],
+)
+def test_diagnostic_output_redacts_absolute_and_home_paths(private_value: str) -> None:
+    output = Diagnostic("RKBC-999", "synthetic", None, "", f"failed at '{private_value}'").to_dict()
+    assert private_value not in output["message"]
+    assert "<redacted-path>" in output["message"]
 
 
 def test_contract_validate_cli(capsys) -> None:
@@ -222,3 +239,134 @@ def test_guardian_cli_returns_findings_exit_for_changed_source(tmp_path, capsys)
     output = json.loads(capsys.readouterr().out)
     assert output["status"] == "failure"
     assert "RKBC-009" in {item["code"] for item in output["findings"]}
+
+
+def test_workspace_init_cli_dry_run_apply_and_no_change(tmp_path, capsys) -> None:
+    root = tmp_path / "cli-workspace"
+    root.mkdir()
+    (root / "sources").mkdir()
+    fixture_root = ROOT / "tests" / "fixtures" / "workspaces" / "domain_alpha"
+    (root / "workspace.yaml").write_bytes((fixture_root / "workspace.yaml").read_bytes())
+    (root / "domain-profile.yaml").write_bytes((fixture_root / "domain-profile.yaml").read_bytes())
+    config_path = root / "workspace.yaml"
+
+    assert main(["workspace", "init", "--workspace", str(config_path), "--dry-run"]) == 0
+    dry_run = json.loads(capsys.readouterr().out)
+    assert dry_run["result"] == "planned"
+    assert not (root / "knowledge").exists()
+
+    assert main(["workspace", "init", "--workspace", str(config_path)]) == 0
+    assert json.loads(capsys.readouterr().out)["result"] == "initialized"
+    assert main(["workspace", "init", "--workspace", str(config_path)]) == 0
+    assert json.loads(capsys.readouterr().out)["result"] == "no_change"
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["registry", "add", "--root-id", "alpha-sources", "--relative-path", "x.txt", "--metadata", "missing.json"],
+        ["parse", "run", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111", "--adapter", "synthetic-text"],
+        ["record", "promote", "--request", "missing.json", "--actor", "agent"],
+        ["guardian", "check"],
+        ["transaction", "recover", "--dry-run"],
+    ],
+)
+def test_every_runtime_cli_command_requires_initialized_workspace(tmp_path, capsys, argv) -> None:
+    root = tmp_path / "private-root"
+    root.mkdir()
+    (root / "sources").mkdir()
+    fixture_root = ROOT / "tests" / "fixtures" / "workspaces" / "domain_alpha"
+    config_path = root / "workspace.yaml"
+    config_path.write_bytes((fixture_root / "workspace.yaml").read_bytes())
+    (root / "domain-profile.yaml").write_bytes((fixture_root / "domain-profile.yaml").read_bytes())
+
+    result = main([argv[0], argv[1], "--workspace", str(config_path), *argv[2:]])
+    captured = capsys.readouterr()
+    diagnostic = json.loads(captured.err)["diagnostic"]
+    assert result == 4
+    assert diagnostic["code"] == "RKBC-019"
+    assert str(tmp_path) not in captured.err
+
+
+def test_workspace_init_blocked_output_is_redacted_and_uses_exit_four(tmp_path, capsys) -> None:
+    root = tmp_path / "private-root"
+    root.mkdir()
+    (root / "sources").mkdir()
+    fixture_root = ROOT / "tests" / "fixtures" / "workspaces" / "domain_alpha"
+    config_path = root / "workspace.yaml"
+    config_path.write_bytes((fixture_root / "workspace.yaml").read_bytes())
+    (root / "domain-profile.yaml").write_bytes((fixture_root / "domain-profile.yaml").read_bytes())
+    knowledge = root / "knowledge"
+    knowledge.mkdir()
+    (knowledge / "unknown.txt").write_text("unknown", encoding="utf-8")
+
+    result = main(["workspace", "init", "--workspace", str(config_path)])
+    output_text = capsys.readouterr().out
+    output = json.loads(output_text)
+    assert result == 4
+    assert output["status"] == "failure"
+    assert output["result"] == "blocked"
+    assert str(tmp_path) not in output_text
+
+
+def test_workspace_init_cli_distinguishes_input_and_version_errors(tmp_path, capsys) -> None:
+    missing = tmp_path / "private" / "missing.yaml"
+    assert main(["workspace", "init", "--workspace", str(missing)]) == 2
+    missing_output = capsys.readouterr().out
+    assert str(tmp_path) not in missing_output
+
+    malformed = tmp_path / "malformed.yaml"
+    malformed.write_text("workspace: [", encoding="utf-8")
+    assert main(["workspace", "init", "--workspace", str(malformed)]) == 2
+    assert json.loads(capsys.readouterr().out)["result"] == "blocked"
+
+    unsupported = tmp_path / "unsupported.yaml"
+    unsupported.write_text("contract_version: '2.0'\n", encoding="utf-8", newline="\n")
+    assert main(["workspace", "init", "--workspace", str(unsupported)]) == 3
+    output = json.loads(capsys.readouterr().out)
+    assert output["diagnostics"][0]["code"] == "RKBC-001"
+
+
+def test_workspace_cli_redacts_absolute_paths_from_schema_and_runtime_errors(tmp_path, capsys) -> None:
+    private_value = "Z:" + "/private/research"
+    invalid_config = tmp_path / "invalid-workspace.yaml"
+    invalid_config.write_text(
+        yaml.safe_dump(
+            {
+                "contract_version": "1.0",
+                "workspace": {
+                    "id": "workspace_a1111111-1111-4111-8111-111111111111",
+                    "knowledge_root": "./knowledge",
+                    "source_roots": private_value,
+                    "local_inbox": "./inbox",
+                    "domain_profile": "./domain-profile.yaml",
+                },
+                "runtime": {
+                    "path_serialization": "workspace_relative_posix",
+                    "default_encoding": "utf-8",
+                    "line_ending": "lf",
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+
+    assert main(["workspace", "init", "--workspace", str(invalid_config)]) == 2
+    assert private_value not in capsys.readouterr().out
+
+    runtime_root = tmp_path / "runtime"
+    runtime_root.mkdir()
+    layout = make_runtime_workspace(runtime_root)
+    source = layout.source_roots["alpha-sources"] / "study.txt"
+    source.write_text("Invented runtime source.\n", encoding="utf-8", newline="\n")
+    metadata = tmp_path / "metadata.json"
+    metadata.write_text("{}", encoding="utf-8")
+    layout.registry_path.write_bytes(b"{}")
+
+    assert main([
+        "registry", "add", "--workspace", str(layout.config.path),
+        "--root-id", "alpha-sources", "--relative-path", "study.txt", "--metadata", str(metadata),
+    ]) == 2
+    assert str(tmp_path) not in capsys.readouterr().err

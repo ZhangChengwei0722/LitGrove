@@ -422,6 +422,7 @@ def _require_ref(
 
 def _record_id(kind: str, record: dict[str, Any]) -> str | None:
     fields = {
+        "workspace-marker": "workspace_id",
         "registry-paper": "paper_id",
         "paper-card": "paper_id",
         "evidence": "evidence_id",

@@ -129,4 +129,4 @@ def _strict_text(path: Path, record_kind: str) -> str:
 
 
 def _format_error(record_kind: str, path: Path, message: str) -> ResearchKBError:
-    return ResearchKBError(Diagnostic(JSONL_FORMAT_ERROR, record_kind, None, str(path), message))
+    return ResearchKBError(Diagnostic(JSONL_FORMAT_ERROR, record_kind, None, "", message))

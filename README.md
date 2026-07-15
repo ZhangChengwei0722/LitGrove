@@ -4,7 +4,7 @@ Cross-platform, local-first contracts and deterministic CLI primitives for evide
 
 ## Current Scope
 
-Milestone 1B provides:
+Milestone 1B and M2A-1 provide:
 
 - versioned workspace, domain, record, and candidate schemas;
 - portable source references and stable IDs;
@@ -15,6 +15,9 @@ Milestone 1B provides:
 - deterministic Paper Card, Evidence, and review queue record promotion;
 - check-only or explicitly persisted Guardian reports;
 - two fully synthetic cross-domain runtime fixtures.
+- config-first workspace bootstrap with shared semantic validation;
+- a deterministic, non-canonical workspace identity marker;
+- initialized-workspace enforcement for every runtime command.
 
 Real PDF parsing, scientific claim generation, Question Mapping runtime, Step 7 runtime, Markdown rendering, and the Portable Agent Skill remain later milestones. The CLI never calls an LLM or makes scientific judgments.
 
@@ -36,7 +39,15 @@ On macOS, use `.venv/bin/python` instead.
 
 ## Runtime Commands
 
-All mutation commands resolve paths through an explicit workspace config:
+Initialize an existing workspace config before running workspace services:
+
+```text
+research-kb workspace init --workspace <workspace.yaml> [--dry-run]
+```
+
+Bootstrap validates source/config relationships, creates only the approved managed scaffold, and writes `.research-kb/workspace.json`. It never creates or scans `local_inbox`, changes source assets, creates canonical records, or emits a process event.
+
+All runtime commands then resolve paths through the initialized workspace:
 
 ```text
 research-kb registry add --workspace <workspace.yaml> --root-id <root> --relative-path <path> --metadata <metadata.json>

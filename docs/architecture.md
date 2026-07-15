@@ -41,4 +41,20 @@ Guardian requires every completed journal to have exactly one matching process e
 
 Existing canonical records are validated with the internal `stored` context. This bypasses submitter-state checks only while reading already persisted state; it grants no mutation authority and is not exposed by CLI actor choices.
 
+## M2A-1 Workspace Boundary
+
+```text
+existing workspace config + domain profile
+-> shared semantic validation
+-> read-only preflight
+-> workspace lock and repeated preflight
+-> exact managed directory scaffold
+-> deterministic workspace identity marker
+-> initialized runtime
+```
+
+`WorkspaceLayout.load` is the single initialized-workspace gate used by Registry, Parse, Record, Guardian, and Recovery commands. Bootstrap alone may resolve an unbound config. A marker mismatch, unsafe layout, unknown managed content, source/root conflict, or missing marker fails closed.
+
+`.research-kb/workspace.json` contains only workspace/profile identities, the layout contract version, and a SHA-256 config fingerprint. It is operational metadata, not canonical scientific state, and emits no process event or transaction journal. A markerless populated M1B store is adopted only after its complete structured bundle and transaction state validate without rewriting records.
+
 Question Mapping, Step 7 runtime, Markdown rendering, real PDF parsing, and Agent Skill orchestration are intentionally absent.

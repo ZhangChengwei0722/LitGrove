@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:workspace-marker",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "workspace_id", "domain_profile_id", "domain_profile_version", "layout_contract_version", "config_fingerprint"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "domain_profile_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+    "domain_profile_version": {"const": "1.0"},
+    "layout_contract_version": {"const": "m2a-1"},
+    "config_fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "value"],
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "value": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

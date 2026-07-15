@@ -4,6 +4,7 @@ from pathlib import Path
 
 import yaml
 
+from research_kb.services.bootstrap import WorkspaceBootstrapService
 from research_kb.workspace import WorkspaceLayout
 from tests.fixture_factory import SECTIONS
 
@@ -51,4 +52,7 @@ def make_runtime_workspace(tmp_path: Path, domain: str = "alpha") -> WorkspaceLa
         encoding="utf-8",
         newline="\n",
     )
+    result = WorkspaceBootstrapService(config_path).run()
+    if result.exit_code != 0:
+        raise AssertionError(result.to_dict())
     return WorkspaceLayout.load(config_path)
