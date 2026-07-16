@@ -9,7 +9,7 @@
     "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
     "domain_profile_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
     "domain_profile_version": {"const": "1.0"},
-    "layout_contract_version": {"const": "m2a-1"},
+    "layout_contract_version": {"enum": ["m2a-1", "m2b-1"]},
     "config_fingerprint": {
       "type": "object",
       "additionalProperties": false,

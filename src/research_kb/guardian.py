@@ -10,11 +10,13 @@ from research_kb.errors import (
     GROUNDING_MISMATCH,
     INCOMPLETE_TRANSACTION,
     PATH_ESCAPE,
+    SNAPSHOT_MISMATCH,
     Diagnostic,
     ResearchKBError,
 )
 from research_kb.identifiers import Namespace, allocate_id
 from research_kb.process_events import timestamp
+from research_kb.services.question_mapping import mapping_freshness_diagnostics
 from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl, serialize_jsonl
 from research_kb.storage.transactions import TransactionManager, TransactionResult, build_journal_event
 from research_kb.workspace import WorkspaceLayout
@@ -51,6 +53,11 @@ class GuardianService:
                 )
             )
             diagnostics.extend(self._source_diagnostics(entries))
+            for kind, mapping in entries:
+                if kind == "question-mapping" and not validate_record(
+                    "question-mapping", mapping, actor="stored"
+                ):
+                    diagnostics.extend(mapping_freshness_diagnostics(mapping, entries))
         diagnostics.extend(self._canonical_path_diagnostics())
         process_events = [record for kind, record in entries if kind == "process-event"]
         diagnostics.extend(self._transaction_diagnostics(process_events))
@@ -105,6 +112,7 @@ class GuardianService:
             self.layout.review_queue_path,
             self.layout.process_events_path,
             self.layout.guardian_reports_path,
+            self.layout.question_mappings_path,
         ]
         for directory, pattern in (
             (self.layout.knowledge_root / "parse" / "by_paper", "*.pages.jsonl"),
@@ -222,6 +230,7 @@ def _finding_from_diagnostic(diagnostic: Diagnostic, defined_ids: set[str]) -> d
         GROUNDING_MISMATCH: "Restore the registered source or register the changed asset as a new controlled input.",
         INCOMPLETE_TRANSACTION: "Run transaction recover and inspect ambiguous digests before any further mutation.",
         PATH_ESCAPE: "Move the canonical target under knowledge_root and correct the workspace path contract.",
+        SNAPSHOT_MISMATCH: "Refresh the Question Mapping from its current Paper Card, evidence, and review queue inputs.",
     }.get(diagnostic.code, "Inspect the referenced structured record and correct the reported contract violation.")
     return {
         "code": diagnostic.code,
@@ -252,6 +261,9 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
         elif kind == "paper-card":
             for section in record.get("sections", []):
                 result.update(unit["unit_id"] for unit in section.get("units", []))
+        elif kind == "question-mapping":
+            result.add(record["question_id"])
+            result.update(link["question_link_id"] for link in record.get("paper_links", []))
         elif kind in fields:
             value = record.get(fields[kind])
             if isinstance(value, str):

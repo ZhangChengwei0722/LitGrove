@@ -26,6 +26,7 @@ PhaseHook = Callable[[str], None]
 TemporaryValidator = Callable[[Path], None]
 PostReplaceValidator = Callable[[], None]
 EventIdFactory = Callable[[], str]
+_EXPECTED_BEFORE_UNSET = object()
 
 MANUAL_RESOLUTION_ACTIONS = frozenset({
     "completed_event_missing",
@@ -70,14 +71,14 @@ class TransactionManager:
         output_refs: list[str],
         validator: TemporaryValidator | None = None,
         post_replace_validator: PostReplaceValidator | None = None,
-        expected_before_sha256: str | None = None,
+        expected_before_sha256: str | None | object = _EXPECTED_BEFORE_UNSET,
         phase_hook: PhaseHook | None = None,
         event_id: str | None = None,
     ) -> TransactionResult:
         resolved_target = self.layout.ensure_writable_target(target)
         with workspace_lock(self.layout.lock_path, timeout=self.lock_timeout):
             before_sha256 = file_sha256(resolved_target)
-            if expected_before_sha256 is not None and before_sha256 != expected_before_sha256:
+            if expected_before_sha256 is not _EXPECTED_BEFORE_UNSET and before_sha256 != expected_before_sha256:
                 raise ResearchKBError(
                     Diagnostic(WRITE_CONFLICT, "transaction", None, "", "canonical target changed before promotion")
                 )

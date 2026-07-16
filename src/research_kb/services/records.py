@@ -24,7 +24,7 @@ from research_kb.workspace import WorkspaceLayout
 
 
 IdAllocator = Callable[[Namespace], str]
-SUPPORTED_KINDS = {"registry-paper", "paper-card", "evidence", "review-queue"}
+SUPPORTED_KINDS = {"registry-paper", "paper-card", "evidence", "review-queue", "question-mapping"}
 HUMAN_REVIEW_STATES = {"human_checked", "verified"}
 COMMON_OWNED_FIELDS = {"schema_version", "automation_status", "created_at", "updated_at", "paper_id"}
 KIND_OWNED_FIELDS = {
@@ -60,6 +60,14 @@ class RecordService:
         self._validate_request_shape(request)
         if request.record_kind == "registry-paper":
             return self._promote_registry(request, actor)
+        if request.record_kind == "question-mapping":
+            from research_kb.services.question_mapping import QuestionMappingService
+
+            return QuestionMappingService(
+                self.layout,
+                transaction_manager=self.transactions,
+                id_allocator=self.id_allocator,
+            ).promote(request, actor=actor)
 
         entries = load_workspace_entries(self.layout)
         validate_workspace_entries(entries)
@@ -294,6 +302,16 @@ class RecordService:
         if request.operation == "replace" and request.target_record_id is None:
             raise ResearchKBError(
                 Diagnostic(SCHEMA_VALIDATION_FAILED, "mutation-request", None, "/target_record_id", "replace target is required")
+            )
+        if request.record_kind != "question-mapping" and request.question_origin is not None:
+            raise ResearchKBError(
+                Diagnostic(
+                    SCHEMA_VALIDATION_FAILED,
+                    "mutation-request",
+                    request.target_record_id,
+                    "/context/question_origin",
+                    "question_origin is only valid for question mappings",
+                )
             )
 
     @staticmethod

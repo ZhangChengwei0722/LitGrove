@@ -8,7 +8,7 @@ Shared Core + CLI
 -> Separate private workspaces
 ```
 
-Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, and Guardian checks. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Rendering remains deferred after M2A-1.
+Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, and Guardian checks. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Rendering remains deferred after M2B-1.
 
 ## Knowledge Flow
 
@@ -71,4 +71,21 @@ Shared Core owns adapter metadata validation, source-reference confinement, diff
 
 Compatibility inspection is not migration. It allocates no replacement canonical IDs, writes no report or process event, and does not alter the legacy source of truth. If declared protected input changes, disappears, changes type, or becomes unsafe during inspection, the run fails with `RKBC-026` even when the adapter also raises.
 
-Question Mapping, Step 7 runtime, Markdown rendering, real PDF parsing, migration, and Agent Skill orchestration are intentionally absent.
+Step 7 runtime, Markdown rendering, real PDF parsing, migration, and Agent Skill orchestration are intentionally absent.
+
+## M2B-1 Question Mapping Boundary
+
+```text
+user-supplied or user-approved question
++ selected Paper Card Units
++ question-specific review queue boundaries
+-> QuestionMappingService
+-> exact evidence and boundary projection
+-> questions/mappings.jsonl
+```
+
+The Agent supplies the semantic selection, role, and rationale. Core owns `question_id`, `question_link_id`, domain binding, timestamps, evidence expansion, required Card Unit boundaries, ordering, validation, and atomic persistence. One question has at most one link per paper; replace preserves existing question/link identities and cannot remove a paper link in M2B-1.
+
+`questions/mappings.jsonl` is canonical organizational state, not canonical scientific evidence. It points back to Paper Card Units and canonical evidence rather than duplicating their scientific content. Guardian warns with `RKBC-014` when linked Card, evidence, or queue records are newer than a mapping; it never refreshes the mapping automatically.
+
+New workspaces initialize at layout `m2b-1`. Exact `m2a-1` predecessors are runtime-blocked with `RKBC-027` and can be upgraded only through `workspace init`. The upgrade creates `questions/` and replaces operational marker metadata; it creates no empty JSONL, process event, journal, or scientific record.

@@ -11,17 +11,22 @@ import yaml
 
 from research_kb import __version__
 from research_kb.contracts.registry import SchemaRegistry
+from research_kb.bundle import load_workspace_entries, records_of_kind, validate_workspace_entries
 from research_kb.contracts.validator import validate_bundle, validate_record
 from research_kb.errors import (
     UNSAFE_DIRECTORY_MODE,
+    UNRESOLVED_REFERENCE,
     PROTECTED_INPUT_CHANGED,
     WORKSPACE_IDENTITY_CONFLICT,
     WORKSPACE_LAYOUT_CONFLICT,
+    WORKSPACE_LAYOUT_UPGRADE_REQUIRED,
     WORKSPACE_NOT_INITIALIZED,
+    Diagnostic,
     ResearchKBError,
     redact_absolute_paths,
 )
 from research_kb.guardian import GuardianService
+from research_kb.identifiers import Namespace, validate_id
 from research_kb.mutation import load_mutation_request
 from research_kb.parse.synthetic_text import SyntheticTextAdapter
 from research_kb.privacy import scan_repository
@@ -42,6 +47,7 @@ ID_FIELDS = {
     "review-queue": "queue_id",
     "process-event": "event_id",
     "guardian-report": "guardian_report_id",
+    "question-mapping": "question_id",
 }
 
 
@@ -111,6 +117,14 @@ def build_parser() -> argparse.ArgumentParser:
     guardian_check.add_argument("--workspace", required=True, type=Path)
     guardian_check.add_argument("--write-report", action="store_true")
 
+    question = commands.add_parser("question", help="inspect persisted question mappings")
+    question_commands = question.add_subparsers(dest="question_command", required=True)
+    question_list = question_commands.add_parser("list", help="list question mappings")
+    question_list.add_argument("--workspace", required=True, type=Path)
+    question_show = question_commands.add_parser("show", help="show one question mapping")
+    question_show.add_argument("--workspace", required=True, type=Path)
+    question_show.add_argument("--question-id", required=True)
+
     transaction = commands.add_parser("transaction", help="inspect or recover interrupted writes")
     transaction_commands = transaction.add_subparsers(dest="transaction_command", required=True)
     recover = transaction_commands.add_parser("recover", help="recover transaction journals by digest")
@@ -146,6 +160,10 @@ def main(
             return _parse_run(args)
         if args.command == "guardian" and args.guardian_command == "check":
             return _guardian_check(args)
+        if args.command == "question" and args.question_command == "list":
+            return _question_list(args)
+        if args.command == "question" and args.question_command == "show":
+            return _question_show(args)
         if args.command == "transaction" and args.transaction_command == "recover":
             return _transaction_recover(args)
     except ResearchKBError as error:
@@ -159,6 +177,7 @@ def main(
             WORKSPACE_NOT_INITIALIZED,
             WORKSPACE_IDENTITY_CONFLICT,
             WORKSPACE_LAYOUT_CONFLICT,
+            WORKSPACE_LAYOUT_UPGRADE_REQUIRED,
             UNSAFE_DIRECTORY_MODE,
             PROTECTED_INPUT_CHANGED,
         }:
@@ -323,12 +342,58 @@ def _guardian_check(args: argparse.Namespace) -> int:
     return 0 if result.report["status"] == "success" else 1
 
 
+def _question_list(args: argparse.Namespace) -> int:
+    layout = WorkspaceLayout.load(args.workspace)
+    entries = load_workspace_entries(layout)
+    validate_workspace_entries(entries)
+    questions = sorted(records_of_kind(entries, "question-mapping"), key=lambda item: item["question_id"])
+    _write_json({
+        "status": "success",
+        "questions": [
+            {
+                "question_id": item["question_id"],
+                "question_text": item["question_text"],
+                "scope": item["scope"],
+                "mapping_status": item["mapping_status"],
+                "linked_paper_count": len(item["paper_links"]),
+                "updated_at": item["updated_at"],
+            }
+            for item in questions
+        ],
+    })
+    return 0
+
+
+def _question_show(args: argparse.Namespace) -> int:
+    layout = WorkspaceLayout.load(args.workspace)
+    question_id = validate_id(args.question_id, Namespace.QUESTION)
+    entries = load_workspace_entries(layout)
+    validate_workspace_entries(entries)
+    question = next(
+        (item for item in records_of_kind(entries, "question-mapping") if item["question_id"] == question_id),
+        None,
+    )
+    if question is None:
+        raise ResearchKBError(
+            Diagnostic(
+                UNRESOLVED_REFERENCE,
+                "question-mapping",
+                question_id,
+                "/question_id",
+                "question mapping does not exist",
+            )
+        )
+    _write_json({"status": "success", "question": question})
+    return 0
+
+
 def _record_id(kind: str, record: dict[str, Any]) -> str:
     id_field = {
         "registry-paper": "paper_id",
         "paper-card": "paper_id",
         "evidence": "evidence_id",
         "review-queue": "queue_id",
+        "question-mapping": "question_id",
     }[kind]
     return record[id_field]
 

@@ -33,6 +33,7 @@ from research_kb.storage.transactions import build_journal_event
 from research_kb.workspace import WorkspaceLayout
 from research_kb.workspace_validation import (
     MANAGED_DIRECTORIES,
+    PREVIOUS_LAYOUT_CONTRACT_VERSION,
     WorkspaceContext,
     _is_unsafe_link,
     _lexists,
@@ -93,6 +94,16 @@ class WorkspaceBootstrapService:
         if initial.errors:
             return self._blocked(initial.context, initial.diagnostics, dry_run=dry_run, exit_code=4)
         if dry_run:
+            if self._requires_layout_upgrade(initial.context):
+                try:
+                    self._validate_adoption(initial.context)
+                except ResearchKBError as error:
+                    return self._blocked(
+                        initial.context,
+                        (error.diagnostic,),
+                        dry_run=True,
+                        exit_code=4,
+                    )
             return BootstrapResult(
                 "success",
                 "planned",
@@ -108,6 +119,7 @@ class WorkspaceBootstrapService:
     def _apply(self, initial: WorkspaceContext, warnings: tuple[Diagnostic, ...]) -> BootstrapResult:
         actions: list[dict[str, str]] = []
         adoption_validation = False
+        upgrade_validation = False
         try:
             self._ensure_lock_scaffold(initial, actions)
             lock_path = initial.knowledge_root / ".research-kb" / "locks" / "workspace.lock"
@@ -141,8 +153,21 @@ class WorkspaceBootstrapService:
                     adoption_validation = True
                     self._validate_adoption(context)
                     adoption_validation = False
+                upgrade = self._requires_layout_upgrade(context)
+                if upgrade:
+                    upgrade_validation = True
+                    self._validate_adoption(context)
+                    upgrade_validation = False
                 self._ensure_managed_directories(context, actions)
-                if context.marker_path.exists():
+                if upgrade:
+                    self.marker_writer(
+                        context.marker_path,
+                        serialize_json(context.expected_marker),
+                        f"workspace-marker-{uuid.uuid4().hex}",
+                    )
+                    actions.append({"relative_path": ".research-kb/workspace.json", "action": "upgrade_identity_marker"})
+                    self._verify_marker(context)
+                elif context.marker_path.exists():
                     actions.append({"relative_path": ".research-kb/workspace.json", "action": "already_present"})
                 else:
                     self.marker_writer(
@@ -154,7 +179,7 @@ class WorkspaceBootstrapService:
                     self._verify_marker(context)
             self._preserve_lock_file(context, lock_path)
         except ResearchKBError as error:
-            exit_code = 4 if adoption_validation or error.diagnostic.code in {
+            exit_code = 4 if adoption_validation or upgrade_validation or error.diagnostic.code in {
                 LOCK_TIMEOUT,
                 INCOMPLETE_TRANSACTION,
                 WORKSPACE_IDENTITY_CONFLICT,
@@ -178,7 +203,7 @@ class WorkspaceBootstrapService:
             if item["action"] == "acquire_workspace_lock"
         )
         created = any(
-            item["action"] in {"create_directory", "write_identity_marker"}
+            item["action"] in {"create_directory", "write_identity_marker", "upgrade_identity_marker"}
             for item in actions[lock_action_index + 1 :]
         )
         return BootstrapResult(
@@ -320,6 +345,7 @@ class WorkspaceBootstrapService:
             "review_queue/items.jsonl",
             "process/events.jsonl",
             "guardian/reports.jsonl",
+            "questions/mappings.jsonl",
         ):
             if (context.knowledge_root / Path(*relative.split("/"))).is_file():
                 return True
@@ -474,10 +500,23 @@ class WorkspaceBootstrapService:
         actions.append(
             {
                 "relative_path": ".research-kb/workspace.json",
-                "action": "already_present" if context.marker_path.is_file() else "write_identity_marker",
+                "action": (
+                    "upgrade_identity_marker"
+                    if WorkspaceBootstrapService._requires_layout_upgrade(context)
+                    else "already_present" if context.marker_path.is_file() else "write_identity_marker"
+                ),
             }
         )
         return actions
+
+    @staticmethod
+    def _requires_layout_upgrade(context: WorkspaceContext) -> bool:
+        if not context.marker_path.is_file():
+            return False
+        marker = read_json_document(context.marker_path, record_kind="workspace-marker")
+        expected = dict(context.expected_marker)
+        expected["layout_contract_version"] = PREVIOUS_LAYOUT_CONTRACT_VERSION
+        return marker == expected
 
     @staticmethod
     def _blocked(
@@ -543,6 +582,7 @@ def _journal_target_matches_store(target_store: str, relative_path: str) -> bool
         "registry": "registry/papers.jsonl",
         "review_queue": "review_queue/items.jsonl",
         "guardian_reports": "guardian/reports.jsonl",
+        "question_mappings": "questions/mappings.jsonl",
     }
     if target_store in exact:
         return relative_path == exact[target_store]

@@ -7,7 +7,7 @@
   "properties": {
     "contract_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/contract_version"},
     "operation": {"enum": ["append", "replace"]},
-    "record_kind": {"enum": ["registry-paper", "paper-card", "evidence", "review-queue"]},
+    "record_kind": {"enum": ["registry-paper", "paper-card", "evidence", "review-queue", "question-mapping"]},
     "target_record_id": {
       "anyOf": [
         {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/record_id"},
@@ -24,7 +24,8 @@
             {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
             {"type": "null"}
           ]
-        }
+        },
+        "question_origin": {"enum": ["user_supplied", "user_approved_candidate", "existing_question"]}
       }
     },
     "payload": {"type": "object"},
@@ -38,6 +39,48 @@
     {
       "if": {"properties": {"operation": {"const": "replace"}}, "required": ["operation"]},
       "then": {"properties": {"target_record_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/record_id"}}}
+    },
+    {
+      "if": {"properties": {"record_kind": {"const": "question-mapping"}}, "required": ["record_kind"]},
+      "then": {
+        "properties": {
+          "context": {
+            "required": ["paper_id", "question_origin"],
+            "properties": {"paper_id": {"type": "null"}}
+          }
+        }
+      },
+      "else": {"properties": {"context": {"not": {"required": ["question_origin"]}}}}
+    },
+    {
+      "if": {
+        "properties": {
+          "record_kind": {"const": "question-mapping"},
+          "operation": {"const": "append"}
+        },
+        "required": ["record_kind", "operation"]
+      },
+      "then": {
+        "properties": {
+          "context": {
+            "properties": {"question_origin": {"enum": ["user_supplied", "user_approved_candidate"]}}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_kind": {"const": "question-mapping"},
+          "operation": {"const": "replace"}
+        },
+        "required": ["record_kind", "operation"]
+      },
+      "then": {
+        "properties": {
+          "context": {"properties": {"question_origin": {"const": "existing_question"}}}
+        }
+      }
     }
   ]
 }

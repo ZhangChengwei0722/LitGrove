@@ -4,7 +4,7 @@ Cross-platform, local-first contracts and deterministic CLI primitives for evide
 
 ## Current Scope
 
-Milestone 1B, M2A-1, and M2A-2 provide:
+Milestone 1B, M2A-1, M2A-2, and M2B-1 provide:
 
 - versioned workspace, domain, record, and candidate schemas;
 - portable source references and stable IDs;
@@ -20,8 +20,12 @@ Milestone 1B, M2A-1, and M2A-2 provide:
 - initialized-workspace enforcement for every runtime command.
 - generic read-only compatibility inspection through explicitly injected legacy adapters;
 - deterministic compatibility differences, protected-input snapshots, and blocking policy without migration or persistence.
+- an explicit `m2a-1 -> m2b-1` workspace layout upgrade with no canonical-record rewrite;
+- persistent, domain-neutral Question Mapping from selected Paper Card Units;
+- CLI-owned question/link IDs and exact evidence/boundary projection;
+- read-only `question list/show` commands and Guardian mapping freshness warnings.
 
-The installed CLI contains no private adapter and performs no adapter discovery. Real PDF parsing, scientific claim generation, Question Mapping runtime, Step 7 runtime, Markdown rendering, migration, and the Portable Agent Skill remain later milestones. The CLI never calls an LLM or makes scientific judgments.
+The installed CLI contains no private adapter and performs no adapter discovery. Real PDF parsing, scientific claim generation, derived Question Layer views, Step 7 runtime, Markdown rendering, migration, and the Portable Agent Skill remain later milestones. The CLI never calls an LLM or makes scientific judgments.
 
 ## Privacy Boundary
 
@@ -56,11 +60,15 @@ research-kb compatibility inspect --workspace <workspace.yaml> --adapter <adapte
 research-kb registry add --workspace <workspace.yaml> --root-id <root> --relative-path <path> --metadata <metadata.json>
 research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapter synthetic-text
 research-kb record promote --workspace <workspace.yaml> --request <request.json> --actor <agent|cli|user>
+research-kb question list --workspace <workspace.yaml>
+research-kb question show --workspace <workspace.yaml> --question-id <question_id>
 research-kb guardian check --workspace <workspace.yaml> [--write-report]
 research-kb transaction recover --workspace <workspace.yaml> [--dry-run]
 ```
 
 Source assets remain read-only. Canonical writes stay under `knowledge_root` and emit a process event only after a validated atomic replacement.
+
+Question Mapping requests use `record promote`. The request selects Paper Card Unit IDs and may add question-specific review queue boundaries; Core derives `evidence_ids`, preserves required unit boundaries, allocates IDs, and stores the result in `questions/mappings.jsonl`. Unapproved Agent-generated questions remain task report candidates and cannot use a persistable `question_origin`.
 
 `compatibility inspect` is an integration seam for an adapter injected by a private caller in the same Python process. It emits one schema-valid report to stdout, snapshots every declared protected input before and after inspection, and writes no report, event, journal, or canonical record. A clean report exits `0`, blocking differences exit `1`, adapter/output errors exit `2`, and protected-input changes exit `4`.
 

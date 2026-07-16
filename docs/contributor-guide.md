@@ -51,6 +51,15 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Treat compatibility output as a transient read-only report. Do not create report files, process events, journals, canonical records, or migration IDs.
 - Use synthetic-from-scratch fixtures for every shared test, including adapter errors and protected-input mutation detection.
 
+## Question Mapping Rules
+
+- Persist mappings only for `user_supplied`, `user_approved_candidate`, or `existing_question` request contexts.
+- Treat selected Paper Card Units as semantic inputs; never accept caller-supplied `evidence_ids` or `question_link_id` values.
+- Derive evidence exactly from selected units and preserve every selected-unit review queue boundary.
+- Keep one paper link per question, preserve existing link IDs on replace, and do not implement deletion without a later lifecycle contract.
+- Add cross-paper, duplicate, stale-upstream, write-conflict, deterministic-ordering, and read-only retrieval tests.
+- Keep mappings in structured JSONL. Do not add a hand-maintained Markdown mirror.
+
 ## Platform Rules
 
 Tests must include Windows-shaped and POSIX-shaped paths independent of the host. Persisted relative paths always use `/`.
