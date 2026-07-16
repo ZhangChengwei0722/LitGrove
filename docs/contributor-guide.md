@@ -60,6 +60,15 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Add cross-paper, duplicate, stale-upstream, write-conflict, deterministic-ordering, and read-only retrieval tests.
 - Keep mappings in structured JSONL. Do not add a hand-maintained Markdown mirror.
 
+## Question Reading View Rules
+
+- Render only records reachable through the selected validated Question Mapping; do not scan for extra same-paper evidence.
+- Keep review queue boundaries in their own explicit non-evidence section and out of evidence counts.
+- Build complete UTF-8/LF bytes before stdout begins. Deterministic validation and rendering failures must leave stdout empty.
+- Never include wall-clock time, hostname, cwd, absolute paths, `source_ref`, or source filenames in a view.
+- Treat synthetic golden Markdown as reviewed output: author its source records from scratch, compare bytes exactly, and update it only for an approved contract change.
+- Rendering is read-only. Do not create a view file, cache, event, journal, report, lock, or layout directory.
+
 ## Platform Rules
 
 Tests must include Windows-shaped and POSIX-shaped paths independent of the host. Persisted relative paths always use `/`.

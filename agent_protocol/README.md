@@ -9,3 +9,5 @@ For M2A-2 compatibility work, a private integration may construct a `LegacyReade
 For M2B-1 Question Mapping, the Agent submits selected Paper Card Unit IDs, paper roles, relevance rationales, and optional question-specific review queue boundaries. It must not submit question/link IDs or evidence projections. Use `question_origin: user_supplied` for a directly supplied active question, `user_approved_candidate` only after explicit approval, and `existing_question` only for refresh. Unapproved generated questions remain in the task report.
 
 Question roles and rationales are candidate interpretation, not evidence. If a Card Unit, evidence record, or queue boundary is wrong, correct that upstream record through its own authority flow rather than editing a mapping projection by hand.
+
+For M2B-2, the Agent may request `question render` as a disposable reading surface. It must not edit the Markdown back into JSONL, treat the generated view as canonical knowledge, or cite review queue boundaries as evidence. Corrections still go through the owning Registry, Paper Card, evidence, queue, or Question Mapping contract.

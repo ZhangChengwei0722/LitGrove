@@ -8,7 +8,7 @@ Shared Core + CLI
 -> Separate private workspaces
 ```
 
-Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, and Guardian checks. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Rendering remains deferred after M2B-1.
+Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, Guardian checks, and one bounded stdout reading view. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Persisted and additional derived views remain deferred after M2B-2.
 
 ## Knowledge Flow
 
@@ -71,7 +71,7 @@ Shared Core owns adapter metadata validation, source-reference confinement, diff
 
 Compatibility inspection is not migration. It allocates no replacement canonical IDs, writes no report or process event, and does not alter the legacy source of truth. If declared protected input changes, disappears, changes type, or becomes unsafe during inspection, the run fails with `RKBC-026` even when the adapter also raises.
 
-Step 7 runtime, Markdown rendering, real PDF parsing, migration, and Agent Skill orchestration are intentionally absent.
+Step 7 runtime, persisted Markdown views, real PDF parsing, migration, and Agent Skill orchestration are intentionally absent.
 
 ## M2B-1 Question Mapping Boundary
 
@@ -89,3 +89,15 @@ The Agent supplies the semantic selection, role, and rationale. Core owns `quest
 `questions/mappings.jsonl` is canonical organizational state, not canonical scientific evidence. It points back to Paper Card Units and canonical evidence rather than duplicating their scientific content. Guardian warns with `RKBC-014` when linked Card, evidence, or queue records are newer than a mapping; it never refreshes the mapping automatically.
 
 New workspaces initialize at layout `m2b-1`. Exact `m2a-1` predecessors are runtime-blocked with `RKBC-027` and can be upgraded only through `workspace init`. The upgrade creates `questions/` and replaces operational marker metadata; it creates no empty JSONL, process event, journal, or scientific record.
+
+## M2B-2 Question Reading View Boundary
+
+```text
+validated Question Mapping + reachable Registry/Card/Evidence/Queue records
+-> deterministic in-memory projection and source snapshot digest
+-> one UTF-8/LF Markdown document on stdout
+```
+
+`QuestionReadingViewService` accepts structured bundle entries rather than paths or a workspace object. It validates the complete bundle, resolves exactly one question, preserves domain-profile Card section order, expands only mapping-owned evidence and boundaries, and reuses the existing freshness diagnostic. Review queue records are rendered in a separate, explicitly non-evidence section.
+
+The CLI completes validation, projection, hashing, and rendering before its single stdout write. It creates no `views/` directory, canonical record, cache, report, event, journal, lock, or render timestamp. The view is a one-way reading surface; JSONL remains the organizational source of truth.

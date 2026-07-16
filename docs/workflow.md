@@ -24,8 +24,9 @@ Milestone 1B implements this deterministic storage lifecycle for Registry, synth
 6. `record promote` loads a private mutation request, injects IDs/timestamps/fingerprints, enforces actor authority, and promotes one canonical store.
 7. A `question-mapping` request selects Card Units for a user-supplied or explicitly approved question. Core derives evidence and required boundaries before atomic promotion.
 8. `question list/show` retrieves deterministic structured mappings without writing a reading view, report, event, or journal.
-9. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
-10. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
+9. `question render` validates one mapping and emits its complete Markdown reading view to stdout without persisting the view or changing structured state.
+10. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
+11. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
 
 Every runtime command uses the same semantic validator and requires a matching workspace marker. No command accepts a raw `knowledge_root` override or a source-write operation. `local_inbox` remains user-owned and is never created or scanned by bootstrap.
 
@@ -66,4 +67,6 @@ Question origins are explicit mutation context:
 
 Structured JSON/YAML/JSONL records are inputs. Markdown views are one-way renders and cannot be used to rewrite structured facts.
 
-M2B-1 does not render an evidence matrix, relations, gap map, contradictions, Question Layer Markdown, or Step 7 output.
+M2B-2 renders exactly one stdout-only Question Reading View. It includes selected Paper Card Units, mapped canonical evidence, non-evidence review queue boundaries, and current freshness diagnostics. It creates no Markdown file or view store.
+
+Evidence matrices, relations, gap maps, contradictions, persisted Question Layer Markdown, and Step 7 output remain outside the implemented runtime.
