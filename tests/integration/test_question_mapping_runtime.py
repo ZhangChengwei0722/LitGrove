@@ -7,7 +7,9 @@ import pytest
 
 from research_kb.cli import main
 from research_kb.guardian import GuardianService
+from research_kb.mutation import MutationRequest
 from research_kb.services.question_mapping import QuestionMappingService
+from research_kb.services.records import RecordService
 from research_kb.storage.json_io import file_sha256, read_jsonl
 from tests.runtime_helpers import make_runtime_workspace
 from tests.unit.test_question_mapping_service import _append_request, _link, _prepare_paper
@@ -78,9 +80,70 @@ def test_two_domains_promote_and_read_question_mappings_without_source_changes(
     assert [item["question_id"] for item in listed["questions"]] == sorted(
         item["question_id"] for item in mappings
     )
-    assert GuardianService(layout).check().report["status"] == "success"
+    before_render = {
+        path.relative_to(layout.knowledge_root).as_posix(): path.read_bytes()
+        for path in layout.knowledge_root.rglob("*")
+        if path.is_file()
+    }
+    assert main([
+        "question", "render", "--workspace", str(layout.config.path),
+        "--question-id", first_mapping["question_id"],
+    ]) == 0
+    current_view = capsys.readouterr()
+    assert current_view.err == ""
+    assert 'freshness_status: "current"' in current_view.out
+    assert f'`{first["grounded_unit"]["unit_id"]}`' in current_view.out
+    assert f'`{first["evidence"]["evidence_id"]}`' in current_view.out
+    assert (
+        "> Invented response increased for first\\-question\\-source\\.txt\\."
+        in current_view.out
+    )
+    assert "PDF Page: 1; Section: Results" in current_view.out
+    assert "- Locator: `page:1:block:1`" in current_view.out
+    assert f'#### Boundary `{first["queue"]["queue_id"]}`' in current_view.out
+    assert "These records are risk and unresolved-context boundaries. They are not evidence." in current_view.out
+    assert {
+        path.relative_to(layout.knowledge_root).as_posix(): path.read_bytes()
+        for path in layout.knowledge_root.rglob("*")
+        if path.is_file()
+    } == before_render
+
+    mapping_bytes = layout.question_mappings_path.read_bytes()
+    RecordService(layout).promote(
+        MutationRequest(
+            operation="replace",
+            record_kind="review-queue",
+            target_record_id=first["queue"]["queue_id"],
+            paper_id=first["paper"]["paper_id"],
+            payload={"reason": "The narrowed invented boundary remains limited to one case."},
+        ),
+        actor="agent",
+    )
+    assert layout.question_mappings_path.read_bytes() == mapping_bytes
+    before_stale_render = {
+        path.relative_to(layout.knowledge_root).as_posix(): path.read_bytes()
+        for path in layout.knowledge_root.rglob("*")
+        if path.is_file()
+    }
+    assert main([
+        "question", "render", "--workspace", str(layout.config.path),
+        "--question-id", first_mapping["question_id"],
+    ]) == 0
+    stale_view = capsys.readouterr()
+    assert stale_view.err == ""
+    assert 'freshness_status: "stale"' in stale_view.out
+    assert "`RKBC-014`" in stale_view.out
+    assert {
+        path.relative_to(layout.knowledge_root).as_posix(): path.read_bytes()
+        for path in layout.knowledge_root.rglob("*")
+        if path.is_file()
+    } == before_stale_render
+    guardian = GuardianService(layout).check().report
+    assert guardian["status"] == "warning"
+    assert "RKBC-014" in {finding["code"] for finding in guardian["findings"]}
     assert {
         path.name: file_sha256(path)
         for path in next(iter(layout.source_roots.values())).glob("*.txt")
     } == source_hashes
+    assert not (layout.knowledge_root / "views").exists()
     assert not (layout.knowledge_root / "step7").exists()

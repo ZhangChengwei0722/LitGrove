@@ -31,6 +31,7 @@ from research_kb.mutation import load_mutation_request
 from research_kb.parse.synthetic_text import SyntheticTextAdapter
 from research_kb.privacy import scan_repository
 from research_kb.services.records import RecordService
+from research_kb.services.question_view import QuestionReadingViewService
 from research_kb.services.registry import RegistryService
 from research_kb.services.parse import ParseService
 from research_kb.services.bootstrap import WorkspaceBootstrapService
@@ -124,6 +125,9 @@ def build_parser() -> argparse.ArgumentParser:
     question_show = question_commands.add_parser("show", help="show one question mapping")
     question_show.add_argument("--workspace", required=True, type=Path)
     question_show.add_argument("--question-id", required=True)
+    question_render = question_commands.add_parser("render", help="render one question reading view")
+    question_render.add_argument("--workspace", required=True, type=Path)
+    question_render.add_argument("--question-id", required=True)
 
     transaction = commands.add_parser("transaction", help="inspect or recover interrupted writes")
     transaction_commands = transaction.add_subparsers(dest="transaction_command", required=True)
@@ -164,6 +168,8 @@ def main(
             return _question_list(args)
         if args.command == "question" and args.question_command == "show":
             return _question_show(args)
+        if args.command == "question" and args.question_command == "render":
+            return _question_render(args)
         if args.command == "transaction" and args.transaction_command == "recover":
             return _transaction_recover(args)
     except ResearchKBError as error:
@@ -387,6 +393,14 @@ def _question_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def _question_render(args: argparse.Namespace) -> int:
+    layout = WorkspaceLayout.load(args.workspace)
+    entries = load_workspace_entries(layout)
+    content = QuestionReadingViewService(entries).render(args.question_id)
+    _write_bytes_once(content)
+    return 0
+
+
 def _record_id(kind: str, record: dict[str, Any]) -> str:
     id_field = {
         "registry-paper": "paper_id",
@@ -409,6 +423,23 @@ def _load_mapping(path: Path) -> dict[str, Any]:
 def _write_json(value: dict[str, Any], stream: Any | None = None) -> None:
     output = sys.stdout if stream is None else stream
     output.write(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+
+
+def _write_bytes_once(content: bytes, stream: Any | None = None) -> None:
+    output = sys.stdout if stream is None else stream
+    binary = getattr(output, "buffer", None)
+    if binary is not None:
+        written = binary.write(content)
+        if written != len(content):
+            raise OSError("short stdout write")
+        binary.flush()
+        return
+
+    text = content.decode("utf-8")
+    written = output.write(text)
+    if written != len(text):
+        raise OSError("short stdout write")
+    output.flush()
 
 
 def _configure_standard_streams() -> None:

@@ -1,11 +1,11 @@
 import json
-from io import BytesIO, TextIOWrapper
+from io import BytesIO, StringIO, TextIOWrapper
 from pathlib import Path
 
 import pytest
 import yaml
 
-from research_kb.cli import _configure_standard_streams, _write_json, main
+from research_kb.cli import _configure_standard_streams, _write_bytes_once, _write_json, main
 from research_kb.errors import Diagnostic
 from research_kb.services.records import RecordService
 from research_kb.storage.json_io import serialize_json
@@ -60,6 +60,27 @@ def test_utf8_output_does_not_inherit_legacy_code_page(monkeypatch) -> None:
     _write_json({"value": "\u6d4b\u8bd5"})
     stream.flush()
     assert "\u6d4b\u8bd5" in raw.getvalue().decode("utf-8")
+
+
+def test_raw_byte_writer_supports_binary_and_text_streams() -> None:
+    raw = BytesIO()
+    binary_stream = TextIOWrapper(raw, encoding="utf-8")
+    _write_bytes_once("Synthetic \u03b1\n".encode("utf-8"), stream=binary_stream)
+    assert raw.getvalue() == "Synthetic \u03b1\n".encode("utf-8")
+
+    text_stream = StringIO()
+    _write_bytes_once("Synthetic \u03b2\n".encode("utf-8"), stream=text_stream)
+    assert text_stream.getvalue() == "Synthetic \u03b2\n"
+
+
+def test_raw_byte_writer_rejects_short_write() -> None:
+    class ShortTextStream(StringIO):
+        def write(self, value: str) -> int:
+            super().write(value[:-1])
+            return len(value) - 1
+
+    with pytest.raises(OSError, match="short stdout write"):
+        _write_bytes_once(b"synthetic\n", stream=ShortTextStream())
 
 
 def test_unknown_record_kind_returns_contract_registry_exit(capsys) -> None:
@@ -312,17 +333,89 @@ def test_question_show_missing_id_is_redacted_reference_error(tmp_path, capsys) 
     assert str(tmp_path) not in captured.err
 
 
-def test_runtime_cli_reports_old_layout_as_upgrade_required(tmp_path, capsys) -> None:
+def test_question_render_emits_raw_markdown_and_changes_no_workspace_file(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    prepared = _prepare_paper(layout, "question-render.txt")
+    mapping, _ = RecordService(layout).promote(_append_request([_link(prepared)]), actor="agent")
+    before_knowledge = {
+        path.relative_to(layout.knowledge_root).as_posix(): path.read_bytes()
+        for path in layout.knowledge_root.rglob("*")
+        if path.is_file()
+    }
+    before_sources = {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for root in layout.source_roots.values()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+
+    result = main([
+        "question", "render", "--workspace", str(layout.config.path),
+        "--question-id", mapping["question_id"],
+    ])
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert captured.err == ""
+    assert captured.out.startswith('---\nview_type: "question_reading_view"\n')
+    assert "## Canonical Evidence Trace" in captured.out
+    assert "## Review Queue Boundaries" in captured.out
+    assert str(tmp_path) not in captured.out
+    assert "question-render.txt" not in captured.out
+    assert {
+        path.relative_to(layout.knowledge_root).as_posix(): path.read_bytes()
+        for path in layout.knowledge_root.rglob("*")
+        if path.is_file()
+    } == before_knowledge
+    assert {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for root in layout.source_roots.values()
+        for path in root.rglob("*")
+        if path.is_file()
+    } == before_sources
+    assert not (layout.knowledge_root / "views").exists()
+
+
+def test_question_render_missing_id_has_empty_stdout(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    missing = "question_f0000000-0000-4000-8000-000000000001"
+
+    result = main([
+        "question", "render", "--workspace", str(layout.config.path),
+        "--question-id", missing,
+    ])
+
+    captured = capsys.readouterr()
+    assert result == 2
+    assert captured.out == ""
+    assert json.loads(captured.err)["diagnostic"]["code"] == "RKBC-005"
+    assert str(tmp_path) not in captured.err
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["guardian", "check"],
+        [
+            "question",
+            "render",
+            "--question-id",
+            "question_a1111111-1111-4111-8111-111111111111",
+        ],
+    ],
+)
+def test_runtime_cli_reports_old_layout_as_upgrade_required(tmp_path, capsys, argv) -> None:
     layout = make_runtime_workspace(tmp_path)
     marker = json.loads(layout.marker_path.read_text(encoding="utf-8"))
     marker["layout_contract_version"] = "m2a-1"
     layout.marker_path.write_bytes(serialize_json(marker))
     (layout.knowledge_root / "questions").rmdir()
 
-    result = main(["guardian", "check", "--workspace", str(layout.config.path)])
+    result = main([argv[0], argv[1], "--workspace", str(layout.config.path), *argv[2:]])
 
     captured = capsys.readouterr()
     assert result == 4
+    assert captured.out == ""
     assert json.loads(captured.err)["diagnostic"]["code"] == "RKBC-027"
     assert str(tmp_path) not in captured.err
 
@@ -337,6 +430,7 @@ def test_runtime_cli_reports_old_layout_as_upgrade_required(tmp_path, capsys) ->
         ["guardian", "check"],
         ["question", "list"],
         ["question", "show", "--question-id", "question_a1111111-1111-4111-8111-111111111111"],
+        ["question", "render", "--question-id", "question_a1111111-1111-4111-8111-111111111111"],
         ["transaction", "recover", "--dry-run"],
     ],
 )
