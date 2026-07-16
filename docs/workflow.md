@@ -22,8 +22,10 @@ Milestone 1B implements this deterministic storage lifecycle for Registry, synth
 4. `registry add` resolves a declared source root, hashes the source read-only, and preserves exact duplicates as reciprocal candidates.
 5. `parse run` uses only `SyntheticTextAdapter` in M1B and writes validated page records without creating a full-text copy.
 6. `record promote` loads a private mutation request, injects IDs/timestamps/fingerprints, enforces actor authority, and promotes one canonical store.
-7. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
-8. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
+7. A `question-mapping` request selects Card Units for a user-supplied or explicitly approved question. Core derives evidence and required boundaries before atomic promotion.
+8. `question list/show` retrieves deterministic structured mappings without writing a reading view, report, event, or journal.
+9. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
+10. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
 
 Every runtime command uses the same semantic validator and requires a matching workspace marker. No command accepts a raw `knowledge_root` override or a source-write operation. `local_inbox` remains user-owned and is never created or scanned by bootstrap.
 
@@ -39,10 +41,18 @@ Compatibility reports classify what can be read directly, projected through an a
 
 `stored` is an internal validation context for existing canonical state. It is not a submitter role.
 
+Question origins are explicit mutation context:
+
+- `user_supplied`: the user supplied the active question;
+- `user_approved_candidate`: the user explicitly approved a generated candidate;
+- `existing_question`: refresh an already persisted mapping;
+- an unapproved Agent-generated question stays in the task report and is not persisted.
+
 ## Failure Boundary
 
 - Bootstrap performs a complete read-only preflight before creating its lock scaffold, then repeats mutation-sensitive checks while holding the workspace lock.
 - A conflicting marker, unknown managed content, incomplete transaction, unsafe path type, or invalid markerless bundle blocks initialization without rewriting canonical records.
+- An exact `m2a-1` marker requires `workspace init`; runtime commands never write through an old layout.
 - Validation failure preserves the previous target bytes.
 - A pre-replacement failure records a failure event when possible.
 - Source-dependent services recheck source stability after replacement and before emitting success.
@@ -55,3 +65,5 @@ Compatibility reports classify what can be read directly, projected through an a
 ## Reading Views
 
 Structured JSON/YAML/JSONL records are inputs. Markdown views are one-way renders and cannot be used to rewrite structured facts.
+
+M2B-1 does not render an evidence matrix, relations, gap map, contradictions, Question Layer Markdown, or Step 7 output.

@@ -7,9 +7,12 @@ import yaml
 
 from research_kb.cli import _configure_standard_streams, _write_json, main
 from research_kb.errors import Diagnostic
+from research_kb.services.records import RecordService
+from research_kb.storage.json_io import serialize_json
 from research_kb.storage.transactions import TransactionManager
 from tests.fixture_factory import make_bundle
 from tests.runtime_helpers import make_runtime_workspace
+from tests.unit.test_question_mapping_service import _append_request, _link, _prepare_paper
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -261,6 +264,69 @@ def test_workspace_init_cli_dry_run_apply_and_no_change(tmp_path, capsys) -> Non
     assert json.loads(capsys.readouterr().out)["result"] == "no_change"
 
 
+def test_question_list_and_show_are_deterministic_and_read_only(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    prepared = _prepare_paper(layout, "question-cli.txt")
+    mapping, _ = RecordService(layout).promote(_append_request([_link(prepared)]), actor="agent")
+    before = {
+        path.relative_to(layout.knowledge_root).as_posix(): path.read_bytes()
+        for path in layout.knowledge_root.rglob("*")
+        if path.is_file()
+    }
+
+    assert main(["question", "list", "--workspace", str(layout.config.path)]) == 0
+    listed = json.loads(capsys.readouterr().out)
+    assert listed["questions"] == [{
+        "question_id": mapping["question_id"],
+        "question_text": mapping["question_text"],
+        "scope": mapping["scope"],
+        "mapping_status": mapping["mapping_status"],
+        "linked_paper_count": 1,
+        "updated_at": mapping["updated_at"],
+    }]
+
+    assert main([
+        "question", "show", "--workspace", str(layout.config.path),
+        "--question-id", mapping["question_id"],
+    ]) == 0
+    assert json.loads(capsys.readouterr().out)["question"] == mapping
+    assert {
+        path.relative_to(layout.knowledge_root).as_posix(): path.read_bytes()
+        for path in layout.knowledge_root.rglob("*")
+        if path.is_file()
+    } == before
+
+
+def test_question_show_missing_id_is_redacted_reference_error(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    missing = "question_f0000000-0000-4000-8000-000000000001"
+
+    result = main([
+        "question", "show", "--workspace", str(layout.config.path),
+        "--question-id", missing,
+    ])
+
+    captured = capsys.readouterr()
+    assert result == 2
+    assert json.loads(captured.err)["diagnostic"]["code"] == "RKBC-005"
+    assert str(tmp_path) not in captured.err
+
+
+def test_runtime_cli_reports_old_layout_as_upgrade_required(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    marker = json.loads(layout.marker_path.read_text(encoding="utf-8"))
+    marker["layout_contract_version"] = "m2a-1"
+    layout.marker_path.write_bytes(serialize_json(marker))
+    (layout.knowledge_root / "questions").rmdir()
+
+    result = main(["guardian", "check", "--workspace", str(layout.config.path)])
+
+    captured = capsys.readouterr()
+    assert result == 4
+    assert json.loads(captured.err)["diagnostic"]["code"] == "RKBC-027"
+    assert str(tmp_path) not in captured.err
+
+
 @pytest.mark.parametrize(
     "argv",
     [
@@ -269,6 +335,8 @@ def test_workspace_init_cli_dry_run_apply_and_no_change(tmp_path, capsys) -> Non
         ["record", "promote", "--request", "missing.json", "--actor", "agent"],
         ["compatibility", "inspect", "--adapter", "missing-adapter"],
         ["guardian", "check"],
+        ["question", "list"],
+        ["question", "show", "--question-id", "question_a1111111-1111-4111-8111-111111111111"],
         ["transaction", "recover", "--dry-run"],
     ],
 )

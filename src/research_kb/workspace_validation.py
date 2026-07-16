@@ -21,6 +21,7 @@ from research_kb.errors import (
     UNSAFE_DIRECTORY_MODE,
     WORKSPACE_IDENTITY_CONFLICT,
     WORKSPACE_LAYOUT_CONFLICT,
+    WORKSPACE_LAYOUT_UPGRADE_REQUIRED,
     WORKSPACE_NOT_INITIALIZED,
     WORKSPACE_PATH_WARNING,
     Diagnostic,
@@ -29,9 +30,11 @@ from research_kb.errors import (
 from research_kb.storage.json_io import read_json_document
 
 
-LAYOUT_CONTRACT_VERSION = "m2a-1"
+PREVIOUS_LAYOUT_CONTRACT_VERSION = "m2a-1"
+CURRENT_LAYOUT_CONTRACT_VERSION = "m2b-1"
+LAYOUT_CONTRACT_VERSION = CURRENT_LAYOUT_CONTRACT_VERSION
 MARKER_RELATIVE_PATH = ".research-kb/workspace.json"
-MANAGED_DIRECTORIES = (
+M2A_1_MANAGED_DIRECTORIES = (
     ".research-kb",
     ".research-kb/locks",
     ".research-kb/transactions",
@@ -46,6 +49,8 @@ MANAGED_DIRECTORIES = (
     "process",
     "guardian",
 )
+M2B_1_MANAGED_DIRECTORIES = M2A_1_MANAGED_DIRECTORIES + ("questions",)
+MANAGED_DIRECTORIES = M2B_1_MANAGED_DIRECTORIES
 
 
 @dataclass(frozen=True, slots=True)
@@ -328,43 +333,15 @@ def _layout_diagnostics(context: WorkspaceContext, *, require_initialized: bool)
         return [_layout_error(context.workspace_id, "knowledge_root exists but is not a directory")]
     diagnostics.extend(_mode_diagnostics(root, context.workspace_id, "/workspace/knowledge_root", directory=True))
 
-    expected_names = {_normalized_name(Path(value).parts[0]): Path(value).parts[0] for value in MANAGED_DIRECTORIES}
-    for child in root.iterdir():
-        normalized = _normalized_name(child.name)
-        expected = expected_names.get(normalized)
-        if expected is None:
-            diagnostics.append(_layout_error(context.workspace_id, "knowledge_root contains unknown top-level content"))
-        elif child.name != expected:
-            diagnostics.append(_layout_error(context.workspace_id, "managed top-level name collides after normalization"))
-
-    for relative in MANAGED_DIRECTORIES:
-        path = root / Path(*relative.split("/"))
-        if not _lexists(path):
-            if require_initialized and _lexists(context.marker_path):
-                diagnostics.append(_layout_error(context.workspace_id, f"managed directory {relative} is missing"))
-            continue
-        if _is_unsafe_link(path):
-            diagnostics.append(_layout_error(context.workspace_id, f"managed path {relative} is an unsafe link"))
-        elif not path.is_dir():
-            diagnostics.append(_layout_error(context.workspace_id, f"managed directory {relative} collides with a file"))
-        else:
-            diagnostics.extend(_mode_diagnostics(path, context.workspace_id, f"/{relative}", directory=True))
-
-    if root.is_dir():
-        for path in _iter_managed_descendants(root):
-            relative = path.relative_to(root).as_posix()
-            if _is_unsafe_link(path):
-                diagnostics.append(_layout_error(context.workspace_id, f"managed descendant {relative} is an unsafe link"))
-                continue
-            if not _recognized_descendant(path, relative):
-                diagnostics.append(_layout_error(context.workspace_id, "managed layout contains an unknown descendant"))
-
     marker_path = context.marker_path
+    marker_is_predecessor = False
     if _lexists(marker_path):
         if _is_unsafe_link(marker_path) or not marker_path.is_file():
             diagnostics.append(_layout_error(context.workspace_id, "workspace marker is not a regular file"))
         else:
-            diagnostics.extend(_mode_diagnostics(marker_path, context.workspace_id, "/.research-kb/workspace.json", directory=False))
+            diagnostics.extend(
+                _mode_diagnostics(marker_path, context.workspace_id, "/.research-kb/workspace.json", directory=False)
+            )
             try:
                 marker = read_json_document(marker_path, record_kind="workspace-marker")
             except ResearchKBError:
@@ -373,7 +350,11 @@ def _layout_diagnostics(context: WorkspaceContext, *, require_initialized: bool)
                 marker_diagnostics = validate_record("workspace-marker", marker, actor="stored")
                 if marker_diagnostics:
                     diagnostics.append(_layout_error(context.workspace_id, "workspace marker does not match its public schema"))
-                elif marker != context.expected_marker:
+                elif marker == context.expected_marker:
+                    pass
+                elif marker == _predecessor_marker(context):
+                    marker_is_predecessor = True
+                else:
                     diagnostics.append(
                         Diagnostic(
                             WORKSPACE_IDENTITY_CONFLICT,
@@ -385,12 +366,75 @@ def _layout_diagnostics(context: WorkspaceContext, *, require_initialized: bool)
                     )
     elif require_initialized:
         diagnostics.append(_not_initialized(context.workspace_id))
+
+    required_directories = M2A_1_MANAGED_DIRECTORIES if marker_is_predecessor else MANAGED_DIRECTORIES
+    allowed_directories = (
+        M2A_1_MANAGED_DIRECTORIES + ("questions",)
+        if marker_is_predecessor
+        else MANAGED_DIRECTORIES
+    )
+    expected_names = {
+        _normalized_name(Path(value).parts[0]): Path(value).parts[0]
+        for value in allowed_directories
+    }
+    for child in root.iterdir():
+        normalized = _normalized_name(child.name)
+        expected = expected_names.get(normalized)
+        if expected is None:
+            diagnostics.append(_layout_error(context.workspace_id, "knowledge_root contains unknown top-level content"))
+        elif child.name != expected:
+            diagnostics.append(_layout_error(context.workspace_id, "managed top-level name collides after normalization"))
+
+    for relative in allowed_directories:
+        path = root / Path(*relative.split("/"))
+        if not _lexists(path):
+            if require_initialized and _lexists(context.marker_path) and relative in required_directories:
+                diagnostics.append(_layout_error(context.workspace_id, f"managed directory {relative} is missing"))
+            continue
+        if _is_unsafe_link(path):
+            diagnostics.append(_layout_error(context.workspace_id, f"managed path {relative} is an unsafe link"))
+        elif not path.is_dir():
+            diagnostics.append(_layout_error(context.workspace_id, f"managed directory {relative} collides with a file"))
+        else:
+            diagnostics.extend(_mode_diagnostics(path, context.workspace_id, f"/{relative}", directory=True))
+
+    if root.is_dir():
+        for path in _iter_managed_descendants(root, allowed_directories):
+            relative = path.relative_to(root).as_posix()
+            if _is_unsafe_link(path):
+                diagnostics.append(_layout_error(context.workspace_id, f"managed descendant {relative} is an unsafe link"))
+                continue
+            if not _recognized_descendant(
+                path,
+                relative,
+                allowed_directories,
+                allow_question_store=not marker_is_predecessor,
+            ):
+                diagnostics.append(_layout_error(context.workspace_id, "managed layout contains an unknown descendant"))
+    if marker_is_predecessor and require_initialized and not any(
+        item.severity != "warning" for item in diagnostics
+    ):
+        diagnostics.append(
+            Diagnostic(
+                WORKSPACE_LAYOUT_UPGRADE_REQUIRED,
+                "workspace-marker",
+                context.workspace_id,
+                "/layout_contract_version",
+                "workspace layout requires upgrade; run workspace init",
+            )
+        )
     return diagnostics
 
 
-def _recognized_descendant(path: Path, relative: str) -> bool:
+def _recognized_descendant(
+    path: Path,
+    relative: str,
+    managed_directories: tuple[str, ...],
+    *,
+    allow_question_store: bool,
+) -> bool:
     if path.is_dir():
-        return relative in MANAGED_DIRECTORIES
+        return relative in managed_directories
     if relative == MARKER_RELATIVE_PATH or relative == ".research-kb/locks/workspace.lock":
         return True
     patterns = (
@@ -401,12 +445,15 @@ def _recognized_descendant(path: Path, relative: str) -> bool:
     )
     if any(relative.startswith(prefix) and "/" not in relative[len(prefix) :] and relative.endswith(suffix) for prefix, suffix in patterns):
         return True
-    return relative in {
+    exact = {
         "registry/papers.jsonl",
         "review_queue/items.jsonl",
         "process/events.jsonl",
         "guardian/reports.jsonl",
     }
+    if allow_question_store:
+        exact.add("questions/mappings.jsonl")
+    return relative in exact
 
 
 def _mode_diagnostics(path: Path, workspace_id: str, json_path: str, *, directory: bool) -> list[Diagnostic]:
@@ -451,7 +498,7 @@ def _declared_path_has_unsafe_component(document: ConfigDocument, value: str) ->
     return False
 
 
-def _iter_managed_descendants(root: Path) -> Iterator[Path]:
+def _iter_managed_descendants(root: Path, managed_directories: tuple[str, ...]) -> Iterator[Path]:
     pending = [root]
     while pending:
         current = pending.pop()
@@ -461,7 +508,7 @@ def _iter_managed_descendants(root: Path) -> Iterator[Path]:
                 yield path
                 relative = path.relative_to(root).as_posix()
                 if (
-                    relative in MANAGED_DIRECTORIES
+                    relative in managed_directories
                     and entry.is_dir(follow_symlinks=False)
                     and not _is_unsafe_link(path)
                 ):
@@ -518,6 +565,12 @@ def _not_initialized(workspace_id: str) -> Diagnostic:
         "/workspace/knowledge_root",
         "workspace is not initialized; run workspace init",
     )
+
+
+def _predecessor_marker(context: WorkspaceContext) -> dict[str, Any]:
+    marker = dict(context.expected_marker)
+    marker["layout_contract_version"] = PREVIOUS_LAYOUT_CONTRACT_VERSION
+    return marker
 
 
 def _layout_error(workspace_id: str, message: str) -> Diagnostic:

@@ -14,6 +14,8 @@ class MutationRequest:
     target_record_id: str | None
     paper_id: str | None
     payload: dict[str, Any]
+    question_origin: str | None = None
+    fixture_origin: str | None = None
 
 
 def load_mutation_request(path: Path) -> MutationRequest:
@@ -24,4 +26,6 @@ def load_mutation_request(path: Path) -> MutationRequest:
         target_record_id=data["target_record_id"],
         paper_id=data["context"]["paper_id"],
         payload=data["payload"],
+        question_origin=data["context"].get("question_origin"),
+        fixture_origin=data.get("fixture_origin"),
     )

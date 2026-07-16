@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable
+from datetime import datetime
 from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
@@ -189,9 +190,13 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
     source_roots: set[str] = set()
     unit_paper: dict[str, str] = {}
     unit_evidence: dict[str, set[str]] = {}
+    unit_boundaries: dict[str, set[str]] = {}
     unit_status: dict[str, str] = {}
+    card_updated_at: dict[str, str] = {}
     evidence_paper: dict[str, str] = {}
+    evidence_updated_at: dict[str, str] = {}
     queue_paper: dict[str, str] = {}
+    queue_updated_at: dict[str, str] = {}
     paper_fingerprint: dict[str, dict[str, Any]] = {}
     profile_sections: dict[str, list[str]] = {}
     defined: dict[str, list[str]] = defaultdict(list)
@@ -219,6 +224,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
         elif kind == "paper-card":
             paper_id = record.get("paper_id", "")
             paper_cards[paper_id] += 1
+            card_updated_at[paper_id] = record.get("updated_at", "")
             for section in record.get("sections", []):
                 for unit in section.get("units", []):
                     unit_id = unit.get("unit_id", "")
@@ -226,17 +232,20 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                     defined["unit"].append(unit_id)
                     unit_paper[unit_id] = paper_id
                     unit_evidence[unit_id] = set(unit.get("evidence_ids", []))
+                    unit_boundaries[unit_id] = set(unit.get("boundary_refs", []))
                     unit_status[unit_id] = unit.get("grounding_status", "")
         elif kind == "evidence":
             evidence_id = record.get("evidence_id", "")
             evidence.add(evidence_id)
             defined["evidence"].append(evidence_id)
             evidence_paper[evidence_id] = record.get("paper_id", "")
+            evidence_updated_at[evidence_id] = record.get("updated_at", "")
         elif kind == "review-queue":
             queue_id = record.get("queue_id", "")
             queues.add(queue_id)
             defined["queue"].append(queue_id)
             queue_paper[queue_id] = record.get("paper_id", "")
+            queue_updated_at[queue_id] = record.get("updated_at", "")
         elif kind == "question-mapping":
             question_id = record.get("question_id", "")
             questions.add(question_id)
@@ -335,14 +344,36 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                             diagnostics.append(Diagnostic(GROUNDING_MISMATCH, kind, unit.get("unit_id"), base + "/boundary_refs", "Card Unit boundary belongs to another paper"))
         elif kind == "question-mapping":
             _require_ref(diagnostics, kind, record_id, "/domain_profile_id", record.get("domain_profile_id"), profiles, "domain profile")
+            linked_papers = [link.get("paper_id") for link in record.get("paper_links", [])]
+            if len(linked_papers) != len(set(linked_papers)):
+                diagnostics.append(
+                    Diagnostic(DUPLICATE_ID, kind, record_id, "/paper_links", "question contains duplicate paper links")
+                )
             for link_index, link in enumerate(record.get("paper_links", [])):
                 base = f"/paper_links/{link_index}"
                 paper_id = link.get("paper_id")
                 _require_ref(diagnostics, kind, record_id, base + "/paper_id", paper_id, papers, "paper")
+                mapping_updated_at = record.get("updated_at", "")
+                upstream_is_newer = _timestamp_is_after(
+                    card_updated_at.get(paper_id, ""),
+                    mapping_updated_at,
+                ) or any(
+                    _timestamp_is_after(updated_at, mapping_updated_at)
+                    for updated_at in (
+                        *(evidence_updated_at.get(value, "") for value in link.get("evidence_ids", [])),
+                        *(queue_updated_at.get(value, "") for value in link.get("boundary_refs", [])),
+                    )
+                )
+                expanded_evidence: set[str] = set()
+                required_boundaries: set[str] = set()
+                selected_needs_resolution = False
                 for value in link.get("selected_card_unit_ids", []):
                     _require_ref(diagnostics, kind, record_id, base + "/selected_card_unit_ids", value, units, "Card Unit")
                     if value in unit_paper and unit_paper[value] != paper_id:
                         diagnostics.append(Diagnostic(GROUNDING_MISMATCH, kind, record_id, base + "/selected_card_unit_ids", "selected Card Unit belongs to another paper"))
+                    expanded_evidence.update(unit_evidence.get(value, set()))
+                    required_boundaries.update(unit_boundaries.get(value, set()))
+                    selected_needs_resolution = selected_needs_resolution or unit_status.get(value) == "needs_resolution"
                 for value in link.get("evidence_ids", []):
                     _require_ref(diagnostics, kind, record_id, base + "/evidence_ids", value, evidence, "evidence")
                     if value in evidence_paper and evidence_paper[value] != paper_id:
@@ -351,6 +382,40 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                     _require_ref(diagnostics, kind, record_id, base + "/boundary_refs", value, queues, "review queue")
                     if value in queue_paper and queue_paper[value] != paper_id:
                         diagnostics.append(Diagnostic(GROUNDING_MISMATCH, kind, record_id, base + "/boundary_refs", "question-link boundary belongs to another paper"))
+                if not upstream_is_newer and expanded_evidence != set(link.get("evidence_ids", [])):
+                    diagnostics.append(
+                        Diagnostic(
+                            SNAPSHOT_MISMATCH,
+                            kind,
+                            record_id,
+                            base + "/evidence_ids",
+                            "question-link evidence does not equal selected Card Unit evidence expansion",
+                        )
+                    )
+                if not upstream_is_newer and not required_boundaries.issubset(set(link.get("boundary_refs", []))):
+                    diagnostics.append(
+                        Diagnostic(
+                            SNAPSHOT_MISMATCH,
+                            kind,
+                            record_id,
+                            base + "/boundary_refs",
+                            "question-link omits a selected Card Unit boundary",
+                        )
+                    )
+                if (
+                    not upstream_is_newer
+                    and selected_needs_resolution
+                    and record.get("mapping_status") != "needs_resolution"
+                ):
+                    diagnostics.append(
+                        Diagnostic(
+                            GROUNDING_MISMATCH,
+                            kind,
+                            record_id,
+                            "/mapping_status",
+                            "a selected needs-resolution Card Unit requires needs_resolution mapping status",
+                        )
+                    )
         elif kind.startswith("step7-"):
             _require_ref(diagnostics, kind, record_id, "/question_id", record.get("question_id"), questions, "question")
             base_units: list[str] = []
@@ -418,6 +483,14 @@ def _require_ref(
 ) -> None:
     if isinstance(value, str) and value and value not in available:
         diagnostics.append(Diagnostic(UNRESOLVED_REFERENCE, kind, record_id, path, f"unresolved {target} reference: {value}"))
+
+
+def _timestamp_is_after(candidate: object, baseline: object) -> bool:
+    if not isinstance(candidate, str) or not candidate or not isinstance(baseline, str) or not baseline:
+        return False
+    return datetime.fromisoformat(candidate.replace("Z", "+00:00")) > datetime.fromisoformat(
+        baseline.replace("Z", "+00:00")
+    )
 
 
 def _record_id(kind: str, record: dict[str, Any]) -> str | None:

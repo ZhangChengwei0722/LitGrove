@@ -58,6 +58,7 @@ def load_workspace_entries(
         for path in sorted((layout.knowledge_root / "evidence" / "by_paper").glob("*.evidence.jsonl")):
             add_jsonl(path, "evidence", "evidence_id")
     add_jsonl(layout.review_queue_path, "review-queue", "queue_id")
+    add_jsonl(layout.question_mappings_path, "question-mapping", "question_id")
     add_jsonl(layout.process_events_path, "process-event", "event_id")
     add_jsonl(layout.guardian_reports_path, "guardian-report", "guardian_report_id")
 

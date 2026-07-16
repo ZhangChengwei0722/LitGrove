@@ -141,5 +141,6 @@ def test_two_domains_run_same_core_from_intake_to_guardian(tmp_path: Path, domai
         == profile["domain_profile"]["id"]
         for paper in papers
     )
-    assert not (layout.knowledge_root / "questions").exists()
+    assert (layout.knowledge_root / "questions").is_dir()
+    assert not layout.question_mappings_path.exists()
     assert not (layout.knowledge_root / "step7").exists()
