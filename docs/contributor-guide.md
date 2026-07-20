@@ -84,9 +84,12 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Recheck source SHA-256 around parsed-page projection and return only the selected paper's stored records.
 - Bound paper context to one selected paper, sort Evidence/queue records by canonical ID, omit source references and recheck source SHA-256 before and after projection.
 - Snapshot the complete managed tree around paper context reads and test registered-only, partial-run, complete and cross-paper isolation states.
+- Require an absolute path for intake inspection, resolve it to exactly one declared root, round-trip its portable source reference, and never expose its absolute path or hash.
+- Match intake registration only by exact `root_id + relative_path`; test unregistered, current, stale, ambiguous and same-bytes-at-another-path states.
+- Hash intake sources before and after projection, keep failure stdout empty, and prove source plus managed trees remain byte-identical.
 - Read stdin as raw bytes with a command-specific limit plus one byte; never echo invalid payloads.
 - Accept stdin only for Registry metadata and mutation requests, and route successful objects through existing services.
-- Exercise base and `[pdf]` installed wheels so availability, stdin, parse reads, status and paper context do not depend on the editable tree.
+- Exercise base and `[pdf]` installed wheels so intake inspection, availability, stdin, parse reads, status and paper context do not depend on the editable tree.
 
 ## Platform Rules
 

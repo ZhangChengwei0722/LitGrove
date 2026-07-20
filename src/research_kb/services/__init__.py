@@ -3,6 +3,7 @@
 from research_kb.services.bootstrap import WorkspaceBootstrapService
 from research_kb.services.capability import CapabilityService
 from research_kb.services.compatibility import CompatibilityAdapterRegistry, CompatibilityInspectionService
+from research_kb.services.intake_inspect import IntakeInspectService
 from research_kb.services.parse import ParseService
 from research_kb.services.parse_read import ParseReadService
 from research_kb.services.paper_context import PaperContextService
@@ -15,6 +16,7 @@ __all__ = [
     "CompatibilityAdapterRegistry",
     "CompatibilityInspectionService",
     "CapabilityService",
+    "IntakeInspectService",
     "ParseService",
     "ParseReadService",
     "PaperContextService",

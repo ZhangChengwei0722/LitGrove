@@ -145,3 +145,19 @@ validated registered paper and current source fingerprint
 `PaperContextService` exists so a later Skill can recover CLI-owned Unit, Evidence and queue IDs after a partial or completed run without parsing canonical file paths. It validates the complete workspace bundle, filters exactly one paper, sorts canonical arrays by ID and rechecks source SHA-256 before returning.
 
 The output may contain private scientific content for the explicitly selected paper, but never Registry source references, paths, parsed pages, Question Mappings or unrelated-paper records. It creates no record, cache, report, event, journal, lock or workflow state and does not infer document type, scientific completion or a next action.
+
+## M3A-0D Intake Preflight Boundary
+
+```text
+absolute user-selected source path
++ initialized workspace and complete validated bundle
+-> exactly one declared source root and portable source reference
+-> exact-path Registry state and active Paper Card section projection
+-> transient interface 1.0 response
+```
+
+`IntakeInspectService` resolves the source to a real regular file, rejects relative paths, root/link escapes and ambiguous root ownership, then round-trips the derived POSIX source reference through `WorkspaceLayout`. It hashes the source before and after reading exact Registry matches and the active domain profile.
+
+Registration identity is exact `root_id + relative_path`. Identical bytes at another path remain unregistered for the selected path. One exact match is `registered_current` only when its stored hash matches; a changed hash is `registered_stale`; multiple exact historical owners are `ambiguous`. The output omits absolute paths, hash values, bibliography, unrelated records and semantic next actions.
+
+Intake preflight writes nothing and does not replace `registry add`. It supports deterministic sequential reruns for a later Skill, but does not provide atomic inspect-and-register or concurrent same-source deduplication. The Portable Skill remains absent.

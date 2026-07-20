@@ -50,6 +50,7 @@ class CapabilityService:
                 (
                     "capability show",
                     "guardian check",
+                    "intake inspect",
                     "paper context",
                     "paper status",
                     "parse show",

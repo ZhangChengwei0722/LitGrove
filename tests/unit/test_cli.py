@@ -73,9 +73,55 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert captured.err == ""
     assert output["status"] == "success"
     assert output["interface_version"] == "1.0"
+    assert "intake inspect" in output["read_commands"]
     assert "paper context" in output["read_commands"]
     assert "paper status" in output["read_commands"]
     assert output["features"]["review_runtime"] is False
+
+
+def test_intake_inspect_cli_is_deterministic_bounded_and_read_only(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = layout.source_roots["alpha-sources"] / "nested" / "intake.pdf"
+    source.parent.mkdir()
+    source.write_text("Invented intake source.\n", encoding="utf-8", newline="\n")
+    before_knowledge = _tree_bytes(layout.knowledge_root)
+    before_sources = _tree_bytes(layout.source_roots["alpha-sources"])
+    argv = [
+        "intake", "inspect", "--workspace", str(layout.config.path), "--source", str(source),
+    ]
+
+    assert main(argv) == 0
+    first = capsys.readouterr()
+    assert main(argv) == 0
+    second = capsys.readouterr()
+
+    output = json.loads(first.out)
+    assert first.err == second.err == ""
+    assert first.out == second.out
+    assert output["source"] == {
+        "root_id": "alpha-sources",
+        "relative_path": "nested/intake.pdf",
+        "fingerprint_algorithm": "sha256",
+    }
+    assert output["registration"] == {"paper_ids": [], "state": "unregistered"}
+    assert str(tmp_path) not in first.out
+    assert file_sha256(source) not in first.out
+    assert _tree_bytes(layout.knowledge_root) == before_knowledge
+    assert _tree_bytes(layout.source_roots["alpha-sources"]) == before_sources
+
+
+def test_intake_inspect_cli_failure_has_empty_stdout_and_no_mutation(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    before = _tree_bytes(layout.knowledge_root)
+
+    assert main([
+        "intake", "inspect", "--workspace", str(layout.config.path), "--source", "relative.pdf",
+    ]) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err)["diagnostic"]["code"] == "RKBC-007"
+    assert _tree_bytes(layout.knowledge_root) == before
 
 
 def test_utf8_output_does_not_inherit_legacy_code_page(monkeypatch) -> None:

@@ -4,7 +4,7 @@ Cross-platform, local-first contracts and deterministic CLI primitives for evide
 
 ## Current Scope
 
-Milestone 1B through M3A-0C provide:
+Milestone 1B through M3A-0D provide:
 
 - versioned workspace, domain, record, and candidate schemas;
 - portable source references and stable IDs;
@@ -30,6 +30,7 @@ Milestone 1B through M3A-0C provide:
 - a versioned transient capability report, bounded one-paper status projection, and validated parsed-page read surface;
 - bounded stdin JSON handoff into the existing Registry and mutation authority paths without temporary request files.
 - one source-stable, paper-scoped canonical context read for Card Unit, Evidence, and review queue recovery.
+- one read-only intake preflight that maps an absolute source path to its portable source reference, exact Registry state, and active Paper Card section contract.
 
 The installed CLI contains no private adapter and performs no adapter discovery. Scientific claim generation, OCR, Review runtime, persisted or additional derived views, Step 7 runtime, migration, and the Portable Agent Skill remain later milestones. The CLI never calls an LLM or makes scientific judgments.
 
@@ -69,6 +70,7 @@ Capability probing is workspace-independent; all commands with `--workspace` res
 
 ```text
 research-kb capability show
+research-kb intake inspect --workspace <workspace.yaml> --source <absolute-source-path>
 research-kb compatibility inspect --workspace <workspace.yaml> --adapter <adapter_id>
 research-kb registry add --workspace <workspace.yaml> --root-id <root> --relative-path <path> --metadata <metadata.json>
 research-kb registry add --workspace <workspace.yaml> --root-id <root> --relative-path <path> --metadata -
@@ -88,7 +90,9 @@ research-kb transaction recover --workspace <workspace.yaml> [--dry-run]
 
 Source assets remain read-only. Canonical writes stay under `knowledge_root` and emit a process event only after a validated atomic replacement.
 
-`capability show`, `parse show`, `paper status`, and `paper context` emit transient interface `1.0` JSON and write no workspace state. Capability output distinguishes an implemented adapter from its installed availability. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
+`capability show`, `intake inspect`, `parse show`, `paper status`, and `paper context` emit transient interface `1.0` JSON and write no workspace state. Capability output distinguishes an implemented adapter from its installed availability. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
+
+`intake inspect` accepts one absolute source path, confines it to exactly one declared source root, and returns only portable `root_id + relative_path`, exact-path registration state, and ordered Paper Card section IDs/labels. It hashes the source before and after projection, never returns the hash or absolute path, and performs no registration. A future Skill may use it for sequential reruns; concurrent inspect-and-register deduplication is not guaranteed.
 
 `paper context` returns the selected paper's complete stored Paper Card or `null`, canonical Evidence records, and review queue records after complete-bundle and source-stability checks. It excludes source references, paths, parsed pages, Question Mappings, and unrelated papers. It is the public recovery surface for CLI-owned Unit, Evidence, and queue IDs, not a generic workspace export or semantic resume decision.
 

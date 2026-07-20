@@ -78,8 +78,8 @@ def main() -> int:
             "diagnostic_code": None,
         }:
             raise SystemExit("PDF wheel capability report does not match the installed adapter")
-        if "paper context" not in capability["read_commands"]:
-            raise SystemExit("PDF wheel capability report lacks paper context")
+        if not {"intake inspect", "paper context"}.issubset(capability["read_commands"]):
+            raise SystemExit("PDF wheel capability report lacks deterministic intake/context reads")
 
         workspace_root = temporary_root / "synthetic-pdf-workspace"
         sources = workspace_root / "sources"
@@ -145,6 +145,18 @@ def main() -> int:
         )
         if init_output["result"] != "initialized":
             raise SystemExit("PDF wheel workspace did not initialize")
+        intake = _run_json(
+            python,
+            temporary_root,
+            "intake",
+            "inspect",
+            "--workspace",
+            str(config_path),
+            "--source",
+            str(source),
+        )
+        if intake["registration"] != {"paper_ids": [], "state": "unregistered"}:
+            raise SystemExit("PDF wheel intake did not report an unregistered source")
         paper_id = _run_json_stdin(
             python,
             temporary_root,
@@ -154,12 +166,27 @@ def main() -> int:
             "--workspace",
             str(config_path),
             "--root-id",
-            "pdf-wheel-sources",
+            intake["source"]["root_id"],
             "--relative-path",
-            source.name,
+            intake["source"]["relative_path"],
             "--metadata",
             "-",
         )["paper_id"]
+        registered_intake = _run_json(
+            python,
+            temporary_root,
+            "intake",
+            "inspect",
+            "--workspace",
+            str(config_path),
+            "--source",
+            str(source),
+        )
+        if registered_intake["registration"] != {
+            "paper_ids": [paper_id],
+            "state": "registered_current",
+        }:
+            raise SystemExit("PDF wheel intake did not recover the registered paper")
         parse_output = _run_json(
             python,
             temporary_root,
@@ -289,7 +316,7 @@ def main() -> int:
         )["record_id"]
         sections = [
             {"section_id": item["section_id"], "units": []}
-            for item in profile["paper_card_sections"]
+            for item in intake["domain_profile"]["paper_card_sections"]
         ]
         sections[1]["units"].append(
             {

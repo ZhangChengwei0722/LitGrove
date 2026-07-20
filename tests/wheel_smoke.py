@@ -63,15 +63,15 @@ def main() -> int:
             "diagnostic_code": "RKBC-028",
         }:
             raise SystemExit("base wheel capability report did not expose the missing PDF dependency")
-        if "paper context" not in capability["read_commands"]:
-            raise SystemExit("base wheel capability report lacks paper context")
+        if not {"intake inspect", "paper context"}.issubset(capability["read_commands"]):
+            raise SystemExit("base wheel capability report lacks deterministic intake/context reads")
         subprocess.run(
             [
                 str(python), "-c",
                 "from research_kb.compatibility import CompatibilitySourceRef, LegacyReaderAdapter; "
                 "from research_kb.contracts.registry import SchemaRegistry; "
                 "from research_kb.guardian import GuardianService; "
-                "from research_kb.services import CompatibilityAdapterRegistry, CompatibilityInspectionService, PaperContextService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService; "
+                "from research_kb.services import CompatibilityAdapterRegistry, CompatibilityInspectionService, IntakeInspectService, PaperContextService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService; "
                 "registry = SchemaRegistry(); "
                 "assert registry.schema('mutation-request')['$id'].endswith('mutation-request'); "
                 "assert registry.schema('compatibility-difference')['$id'].endswith('compatibility-difference'); "
@@ -81,6 +81,7 @@ def main() -> int:
                 "assert CompatibilitySourceRef.__name__ == 'CompatibilitySourceRef'; "
                 "assert CompatibilityAdapterRegistry.__name__ == 'CompatibilityAdapterRegistry'; "
                 "assert CompatibilityInspectionService.__name__ == 'CompatibilityInspectionService'; "
+                "assert IntakeInspectService.__name__ == 'IntakeInspectService'; "
                 "assert PaperContextService.__name__ == 'PaperContextService'; "
                 "assert QuestionMappingService.__name__ == 'QuestionMappingService'; "
                 "assert QuestionReadingViewService.__name__ == 'QuestionReadingViewService'",
@@ -158,6 +159,18 @@ def main() -> int:
 
         source = sources / "wheel-study.txt"
         source.write_text("The invented wheel response increased.\n", encoding="utf-8", newline="\n")
+        intake = _run_json(
+            python,
+            Path(temporary),
+            "intake",
+            "inspect",
+            "--workspace",
+            str(config_path),
+            "--source",
+            str(source),
+        )
+        if intake["registration"] != {"paper_ids": [], "state": "unregistered"}:
+            raise SystemExit("base wheel intake did not report an unregistered source")
         paper_id = _run_json_stdin(
             python,
             Path(temporary),
@@ -175,12 +188,27 @@ def main() -> int:
             "--workspace",
             str(config_path),
             "--root-id",
-            "wheel-sources",
+            intake["source"]["root_id"],
             "--relative-path",
-            source.name,
+            intake["source"]["relative_path"],
             "--metadata",
             "-",
         )["paper_id"]
+        registered_intake = _run_json(
+            python,
+            Path(temporary),
+            "intake",
+            "inspect",
+            "--workspace",
+            str(config_path),
+            "--source",
+            str(source),
+        )
+        if registered_intake["registration"] != {
+            "paper_ids": [paper_id],
+            "state": "registered_current",
+        }:
+            raise SystemExit("base wheel intake did not recover the registered paper")
         source_before_parse = source.read_bytes()
         unavailable = subprocess.run(
             [
@@ -314,7 +342,7 @@ def main() -> int:
             raise SystemExit("base wheel partial context did not recover review queue")
         sections = [
             {"section_id": item["section_id"], "units": []}
-            for item in profile["paper_card_sections"]
+            for item in intake["domain_profile"]["paper_card_sections"]
         ]
         sections[1]["units"].append(
             {
