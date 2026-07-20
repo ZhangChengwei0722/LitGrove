@@ -14,6 +14,10 @@ The Agent may create or check candidates only where the public contract permits.
 
 A generated Research Question remains report-only until the user approves it.
 
+Ordinary knowledge queries are read-only. If persistence intent is ambiguous, use `ephemeral_query` and report `persistent_writes: 0`.
+
+Query and Step 7 maintenance preflight is dry-run-only. A workspace action must be handled as a separate authorized intake/bootstrap task, never hidden inside a query or candidate rerun.
+
 ## Evidence Boundary
 
 Canonical Evidence requires a current same-paper source, active parsed page, exact page/character locator and exact quote slice. Narrow every claim to what the source actually supports.
@@ -21,6 +25,16 @@ Canonical Evidence requires a current same-paper source, active parsed page, exa
 Review queue records are not evidence. Never cite them as support, count them as canonical Evidence or silently promote them.
 
 Review Memory is background-only. Review source notes, exact excerpts, Review Memory IDs and Review Unit IDs never support canonical Evidence, Question Mapping or Step 7. Keep the review route mutually exclusive from Paper Card and Evidence for the same paper.
+
+Review Memory may inform a labeled ephemeral background discussion, but it cannot become primary support.
+
+## Step 7 Authority
+
+Persist only for `explicit_step7_maintenance` or `full_workflow_step7_refresh`. Use `step7 context` before mutation and `record promote` for every append or replace. Never write Step 7 JSONL directly.
+
+Use only grounded/revised Card Units already selected by the current Question Mapping. Exact reruns write nothing. Replace the same candidate when its meaning/support changes, append only a materially distinct candidate and stop on an uncertain near-duplicate.
+
+Refresh Cross-View only after all source candidates are current and admissible. Staleness requires reassessment; it does not authorize automatic scientific replacement.
 
 ## Source And Parse Stops
 
@@ -62,6 +76,9 @@ Stop the selected paper for:
 - an unsupported Card Unit with no valid queue representation;
 - a requested Question Mapping without user supply or approval;
 - an existing Card or grounded chain that would require automatic rewrite.
+- ambiguous Step 7 persistence intent;
+- an uncertain near-duplicate Step 7 candidate;
+- a Cross-View whose source candidate is stale, rejected, missing or cross-question.
 
 ## Task Outcomes
 
@@ -84,6 +101,9 @@ Use these only in the non-canonical task report:
 | `needs_user_approval` | The next action requires explicit user authority. |
 | `resume_available` | Current state supports a deterministic next incomplete stage. |
 | `completed_no_change` | The current chain is already complete and current. |
+| `query_completed_no_write` | An ephemeral query returned a bounded answer with zero persistent writes. |
+| `step7_no_change` | An exact existing candidate satisfied the requested maintenance without a write. |
+| `step7_near_duplicate_stop` | Semantic overlap could not be resolved safely before append/replace. |
 
 These labels never become stored statuses.
 

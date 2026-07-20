@@ -85,6 +85,16 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Revalidate relevant upstream records inside the transaction lock and keep candidate text out of journals and process events.
 - Test all four types, Cross-View same-question/current-source gates, stale readability, unrelated mutation, pre-replacement failure and exact golden Markdown for two synthetic domains.
 
+## Step 7 Skill Orchestration Rules
+
+- Classify persistence intent before mutation. Ordinary explanations, comparisons, trace-back and research discussions must remain read-only task reports.
+- Keep query/maintenance workspace preflight dry-run-only. Treat `already_present` plus planned `acquire_workspace_lock` as no-change; do not confuse dry-run `result: planned` with a need for operational init.
+- Start semantic reasoning from grounded/revised Paper Card Units and expand to canonical Evidence for provenance or promotion.
+- Call `step7 context` before every maintenance decision and use `record promote`; never read or write Step 7 JSONL directly.
+- Exact semantic reruns write nothing. Replace the same candidate, append only a materially distinct one and stop on uncertain near-duplicates.
+- Keep Review Memory as labeled ephemeral background; Review Units cannot become primary support or persisted Step 7 input.
+- Forward-test query ephemerality by snapshotting the complete managed tree and test explicit persistence through Core plus Guardian.
+
 ## Deterministic Read And Stdin Rules
 
 - Build each transient JSON read document completely before one UTF-8/LF stdout write.

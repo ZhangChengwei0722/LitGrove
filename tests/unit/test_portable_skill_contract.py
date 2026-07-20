@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import re
 
 import yaml
@@ -14,6 +15,7 @@ EXPECTED_FILES = {
     "references/authority-and-failure-boundaries.md",
     "references/cli-contract.md",
     "references/local-intake-workflow.md",
+    "references/knowledge-query-and-step7-workflow.md",
     "references/review-intake-workflow.md",
     "references/task" "-report-contract.md",
 }
@@ -64,6 +66,10 @@ def test_skill_frontmatter_and_progressive_disclosure_contract() -> None:
         "review",
         "question",
         "guardian",
+        "query",
+        "comparison",
+        "trace-back",
+        "step 7",
     ):
         assert trigger in description
     assert len((SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8").splitlines()) < 500
@@ -78,9 +84,9 @@ def test_openai_metadata_is_exact_and_mentions_skill() -> None:
     assert metadata == {
         "interface": {
             "display_name": "Research KB",
-            "short_description": "Process local research and review papers",
+            "short_description": "Ingest and query a traceable research knowledge base",
             "default_prompt": (
-                "Use $research-kb to ingest a local primary-research or review PDF through the appropriate route and run Guardian."
+                "Use $research-kb to ingest local papers, answer traceable knowledge-base questions, or explicitly maintain Step 7 candidates."
             ),
         }
     }
@@ -96,7 +102,6 @@ def test_skill_is_generic_private_safe_and_has_no_hidden_fallback() -> None:
         "T" + "PD",
         "doi.org/",
         "research-kb ingest",
-        "research-kb step7",
         "research-kb discover",
         "research-kb workspace create",
     ):
@@ -108,7 +113,9 @@ def test_skill_is_generic_private_safe_and_has_no_hidden_fallback() -> None:
     assert "can_enter_canonical_evidence: false" in text
     assert "review context" in text
     assert "Field Map integration" in text
-    assert "Step 7 support" in text
+    assert "Review Unit Question Mapping" in text
+    assert "Review Memory is background-only" in text
+    assert "cannot become primary support" in text
 
 
 def test_skill_required_read_commands_match_public_capability() -> None:
@@ -121,8 +128,11 @@ def test_skill_required_read_commands_match_public_capability() -> None:
         "paper status",
         "parse show",
         "question list",
+        "question render",
         "question show",
         "review context",
+        "step7 context",
+        "step7 render",
     }
 
     assert required_reads <= set(capability["read_commands"])
@@ -134,7 +144,17 @@ def test_skill_required_read_commands_match_public_capability() -> None:
 def test_cli_reference_contains_minimal_stdin_promotion_envelopes() -> None:
     text = (SKILL_ROOT / "references" / "cli-contract.md").read_text(encoding="utf-8")
 
-    for record_kind in ("evidence", "review-queue", "paper-card", "review-memory", "question-mapping"):
+    for record_kind in (
+        "evidence",
+        "review-queue",
+        "paper-card",
+        "review-memory",
+        "question-mapping",
+        "step7-synthesis",
+        "step7-review-angle",
+        "step7-insight",
+        "step7-cross-view",
+    ):
         assert f'"record_kind": "{record_kind}"' in text
     for required_field in (
         '"target_record_id": null',
@@ -158,6 +178,96 @@ def test_cli_reference_contains_minimal_stdin_promotion_envelopes() -> None:
     ):
         assert f"| `{statement_type}` |" in text
     assert "There is no Card `other` type" in text
+    assert '"question_origin": "existing_question"' in text
+    assert "Do not submit `candidate_id`" in text
+    assert "Core derives `evidence_base`" in text
+
+
+def test_query_and_step7_workflow_separates_read_only_and_persistent_intent() -> None:
+    text = (
+        SKILL_ROOT / "references" / "knowledge-query-and-step7-workflow.md"
+    ).read_text(encoding="utf-8")
+
+    for required in (
+        "ephemeral_query",
+        "explicit_step7_maintenance",
+        "full_workflow_step7_refresh",
+        "persistent_writes: 0",
+        "paper context",
+        "question show",
+        "step7 context",
+        "step7 render",
+        "record promote",
+        "grounded",
+        "revised",
+        "exact rerun",
+        "near-duplicate",
+        "report-only",
+        "cannot become primary support",
+    ):
+        assert required in text
+
+    assert "If persistence intent is ambiguous, use `ephemeral_query`" in text
+    assert "For query and maintenance, call `workspace init --dry-run` only" in text
+    assert "Never call operational `workspace init` from these modes" in text
+    assert "Do not write Step 7 JSONL directly" in text
+    assert "Review queue records are boundaries, not support" in text
+    assert "Do not invent section labels" in text
+
+
+def test_step7_reference_envelopes_are_valid_json_and_exclude_core_owned_fields() -> None:
+    text = (SKILL_ROOT / "references" / "cli-contract.md").read_text(encoding="utf-8")
+    documents = [
+        json.loads(block)
+        for block in re.findall(r"```json\n(.*?)\n```", text, flags=re.DOTALL)
+    ]
+    step7 = {
+        document["record_kind"]: document
+        for document in documents
+        if str(document.get("record_kind", "")).startswith("step7-")
+    }
+
+    assert set(step7) == {
+        "step7-synthesis",
+        "step7-review-angle",
+        "step7-insight",
+        "step7-cross-view",
+    }
+    core_owned = {
+        "candidate_id",
+        "type",
+        "evidence_base",
+        "review_queue_refs",
+        "input_snapshot",
+        "not_fact",
+        "review_status",
+        "automation_status",
+        "created_at",
+        "updated_at",
+    }
+    for document in step7.values():
+        assert document["context"] == {
+            "paper_id": None,
+            "question_origin": "existing_question",
+        }
+        assert core_owned.isdisjoint(document["payload"])
+    assert len(step7["step7-synthesis"]["payload"]["paper_card_base"]) >= 2
+
+
+def test_skill_routes_modes_before_mutation_and_preserves_query_ephemerality() -> None:
+    _, body = _skill_parts()
+
+    for mode in (
+        "local_intake",
+        "ephemeral_query",
+        "explicit_step7_maintenance",
+        "full_workflow_step7_refresh",
+    ):
+        assert f"`{mode}`" in body
+    assert "Classify the invocation mode before any mutation" in body
+    assert "Ordinary knowledge queries never persist" in body
+    assert "Allow only `already_present` plus the planned `acquire_workspace_lock` action" in body
+    assert "Exact reruns write nothing" in body
 
 
 def test_review_workflow_is_actionable_and_keeps_downstream_boundaries() -> None:
@@ -189,3 +299,6 @@ def test_task_report_defines_new_and_no_change_completion_outcomes() -> None:
     assert "| `completed` |" in authority
     assert "| `completed_no_change` |" in authority
     assert "Use `completed` when this run newly reaches Guardian" in report
+    assert "persistent_writes: 0" in report
+    assert "invocation_mode:" in report
+    assert "step7_maintenance:" in report

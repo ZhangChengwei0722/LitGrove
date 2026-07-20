@@ -93,11 +93,11 @@ Stdin accepts JSON only for Registry metadata and mutation requests. Empty, inva
 
 ## Portable Skill Workflow
 
-The repo-owned `research-kb` Skill accepts an existing workspace config and absolute local PDF paths. It performs capability/workspace preflight, processes one source at a time, resolves or registers the exact path, resumes from current Core state, parses with explicit `pdfplumber`, then selects one mutually exclusive route: ground a complete question-independent primary Card or build one background-only Review Memory. Only the primary route maps approved questions.
+The repo-owned `research-kb` Skill accepts an existing workspace config and routes either local PDF intake or an existing-workspace knowledge query. Intake processes one source at a time, resolves or registers the exact path, resumes from current Core state, parses with explicit `pdfplumber`, then selects one mutually exclusive route: ground a complete question-independent primary Card or build one background-only Review Memory. Only the primary route maps approved questions.
 
 The Skill maintains no checkpoint. Reruns recover state through `intake inspect`, `paper status` and `paper context`; exact existing records are reused, while stale state, ambiguous sources and uncertain near-duplicates stop. Paper-local unsupported-PDF or document-type failures may be isolated, but workspace/transaction integrity failures stop the batch.
 
-Document classification and the final report remain local to the active task. Supported high-confidence reviews use the common Review Memory route; ambiguous, mixed and unsupported types stop before mutation. Core now exposes deterministic Step 7 persistence/read/render, but this Skill version does not generate or refresh Step 7 candidates. Subtype-specific review schemas, Field Map integration, Review Unit Question Mapping, discovery, acquisition, OCR, migration and workspace-config generation are not implemented.
+Document classification and the final report remain local to the active task. Supported high-confidence reviews use the common Review Memory route; ambiguous, mixed and unsupported types stop before mutation. Knowledge queries start from grounded/revised Paper Card Units and expand to canonical Evidence for trace-back. Ordinary queries write nothing. Explicit Step 7 maintenance and an explicitly complete intake workflow may use the deterministic Core runtime. Subtype-specific review schemas, Field Map integration, Review Unit Question Mapping, discovery, acquisition, OCR, migration and workspace-config generation are not implemented.
 
 ## Step 7 Candidate Flow
 
@@ -110,7 +110,9 @@ current Question Mapping
 -> context / stdout render / Guardian
 ```
 
-Step 7 cannot create a question. The request uses `paper_id: null` and `question_origin: existing_question`; callers must not submit candidate IDs, evidence/queue closure, snapshots or status constants. Synthesis spans at least two papers. Cross-View sources are same-question, current and admissible. Upstream drift leaves a valid candidate readable as `stale_upstream`; structural corruption still blocks the bundle. Candidate generation, duplicate judgment, scientific quality assessment and refresh decisions remain Agent work outside this Skill release.
+Step 7 cannot create a question. The request uses `paper_id: null` and `question_origin: existing_question`; callers must not submit candidate IDs, evidence/queue closure, snapshots or status constants. Synthesis spans at least two papers. Cross-View sources are same-question, current and admissible. Upstream drift leaves a valid candidate readable as `stale_upstream`; structural corruption still blocks the bundle.
+
+The Skill owns candidate generation, duplicate judgment, scientific assessment and refresh decisions. It calls `step7 context` before mutation, writes only through `record promote`, treats exact reruns as no-change, stops on uncertain near-duplicates, and finishes with context/render/Guardian. Core remains deterministic and makes no scientific judgment.
 
 ## Review Memory Flow
 

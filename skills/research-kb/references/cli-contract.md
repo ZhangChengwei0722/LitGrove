@@ -19,6 +19,9 @@ Use only public `research-kb` commands. Build every command result completely be
 | `research-kb record promote --workspace <config> --request - --actor agent` | mutation | promoted top-level record ID | Submit one bounded JSON mutation request through existing authority. |
 | `research-kb question list --workspace <config>` | read | bounded question summaries | Find an explicitly selected existing question. |
 | `research-kb question show --workspace <config> --question-id <id>` | read | one Question Mapping | Inspect an existing mapping; do not edit stores directly. |
+| `research-kb question render --workspace <config> --question-id <id>` | read | disposable Markdown reading view | Use only as a non-canonical reading aid. |
+| `research-kb step7 context --workspace <config> --question-id <id>` | read | mapping, candidates and current freshness | Reconcile before any Step 7 write and recover candidate IDs. |
+| `research-kb step7 render --workspace <config> --question-id <id>` | read | disposable Markdown candidate view | Render only after context validation; never persist the output. |
 | `research-kb guardian check --workspace <config>` | read | findings and status | Report the final deterministic integrity result. |
 | `research-kb transaction recover --workspace <config> --dry-run` | read-only preflight | recovery actions | Report possible recovery; do not apply recovery in this Skill. |
 
@@ -34,11 +37,16 @@ paper context
 paper status
 parse show
 question list
+question render
 question show
 review context
+step7 context
+step7 render
 ```
 
 Require `real_pdf_parse: true`, plus `pdfplumber` with `availability: available` and a non-empty version. A declared feature with a missing optional dependency is not executable.
+
+For query and Step 7 maintenance, use `workspace init --dry-run` only. Its successful `result` is `planned`; determine whether the workspace is already usable from `managed_actions`. Only `already_present` entries plus the planned `acquire_workspace_lock` entry are no-change preflight. Any create, marker write, adoption or upgrade action stops this route. Do not call operational init merely because the dry-run result says `planned`.
 
 ## Read Boundaries
 
@@ -46,6 +54,9 @@ Require `real_pdf_parse: true`, plus `pdfplumber` with `availability: available`
 - `paper status` exposes deterministic stage and integrity facts, not scientific content or a next action.
 - `paper context` is the only public recovery surface for Paper Card, Evidence and queue records.
 - `review context` is the only public recovery surface for Review Memory and Review Unit IDs.
+- `question show` plus per-paper `paper context` are the structured inputs for question-scoped comparison.
+- `question render` and `step7 render` are disposable stdout Markdown, never structured input or persistent state.
+- `step7 context` is the only public recovery and freshness surface for Step 7 candidates.
 - `parse show` is the only public parsed-text read surface.
 - `guardian check` is read-only unless an explicit future task authorizes report persistence.
 
@@ -296,6 +307,145 @@ Question Mapping:
 ```
 
 Use `question_origin: user_approved_candidate` when the active user previously approved an Agent-generated candidate. Do not submit `question_link_id` or `evidence_ids`; Core derives them from the selected Card Units.
+
+### Step 7 mutation envelopes
+
+Use these only for `explicit_step7_maintenance` or `full_workflow_step7_refresh`. All requests require an existing Question Mapping and selected `grounded` or `revised` Card Units already present in that mapping.
+
+Do not submit `candidate_id`, `type`, `evidence_base`, `review_queue_refs`, `input_snapshot`, timestamps, `not_fact`, `review_status` or `automation_status`. Core derives `evidence_base` and required queue-boundary closure from selected Units and owns every candidate-only field.
+
+For replace, change `operation` to `replace` and use the current same-type candidate ID returned by `step7 context` as `target_record_id`. Submit the complete new Agent-owned payload. Never use append as version history.
+
+Synthesis:
+
+```json
+{
+  "contract_version": "1.0",
+  "operation": "append",
+  "record_kind": "step7-synthesis",
+  "target_record_id": null,
+  "context": {"paper_id": null, "question_origin": "existing_question"},
+  "payload": {
+    "question_id": "<existing_question_id>",
+    "title": "<bounded candidate title>",
+    "candidate_status": "keep",
+    "analysis_operator": "aggregate",
+    "paper_card_base": [
+      {"paper_id": "<first_paper_id>", "card_unit_ids": ["<mapped_grounded_or_revised_unit_id>"]},
+      {"paper_id": "<second_paper_id>", "card_unit_ids": ["<mapped_grounded_or_revised_unit_id>"]}
+    ],
+    "missing_evidence": ["<specific missing evidence>"],
+    "assumptions": ["<explicit assumption>"],
+    "risk": ["<candidate-level interpretation risk>"],
+    "testability": "<how the synthesis could be checked>",
+    "next_action": "<bounded next action>",
+    "trace_status": "traceable",
+    "claim": "<bounded multi-paper claim>",
+    "scope": "<included scope>",
+    "agreement_pattern": "<agreement or lack of agreement>",
+    "conflict_pattern": "<conflict or explicit absence of direct conflict>",
+    "boundary_statement": "<what the synthesis does not establish>"
+  }
+}
+```
+
+Review Angle:
+
+```json
+{
+  "contract_version": "1.0",
+  "operation": "append",
+  "record_kind": "step7-review-angle",
+  "target_record_id": null,
+  "context": {"paper_id": null, "question_origin": "existing_question"},
+  "payload": {
+    "question_id": "<existing_question_id>",
+    "title": "<bounded angle title>",
+    "candidate_status": "keep",
+    "analysis_operator": "compare",
+    "paper_card_base": [
+      {"paper_id": "<paper_id>", "card_unit_ids": ["<mapped_grounded_or_revised_unit_id>"]}
+    ],
+    "missing_evidence": ["<specific missing evidence>"],
+    "assumptions": ["<explicit assumption>"],
+    "risk": ["<candidate-level interpretation risk>"],
+    "testability": "<how the angle could be evaluated>",
+    "next_action": "<bounded next action>",
+    "trace_status": "traceable",
+    "thesis": "<organizing thesis>",
+    "organizing_axes": ["<axis>"],
+    "included_clusters": ["<included cluster>"],
+    "excluded_scope": ["<excluded scope>"],
+    "why_this_angle_adds_value": "<specific added value>"
+  }
+}
+```
+
+Insight:
+
+```json
+{
+  "contract_version": "1.0",
+  "operation": "append",
+  "record_kind": "step7-insight",
+  "target_record_id": null,
+  "context": {"paper_id": null, "question_origin": "existing_question"},
+  "payload": {
+    "question_id": "<existing_question_id>",
+    "title": "<bounded insight title>",
+    "candidate_status": "keep",
+    "analysis_operator": "hypothesis_generation",
+    "paper_card_base": [
+      {"paper_id": "<paper_id>", "card_unit_ids": ["<mapped_grounded_or_revised_unit_id>"]}
+    ],
+    "missing_evidence": ["<specific missing evidence>"],
+    "assumptions": ["<explicit assumption>"],
+    "risk": ["<candidate-level interpretation risk>"],
+    "testability": "<how the insight could be tested>",
+    "next_action": "<bounded next action>",
+    "trace_status": "speculative",
+    "insight_type": "mechanism_hypothesis",
+    "hypothesis_or_idea": "<testable idea>",
+    "rationale": "<Card-grounded rationale>",
+    "falsification_condition": "<observation that would weaken the idea>",
+    "minimum_test": "<smallest discriminating test>"
+  }
+}
+```
+
+Cross-View:
+
+```json
+{
+  "contract_version": "1.0",
+  "operation": "append",
+  "record_kind": "step7-cross-view",
+  "target_record_id": null,
+  "context": {"paper_id": null, "question_origin": "existing_question"},
+  "payload": {
+    "question_id": "<existing_question_id>",
+    "title": "<bounded cross-view title>",
+    "candidate_status": "keep",
+    "analysis_operator": "contrast",
+    "paper_card_base": [
+      {"paper_id": "<paper_id>", "card_unit_ids": ["<mapped_grounded_or_revised_unit_id>"]}
+    ],
+    "missing_evidence": ["<specific missing evidence>"],
+    "assumptions": ["<explicit assumption>"],
+    "risk": ["<candidate-level interpretation risk>"],
+    "testability": "<how the relation could be checked>",
+    "next_action": "<bounded next action>",
+    "trace_status": "traceable",
+    "source_views": ["<current_same_question_candidate_id>"],
+    "relation_type": "complements",
+    "why_interesting": "<why the relation matters>",
+    "shared_dimension": "<shared comparison dimension>",
+    "non_equivalence_warning": "<why the sources are not interchangeable>"
+  }
+}
+```
+
+Allowed `candidate_status` values are `keep`, `revise`, `rejected` and `needs_resolution`. A rejected payload must add a non-empty `rejection_rationale`; non-rejected payloads must omit it or use `null`. Use only public `analysis_operator`, `insight_type`, `relation_type` and `trace_status` values from the contract.
 
 ## Failure Output
 

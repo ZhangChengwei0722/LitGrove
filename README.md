@@ -37,8 +37,9 @@ Milestone 1B through the M3B-1 repository slice provide:
 - a review-specific route in the same Portable Skill, without subtype-specific schemas or downstream Field Map/Question/Step 7 integration.
 - four deterministic Step 7 candidate stores with CLI-owned IDs, evidence/boundary closure and atomic append/replace;
 - Question Mapping admission, stale-upstream projection, `step7 context`, stdout-only `step7 render`, and Guardian `RKBC-014` warnings.
+- Portable Skill routes for read-only paper/question queries, canonical claim trace-back and explicitly gated Step 7 maintenance.
 
-The installed CLI contains no private adapter and performs no adapter discovery. The CLI never calls an LLM or makes scientific judgments. OCR, subtype-specific review runtime, persisted Markdown or additional derived views, Field Map integration, Review Unit Question Mapping, Agent-side Step 7 generation/refresh orchestration and migration remain later milestones.
+The installed CLI contains no private adapter and performs no adapter discovery. The CLI never calls an LLM or makes scientific judgments. OCR, subtype-specific review runtime, persisted Markdown or additional derived views, Field Map integration, Review Unit Question Mapping and migration remain later milestones.
 
 ## Privacy Boundary
 
@@ -64,9 +65,9 @@ On macOS, use `.venv/bin/python` instead.
 
 ## Portable Skill
 
-The reviewed Skill source lives at `skills/research-kb/`. It orchestrates existing Core commands for mutually exclusive primary-research and common Review Memory routes, but adds no Core service, schema, ID or workflow store.
+The reviewed Skill source lives at `skills/research-kb/`. It orchestrates existing Core commands for mutually exclusive primary-research and common Review Memory intake, read-only knowledge queries and explicitly gated Step 7 maintenance. It adds no Core service, schema, ID or workflow store.
 
-The Python wheel does not install the Skill. Local CC Switch installation is a separate, explicitly authorized post-merge operation. The Skill requires an existing workspace config and does not generate workspace/domain configuration, discover literature, integrate Review Units downstream or run Step 7.
+The Python wheel does not install the Skill. Local CC Switch installation is a separate, explicitly authorized post-merge operation. The Skill requires an existing workspace config and does not generate workspace/domain configuration, discover literature or integrate Review Units downstream. Ordinary queries remain non-persistent; only explicit Step 7 maintenance or an explicitly complete intake workflow may promote candidates through Core.
 
 ## Runtime Commands
 

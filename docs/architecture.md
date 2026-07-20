@@ -16,6 +16,7 @@ Core owns deterministic contracts, validation, path and ID handling, structured 
 Source Intake -> Registry -> Parse
 -> Primary route: Paper Card Core -> Evidence Grounding -> Question Mapping
 -> Review route: background-only Review Memory
+-> Ephemeral query route: Paper Card Units -> optional Evidence trace-back -> task report
 -> Candidate thinking route: mapped grounded Card Units -> Step 7 structured candidates
 -> Guardian / Feedback
 ```
@@ -174,7 +175,7 @@ natural-language local primary-paper task
 -> non-canonical task report
 ```
 
-`skills/research-kb/` is the reviewed Agent-layer source. Its concise `SKILL.md` routes detailed command, workflow, authority and reporting rules to four one-level reference files. It contains no scripts, duplicate schemas, persistent state or scientific fixtures.
+`skills/research-kb/` is the reviewed Agent-layer source. Its concise `SKILL.md` routes detailed command, primary intake, review intake, query/Step 7, authority and reporting rules to six one-level reference files. It contains no scripts, duplicate schemas, persistent state or scientific fixtures.
 
 The Skill processes sources sequentially, uses `intake inspect` before registration, reads current state through `paper status` and `paper context`, reads scientific text through `parse show`, and submits candidates through existing CLI mutation authority. It classifies document type only in task memory and stops non-primary documents before Paper Card or Evidence promotion.
 
@@ -213,3 +214,21 @@ Four type-specific stores live under `step7/`: synthesis, review angle, insight 
 The transaction validator reloads the current relevant mapping, Cards, Evidence, queue records and Cross-View sources while holding the workspace lock. Process events and journals contain IDs, never candidate scientific text. Cross-View sources must be current, same-question and non-rejected at promotion time.
 
 Valid upstream changes do not corrupt an older candidate. `candidate_freshness` projects `current` or `stale_upstream` with stable reasons; Guardian emits `RKBC-014` without rewriting. Missing IDs, impossible ownership, unexplained closure mismatches and cross-question references remain errors. `step7 context` is the structured recovery surface; `step7 render` is a one-way, non-canonical UTF-8/LF Markdown view on stdout. M3B-1 does not add Agent generation/refresh orchestration, Review Unit support, Field Map integration, persisted Markdown or an LLM inside Core.
+
+## M3B-2 Portable Skill Query And Step 7 Orchestration
+
+```text
+ephemeral paper/question query
+-> grounded/revised Paper Card Units
+-> canonical Evidence expansion when trace-back is requested
+-> private task report with zero writes
+
+explicit Step 7 maintenance
+-> context and semantic reconciliation
+-> record promote through Core authority
+-> context / render / Guardian
+```
+
+The Skill classifies intent before mutation. Ordinary seven-section explanations, overview, methods, comparison, claim trace-back and research-direction discussions remain in the task report only. Review Memory may inform labeled background discussion but cannot become primary support.
+
+Step 7 persistence requires an explicit maintenance request or an intake invocation that explicitly requests the complete workflow. Exact semantic reruns write nothing; same-candidate changes use replace; materially distinct candidates may append; uncertain near-duplicates stop. Core still owns IDs, closure, snapshots and states, while the Agent owns scientific semantics and duplicate judgment. M3B-2 adds no Python runtime, schema, layout, dependency, query-answer store or direct JSONL access.
