@@ -4,7 +4,7 @@ Cross-platform, local-first contracts and deterministic CLI primitives for evide
 
 ## Current Scope
 
-Milestone 1B through the M3A-2A repository slice provide:
+Milestone 1B through the M3B-1 repository slice provide:
 
 - versioned workspace, domain, record, and candidate schemas;
 - portable source references and stable IDs;
@@ -20,7 +20,7 @@ Milestone 1B through the M3A-2A repository slice provide:
 - initialized-workspace enforcement for every runtime command.
 - generic read-only compatibility inspection through explicitly injected legacy adapters;
 - deterministic compatibility differences, protected-input snapshots, and blocking policy without migration or persistence.
-- historical `m2a-1 -> m2b-1` and current exact `m2b-1 -> m3a-2a` workspace layout upgrades with no canonical-record rewrite;
+- historical layout upgrades through `m3a-2a` and the current exact `m3a-2a -> m3b-1` upgrade with no canonical-record rewrite;
 - persistent, domain-neutral Question Mapping from selected Paper Card Units;
 - CLI-owned question/link IDs and exact evidence/boundary projection;
 - read-only `question list/show` commands and Guardian mapping freshness warnings.
@@ -35,8 +35,10 @@ Milestone 1B through the M3A-2A repository slice provide:
 - one common, background-only Review Memory contract for five review subtypes, with CLI-owned Memory/Unit IDs and exact page/section provenance;
 - atomic Review Memory append/replace, primary/review route exclusion, stale-parse Guardian warnings, and a separate `review context` recovery read;
 - a review-specific route in the same Portable Skill, without subtype-specific schemas or downstream Field Map/Question/Step 7 integration.
+- four deterministic Step 7 candidate stores with CLI-owned IDs, evidence/boundary closure and atomic append/replace;
+- Question Mapping admission, stale-upstream projection, `step7 context`, stdout-only `step7 render`, and Guardian `RKBC-014` warnings.
 
-The installed CLI contains no private adapter and performs no adapter discovery. The CLI never calls an LLM or makes scientific judgments. OCR, subtype-specific review runtime, persisted or additional derived views, Field Map integration, Review Unit Question Mapping, Step 7 runtime and migration remain later milestones.
+The installed CLI contains no private adapter and performs no adapter discovery. The CLI never calls an LLM or makes scientific judgments. OCR, subtype-specific review runtime, persisted Markdown or additional derived views, Field Map integration, Review Unit Question Mapping, Agent-side Step 7 generation/refresh orchestration and migration remain later milestones.
 
 ## Privacy Boundary
 
@@ -95,13 +97,15 @@ research-kb record promote --workspace <workspace.yaml> --request - --actor <age
 research-kb question list --workspace <workspace.yaml>
 research-kb question show --workspace <workspace.yaml> --question-id <question_id>
 research-kb question render --workspace <workspace.yaml> --question-id <question_id>
+research-kb step7 context --workspace <workspace.yaml> --question-id <question_id>
+research-kb step7 render --workspace <workspace.yaml> --question-id <question_id>
 research-kb guardian check --workspace <workspace.yaml> [--write-report]
 research-kb transaction recover --workspace <workspace.yaml> [--dry-run]
 ```
 
 Source assets remain read-only. Canonical writes stay under `knowledge_root` and emit a process event only after a validated atomic replacement.
 
-`capability show`, `intake inspect`, `parse show`, `paper status`, `paper context`, and `review context` emit transient interface `1.0` JSON and write no workspace state. Capability output distinguishes an implemented adapter from its installed availability. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
+`capability show`, `intake inspect`, `parse show`, `paper status`, `paper context`, `review context`, and `step7 context` emit transient interface `1.0` JSON and write no workspace state. Capability output distinguishes an implemented adapter from its installed availability. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
 
 `intake inspect` accepts one absolute source path, confines it to exactly one declared source root, and returns only portable `root_id + relative_path`, exact-path registration state, and ordered Paper Card section IDs/labels. It hashes the source before and after projection, never returns the hash or absolute path, and performs no registration. The Portable Skill uses it for sequential reruns; concurrent inspect-and-register deduplication is not guaranteed.
 
@@ -116,6 +120,8 @@ The PDF adapter records exact `pdfplumber` version identity and emits `page:<n>:
 Question Mapping requests use `record promote`. The request selects Paper Card Unit IDs and may add question-specific review queue boundaries; Core derives `evidence_ids`, preserves required unit boundaries, allocates IDs, and stores the result in `questions/mappings.jsonl`. Unapproved Agent-generated questions remain task report candidates and cannot use a persistable `question_origin`.
 
 `question render` validates the complete workspace bundle and emits one raw Markdown reading view to stdout. It expands only records reachable from the selected mapping, labels review queue records as non-evidence, computes freshness without rewriting the mapping, and creates no file, event, journal, report, or cache.
+
+Step 7 requests also use `record promote`, but require `paper_id: null` and `question_origin: existing_question`. The Agent submits semantic fields and selected mapped Card Unit IDs; Core owns candidate IDs, candidate type, exact canonical Evidence and Unit-boundary closure, snapshot fields, timestamps and the fixed `not_fact: true`, `review_status: ai_draft`, `automation_status: pending` boundary. Records live in four JSONL stores under `step7/`. `step7 context` returns candidates and deterministic freshness for one question. `step7 render` emits a non-canonical Markdown reading view to stdout only. Neither command generates or scientifically judges candidates.
 
 `compatibility inspect` is an integration seam for an adapter injected by a private caller in the same Python process. It emits one schema-valid report to stdout, snapshots every declared protected input before and after inspection, and writes no report, event, journal, or canonical record. A clean report exits `0`, blocking differences exit `1`, adapter/output errors exit `2`, and protected-input changes exit `4`.
 

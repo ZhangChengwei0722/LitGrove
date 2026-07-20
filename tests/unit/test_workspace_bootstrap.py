@@ -78,17 +78,16 @@ def _write_workspace(
     return path
 
 
-def _downgrade_marker_to_m2b_1(config_path: Path, *, keep_review_directories: bool = False) -> bytes:
+def _downgrade_marker_to_m3a_2a(config_path: Path, *, keep_step7_directory: bool = False) -> bytes:
     knowledge_root = config_path.parent / "knowledge"
     marker_path = knowledge_root / ".research-kb" / "workspace.json"
     marker = read_json_document(marker_path, record_kind="workspace-marker")
-    marker["layout_contract_version"] = "m2b-1"
+    marker["layout_contract_version"] = "m3a-2a"
     marker_bytes = serialize_json(marker)
     atomic_write_bytes(marker_path, marker_bytes, "test-downgrade-marker")
-    review_root = knowledge_root / "review_memories"
-    if not keep_review_directories:
-        (review_root / "by_paper").rmdir()
-        review_root.rmdir()
+    step7_root = knowledge_root / "step7"
+    if not keep_step7_directory:
+        step7_root.rmdir()
     return marker_bytes
 
 
@@ -107,13 +106,13 @@ def test_workspace_marker_schema_and_serialization_are_deterministic(tmp_path: P
         "config_fingerprint",
     }
     assert str(tmp_path) not in serialize_json(marker).decode("utf-8")
-    assert marker["layout_contract_version"] == "m3a-2a"
+    assert marker["layout_contract_version"] == "m3b-1"
 
 
 def test_old_layout_dry_run_plans_upgrade_without_mutation(tmp_path: Path) -> None:
     config_path = _write_workspace(tmp_path / "workspace")
     assert WorkspaceBootstrapService(config_path).run().result == "initialized"
-    marker_before = _downgrade_marker_to_m2b_1(config_path)
+    marker_before = _downgrade_marker_to_m3a_2a(config_path)
     knowledge_root = config_path.parent / "knowledge"
     tree_before = {
         path.relative_to(knowledge_root).as_posix(): path.read_bytes()
@@ -126,11 +125,11 @@ def test_old_layout_dry_run_plans_upgrade_without_mutation(tmp_path: Path) -> No
     assert result.result == "planned"
     assert result.exit_code == 0
     assert {tuple(item.values()) for item in result.managed_actions} >= {
-        ("review_memories", "create_directory"),
-        ("review_memories/by_paper", "create_directory"),
+        ("step7", "create_directory"),
         (".research-kb/workspace.json", "upgrade_identity_marker"),
     }
-    assert not (knowledge_root / "review_memories").exists()
+    assert not (knowledge_root / "step7").exists()
+    assert (knowledge_root / "review_memories" / "by_paper").is_dir()
     assert (knowledge_root / ".research-kb" / "workspace.json").read_bytes() == marker_before
     assert {
         path.relative_to(knowledge_root).as_posix(): path.read_bytes()
@@ -142,7 +141,7 @@ def test_old_layout_dry_run_plans_upgrade_without_mutation(tmp_path: Path) -> No
 def test_old_layout_dry_run_rejects_invalid_structured_state(tmp_path: Path) -> None:
     config_path = _write_workspace(tmp_path / "workspace")
     assert WorkspaceBootstrapService(config_path).run().result == "initialized"
-    marker_before = _downgrade_marker_to_m2b_1(config_path)
+    marker_before = _downgrade_marker_to_m3a_2a(config_path)
     knowledge_root = config_path.parent / "knowledge"
     (knowledge_root / "registry" / "papers.jsonl").write_bytes(b"{}")
 
@@ -152,13 +151,13 @@ def test_old_layout_dry_run_rejects_invalid_structured_state(tmp_path: Path) -> 
     assert result.exit_code == 4
     assert "RKBC-015" in {item.code for item in result.diagnostics}
     assert (knowledge_root / ".research-kb" / "workspace.json").read_bytes() == marker_before
-    assert not (knowledge_root / "review_memories").exists()
+    assert not (knowledge_root / "step7").exists()
 
 
 def test_old_layout_apply_upgrades_only_directory_and_marker_then_converges(tmp_path: Path) -> None:
     config_path = _write_workspace(tmp_path / "workspace")
     assert WorkspaceBootstrapService(config_path).run().result == "initialized"
-    _downgrade_marker_to_m2b_1(config_path)
+    _downgrade_marker_to_m3a_2a(config_path)
     knowledge_root = config_path.parent / "knowledge"
 
     upgraded = WorkspaceBootstrapService(config_path).run()
@@ -166,26 +165,26 @@ def test_old_layout_apply_upgrades_only_directory_and_marker_then_converges(tmp_
     assert upgraded.result == "initialized"
     assert upgraded.exit_code == 0
     actions = {tuple(item.values()) for item in upgraded.managed_actions}
-    assert ("review_memories", "create_directory") in actions
-    assert ("review_memories/by_paper", "create_directory") in actions
+    assert ("step7", "create_directory") in actions
     assert (".research-kb/workspace.json", "upgrade_identity_marker") in actions
     assert (knowledge_root / "questions").is_dir()
     assert not (knowledge_root / "questions" / "mappings.jsonl").exists()
     assert (knowledge_root / "review_memories" / "by_paper").is_dir()
-    assert not any((knowledge_root / "review_memories" / "by_paper").iterdir())
+    assert (knowledge_root / "step7").is_dir()
+    assert not any((knowledge_root / "step7").iterdir())
     assert not (knowledge_root / "process" / "events.jsonl").exists()
     assert not list((knowledge_root / ".research-kb" / "transactions").glob("*.json"))
     assert read_json_document(
         knowledge_root / ".research-kb" / "workspace.json",
         record_kind="workspace-marker",
-    )["layout_contract_version"] == "m3a-2a"
+    )["layout_contract_version"] == "m3b-1"
     assert WorkspaceBootstrapService(config_path).run().result == "no_change"
 
 
-def test_old_layout_upgrade_resumes_from_safe_empty_review_directories(tmp_path: Path) -> None:
+def test_old_layout_upgrade_resumes_from_safe_empty_step7_directory(tmp_path: Path) -> None:
     config_path = _write_workspace(tmp_path / "workspace")
     assert WorkspaceBootstrapService(config_path).run().result == "initialized"
-    _downgrade_marker_to_m2b_1(config_path, keep_review_directories=True)
+    _downgrade_marker_to_m3a_2a(config_path, keep_step7_directory=True)
 
     result = WorkspaceBootstrapService(config_path).run()
 
@@ -193,15 +192,15 @@ def test_old_layout_upgrade_resumes_from_safe_empty_review_directories(tmp_path:
     assert read_json_document(
         config_path.parent / "knowledge" / ".research-kb" / "workspace.json",
         record_kind="workspace-marker",
-    )["layout_contract_version"] == "m3a-2a"
+    )["layout_contract_version"] == "m3b-1"
 
 
-def test_old_layout_upgrade_rejects_nonempty_review_directory(tmp_path: Path) -> None:
+def test_old_layout_upgrade_rejects_nonempty_step7_directory(tmp_path: Path) -> None:
     config_path = _write_workspace(tmp_path / "workspace")
     assert WorkspaceBootstrapService(config_path).run().result == "initialized"
-    marker_before = _downgrade_marker_to_m2b_1(config_path, keep_review_directories=True)
-    review_directory = config_path.parent / "knowledge" / "review_memories" / "by_paper"
-    (review_directory / "unexpected.json").write_text("{}\n", encoding="utf-8", newline="\n")
+    marker_before = _downgrade_marker_to_m3a_2a(config_path, keep_step7_directory=True)
+    step7_directory = config_path.parent / "knowledge" / "step7"
+    (step7_directory / "unexpected.json").write_text("{}\n", encoding="utf-8", newline="\n")
 
     result = WorkspaceBootstrapService(config_path).run()
 
@@ -214,7 +213,7 @@ def test_old_layout_upgrade_rejects_nonempty_review_directory(tmp_path: Path) ->
 def test_old_layout_marker_write_failure_leaves_only_resumable_state(tmp_path: Path) -> None:
     config_path = _write_workspace(tmp_path / "workspace")
     assert WorkspaceBootstrapService(config_path).run().result == "initialized"
-    marker_before = _downgrade_marker_to_m2b_1(config_path)
+    marker_before = _downgrade_marker_to_m3a_2a(config_path)
     knowledge_root = config_path.parent / "knowledge"
 
     def fail_marker(path: Path, content: bytes, write_id: str) -> None:
@@ -223,8 +222,8 @@ def test_old_layout_marker_write_failure_leaves_only_resumable_state(tmp_path: P
     failed = WorkspaceBootstrapService(config_path, marker_writer=fail_marker).run()
 
     assert failed.result == "blocked"
-    assert (knowledge_root / "review_memories" / "by_paper").is_dir()
-    assert not any((knowledge_root / "review_memories" / "by_paper").iterdir())
+    assert (knowledge_root / "step7").is_dir()
+    assert not any((knowledge_root / "step7").iterdir())
     assert (knowledge_root / ".research-kb" / "workspace.json").read_bytes() == marker_before
     assert WorkspaceBootstrapService(config_path).run().result == "initialized"
 
@@ -232,7 +231,7 @@ def test_old_layout_marker_write_failure_leaves_only_resumable_state(tmp_path: P
 def test_runtime_rejects_upgradeable_old_layout(tmp_path: Path) -> None:
     config_path = _write_workspace(tmp_path / "workspace")
     assert WorkspaceBootstrapService(config_path).run().result == "initialized"
-    _downgrade_marker_to_m2b_1(config_path)
+    _downgrade_marker_to_m3a_2a(config_path)
 
     with pytest.raises(ResearchKBError) as caught:
         WorkspaceLayout.load(config_path)

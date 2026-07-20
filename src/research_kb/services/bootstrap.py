@@ -346,6 +346,10 @@ class WorkspaceBootstrapService:
             "process/events.jsonl",
             "guardian/reports.jsonl",
             "questions/mappings.jsonl",
+            "step7/synthesis.jsonl",
+            "step7/review_angles.jsonl",
+            "step7/insights.jsonl",
+            "step7/cross_views.jsonl",
         ):
             if (context.knowledge_root / Path(*relative.split("/"))).is_file():
                 return True
@@ -599,6 +603,10 @@ def _journal_target_matches_store(target_store: str, relative_path: str) -> bool
         "review_queue": "review_queue/items.jsonl",
         "guardian_reports": "guardian/reports.jsonl",
         "question_mappings": "questions/mappings.jsonl",
+        "step7_synthesis": "step7/synthesis.jsonl",
+        "step7_review_angles": "step7/review_angles.jsonl",
+        "step7_insights": "step7/insights.jsonl",
+        "step7_cross_views": "step7/cross_views.jsonl",
     }
     if target_store in exact:
         return relative_path == exact[target_store]

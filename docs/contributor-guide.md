@@ -76,6 +76,15 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Treat synthetic golden Markdown as reviewed output: author its source records from scratch, compare bytes exactly, and update it only for an approved contract change.
 - Rendering is read-only. Do not create a view file, cache, event, journal, report, lock, or layout directory.
 
+## Step 7 Runtime Rules
+
+- Admit only grounded/revised Card Units already selected by one current Question Mapping.
+- Treat candidate semantics as Agent-owned and IDs, type, Evidence/boundary closure, snapshots, timestamps and candidate-only status constants as Core-owned.
+- Keep review queue IDs out of `evidence_base`; Review Memory and Review Unit IDs cannot support Step 7.
+- Distinguish explained upstream staleness from structural corruption. Guardian may warn with `RKBC-014`, but it must never refresh a candidate.
+- Revalidate relevant upstream records inside the transaction lock and keep candidate text out of journals and process events.
+- Test all four types, Cross-View same-question/current-source gates, stale readability, unrelated mutation, pre-replacement failure and exact golden Markdown for two synthetic domains.
+
 ## Deterministic Read And Stdin Rules
 
 - Build each transient JSON read document completely before one UTF-8/LF stdout write.

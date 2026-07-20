@@ -63,17 +63,17 @@ def main() -> int:
             "diagnostic_code": "RKBC-028",
         }:
             raise SystemExit("base wheel capability report did not expose the missing PDF dependency")
-        if not {"intake inspect", "paper context", "review context"}.issubset(capability["read_commands"]):
+        if not {"intake inspect", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
             raise SystemExit("base wheel capability report lacks deterministic intake/context reads")
-        if capability["features"]["review_runtime"] is not True:
-            raise SystemExit("base wheel capability report lacks Review Memory runtime")
+        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True:
+            raise SystemExit("base wheel capability report lacks Review Memory or Step 7 runtime")
         subprocess.run(
             [
                 str(python), "-c",
                 "from research_kb.compatibility import CompatibilitySourceRef, LegacyReaderAdapter; "
                 "from research_kb.contracts.registry import SchemaRegistry; "
                 "from research_kb.guardian import GuardianService; "
-                "from research_kb.services import CompatibilityAdapterRegistry, CompatibilityInspectionService, IntakeInspectService, PaperContextService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService, ReviewContextService, ReviewMemoryService; "
+                "from research_kb.services import CompatibilityAdapterRegistry, CompatibilityInspectionService, IntakeInspectService, PaperContextService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService, ReviewContextService, ReviewMemoryService, Step7CandidateService, Step7ContextService, Step7ReadingViewService; "
                 "registry = SchemaRegistry(); "
                 "assert registry.schema('mutation-request')['$id'].endswith('mutation-request'); "
                 "assert registry.schema('compatibility-difference')['$id'].endswith('compatibility-difference'); "
@@ -89,7 +89,10 @@ def main() -> int:
                 "assert ReviewContextService.__name__ == 'ReviewContextService'; "
                 "assert ReviewMemoryService.__name__ == 'ReviewMemoryService'; "
                 "assert QuestionMappingService.__name__ == 'QuestionMappingService'; "
-                "assert QuestionReadingViewService.__name__ == 'QuestionReadingViewService'",
+                "assert QuestionReadingViewService.__name__ == 'QuestionReadingViewService'; "
+                "assert Step7CandidateService.__name__ == 'Step7CandidateService'; "
+                "assert Step7ContextService.__name__ == 'Step7ContextService'; "
+                "assert Step7ReadingViewService.__name__ == 'Step7ReadingViewService'",
             ],
             cwd=temporary,
             check=True,
@@ -155,8 +158,8 @@ def main() -> int:
         if outputs != ["planned", "initialized", "no_change"]:
             raise SystemExit(f"unexpected workspace init results: {outputs}")
         marker = json.loads((workspace_root / "knowledge" / ".research-kb" / "workspace.json").read_text(encoding="utf-8"))
-        if marker["layout_contract_version"] != "m3a-2a":
-            raise SystemExit("wheel workspace did not initialize at m3a-2a")
+        if marker["layout_contract_version"] != "m3b-1":
+            raise SystemExit("wheel workspace did not initialize at m3b-1")
         if not (workspace_root / "knowledge" / "questions").is_dir():
             raise SystemExit("wheel workspace lacks questions directory")
         if (workspace_root / "knowledge" / "questions" / "mappings.jsonl").exists():
@@ -165,6 +168,10 @@ def main() -> int:
             raise SystemExit("wheel workspace lacks review memory directories")
         if any((workspace_root / "knowledge" / "review_memories" / "by_paper").iterdir()):
             raise SystemExit("workspace init created a review memory record")
+        if not (workspace_root / "knowledge" / "step7").is_dir():
+            raise SystemExit("wheel workspace lacks Step 7 directory")
+        if any((workspace_root / "knowledge" / "step7").iterdir()):
+            raise SystemExit("workspace init created an empty Step 7 store")
 
         source = sources / "wheel-study.txt"
         source.write_text("The invented wheel response increased.\n", encoding="utf-8", newline="\n")
@@ -424,6 +431,34 @@ def main() -> int:
                 "fixture_origin": "synthetic_from_scratch",
             },
         )["record_id"]
+        insight_id = promote(
+            {
+                "contract_version": "1.0",
+                "operation": "append",
+                "record_kind": "step7-insight",
+                "target_record_id": None,
+                "context": {"paper_id": None, "question_origin": "existing_question"},
+                "payload": {
+                    "question_id": question_id,
+                    "title": "Synthetic wheel insight",
+                    "candidate_status": "keep",
+                    "analysis_operator": "experiment_design",
+                    "paper_card_base": [{"paper_id": paper_id, "card_unit_ids": [unit_id]}],
+                    "missing_evidence": ["One independent fabricated wheel observation"],
+                    "assumptions": ["The selected synthetic record remains comparable"],
+                    "risk": ["The wheel fixture represents one setting"],
+                    "testability": "Add one fabricated wheel observation.",
+                    "next_action": "Retain for installed-wheel validation.",
+                    "trace_status": "traceable",
+                    "insight_type": "experimental_idea",
+                    "hypothesis_or_idea": "One added wheel control may narrow interpretation.",
+                    "rationale": "The selected Unit has canonical Evidence and an explicit boundary.",
+                    "falsification_condition": "The added control leaves interpretation unchanged.",
+                    "minimum_test": "Add one fabricated control arm."
+                },
+                "fixture_origin": "synthetic_from_scratch"
+            }
+        )["record_id"]
 
         before_knowledge = _tree_snapshot(workspace_root / "knowledge")
         before_sources = _tree_snapshot(sources)
@@ -502,6 +537,41 @@ def main() -> int:
             raise SystemExit("wheel render changed source files")
         if (workspace_root / "knowledge" / "views").exists():
             raise SystemExit("wheel render created a views directory")
+
+        step7_context = _run_json(
+            python,
+            Path(temporary),
+            "step7",
+            "context",
+            "--workspace",
+            str(config_path),
+            "--question-id",
+            question_id,
+        )
+        if step7_context["summary"]["total"] != 1 or step7_context["candidates"][0]["candidate"]["candidate_id"] != insight_id:
+            raise SystemExit("base wheel Step 7 context did not recover the candidate")
+        step7_rendered = subprocess.run(
+            [
+                str(python),
+                "-m",
+                "research_kb",
+                "step7",
+                "render",
+                "--workspace",
+                str(config_path),
+                "--question-id",
+                question_id,
+            ],
+            cwd=temporary,
+            check=True,
+            capture_output=True,
+        )
+        if step7_rendered.stderr or insight_id.encode("utf-8") not in step7_rendered.stdout:
+            raise SystemExit("base wheel Step 7 render did not expose the candidate")
+        if b"canonical: false" not in step7_rendered.stdout or b"Review Queue Boundaries (Not Evidence)" not in step7_rendered.stdout:
+            raise SystemExit("base wheel Step 7 render lacks candidate boundaries")
+        if _tree_snapshot(workspace_root / "knowledge") != before_knowledge:
+            raise SystemExit("base wheel Step 7 reads changed managed workspace files")
 
         review_source = sources / "wheel-review.txt"
         review_source.write_text(

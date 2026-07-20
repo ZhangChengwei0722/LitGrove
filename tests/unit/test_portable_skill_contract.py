@@ -128,7 +128,7 @@ def test_skill_required_read_commands_match_public_capability() -> None:
     assert required_reads <= set(capability["read_commands"])
     assert capability["features"]["real_pdf_parse"] is True
     assert capability["features"]["review_runtime"] is True
-    assert capability["features"]["step7_runtime"] is False
+    assert capability["features"]["step7_runtime"] is True
 
 
 def test_cli_reference_contains_minimal_stdin_promotion_envelopes() -> None:

@@ -813,6 +813,27 @@ def test_question_render_missing_id_has_empty_stdout(tmp_path, capsys) -> None:
     assert str(tmp_path) not in captured.err
 
 
+@pytest.mark.parametrize("command", ["context", "render"])
+def test_step7_read_missing_id_has_empty_stdout(tmp_path, capsys, command) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    missing = "question_f0000000-0000-4000-8000-000000000000"
+
+    result = main([
+        "step7",
+        command,
+        "--workspace",
+        str(layout.config.path),
+        "--question-id",
+        missing,
+    ])
+
+    captured = capsys.readouterr()
+    assert result == 2
+    assert captured.out == ""
+    assert json.loads(captured.err)["diagnostic"]["code"] == "RKBC-005"
+    assert str(tmp_path) not in captured.err
+
+
 @pytest.mark.parametrize(
     "argv",
     [
@@ -826,15 +847,26 @@ def test_question_render_missing_id_has_empty_stdout(tmp_path, capsys) -> None:
             "--question-id",
             "question_a1111111-1111-4111-8111-111111111111",
         ],
+        [
+            "step7",
+            "context",
+            "--question-id",
+            "question_a1111111-1111-4111-8111-111111111111",
+        ],
+        [
+            "step7",
+            "render",
+            "--question-id",
+            "question_a1111111-1111-4111-8111-111111111111",
+        ],
     ],
 )
 def test_runtime_cli_reports_old_layout_as_upgrade_required(tmp_path, capsys, argv) -> None:
     layout = make_runtime_workspace(tmp_path)
     marker = json.loads(layout.marker_path.read_text(encoding="utf-8"))
-    marker["layout_contract_version"] = "m2b-1"
+    marker["layout_contract_version"] = "m3a-2a"
     layout.marker_path.write_bytes(serialize_json(marker))
-    (layout.knowledge_root / "review_memories" / "by_paper").rmdir()
-    (layout.knowledge_root / "review_memories").rmdir()
+    (layout.knowledge_root / "step7").rmdir()
 
     result = main([argv[0], argv[1], "--workspace", str(layout.config.path), *argv[2:]])
 
@@ -859,6 +891,8 @@ def test_runtime_cli_reports_old_layout_as_upgrade_required(tmp_path, capsys, ar
         ["question", "list"],
         ["question", "show", "--question-id", "question_a1111111-1111-4111-8111-111111111111"],
         ["question", "render", "--question-id", "question_a1111111-1111-4111-8111-111111111111"],
+        ["step7", "context", "--question-id", "question_a1111111-1111-4111-8111-111111111111"],
+        ["step7", "render", "--question-id", "question_a1111111-1111-4111-8111-111111111111"],
         ["transaction", "recover", "--dry-run"],
     ],
 )

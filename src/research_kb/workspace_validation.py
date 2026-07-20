@@ -30,8 +30,8 @@ from research_kb.errors import (
 from research_kb.storage.json_io import read_json_document
 
 
-PREVIOUS_LAYOUT_CONTRACT_VERSION = "m2b-1"
-CURRENT_LAYOUT_CONTRACT_VERSION = "m3a-2a"
+PREVIOUS_LAYOUT_CONTRACT_VERSION = "m3a-2a"
+CURRENT_LAYOUT_CONTRACT_VERSION = "m3b-1"
 LAYOUT_CONTRACT_VERSION = CURRENT_LAYOUT_CONTRACT_VERSION
 MARKER_RELATIVE_PATH = ".research-kb/workspace.json"
 M2A_1_MANAGED_DIRECTORIES = (
@@ -54,7 +54,8 @@ M3A_2A_MANAGED_DIRECTORIES = M2B_1_MANAGED_DIRECTORIES + (
     "review_memories",
     "review_memories/by_paper",
 )
-MANAGED_DIRECTORIES = M3A_2A_MANAGED_DIRECTORIES
+M3B_1_MANAGED_DIRECTORIES = M3A_2A_MANAGED_DIRECTORIES + ("step7",)
+MANAGED_DIRECTORIES = M3B_1_MANAGED_DIRECTORIES
 
 
 @dataclass(frozen=True, slots=True)
@@ -371,9 +372,9 @@ def _layout_diagnostics(context: WorkspaceContext, *, require_initialized: bool)
     elif require_initialized:
         diagnostics.append(_not_initialized(context.workspace_id))
 
-    required_directories = M2B_1_MANAGED_DIRECTORIES if marker_is_predecessor else MANAGED_DIRECTORIES
+    required_directories = M3A_2A_MANAGED_DIRECTORIES if marker_is_predecessor else MANAGED_DIRECTORIES
     allowed_directories = (
-        M2B_1_MANAGED_DIRECTORIES + ("review_memories", "review_memories/by_paper")
+        M3A_2A_MANAGED_DIRECTORIES + ("step7",)
         if marker_is_predecessor
         else MANAGED_DIRECTORIES
     )
@@ -412,7 +413,7 @@ def _layout_diagnostics(context: WorkspaceContext, *, require_initialized: bool)
                 path,
                 relative,
                 allowed_directories,
-                allow_review_store=not marker_is_predecessor,
+                allow_step7_store=not marker_is_predecessor,
             ):
                 diagnostics.append(_layout_error(context.workspace_id, "managed layout contains an unknown descendant"))
     if marker_is_predecessor and require_initialized and not any(
@@ -435,7 +436,7 @@ def _recognized_descendant(
     relative: str,
     managed_directories: tuple[str, ...],
     *,
-    allow_review_store: bool,
+    allow_step7_store: bool,
 ) -> bool:
     if path.is_dir():
         return relative in managed_directories
@@ -446,9 +447,8 @@ def _recognized_descendant(
         ("parse/by_paper/", ".pages.jsonl"),
         ("paper_cards/by_paper/", ".card.json"),
         ("evidence/by_paper/", ".evidence.jsonl"),
+        ("review_memories/by_paper/", ".review.json"),
     )
-    if allow_review_store:
-        patterns += (("review_memories/by_paper/", ".review.json"),)
     if any(relative.startswith(prefix) and "/" not in relative[len(prefix) :] and relative.endswith(suffix) for prefix, suffix in patterns):
         return True
     exact = {
@@ -458,6 +458,15 @@ def _recognized_descendant(
         "guardian/reports.jsonl",
         "questions/mappings.jsonl",
     }
+    if allow_step7_store:
+        exact.update(
+            {
+                "step7/synthesis.jsonl",
+                "step7/review_angles.jsonl",
+                "step7/insights.jsonl",
+                "step7/cross_views.jsonl",
+            }
+        )
     return relative in exact
 
 

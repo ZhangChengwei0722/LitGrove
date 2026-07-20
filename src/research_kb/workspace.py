@@ -78,6 +78,19 @@ class WorkspaceLayout:
     def review_memory_path(self, paper_id: str) -> Path:
         return self.knowledge_root / "review_memories" / "by_paper" / f"{paper_id}.review.json"
 
+    def step7_store_path(self, record_kind: str) -> Path:
+        filenames = {
+            "step7-synthesis": "synthesis.jsonl",
+            "step7-review-angle": "review_angles.jsonl",
+            "step7-insight": "insights.jsonl",
+            "step7-cross-view": "cross_views.jsonl",
+        }
+        try:
+            filename = filenames[record_kind]
+        except KeyError as error:
+            raise ValueError(f"unsupported Step 7 record kind: {record_kind}") from error
+        return self.knowledge_root / "step7" / filename
+
     def journal_path(self, event_id: str) -> Path:
         return self.transactions_root / f"{event_id}.json"
 
