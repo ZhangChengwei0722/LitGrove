@@ -16,19 +16,22 @@ Milestone 1B implements this deterministic storage lifecycle. M3A-0A adds explic
 
 ## Runtime Sequence
 
-1. `workspace init --dry-run` validates an existing config and reports planned managed actions without deliberate filesystem mutation.
-2. `workspace init` binds the managed root with a deterministic marker. Repeating it with the same config returns `no_change`.
-3. `compatibility inspect` uses only adapters explicitly injected by a private in-process caller. It emits a read-only report to stdout and never persists compatibility state.
-4. `registry add` resolves a declared source root, hashes the source read-only, and preserves exact duplicates as reciprocal candidates.
-5. `parse run` uses the explicitly requested `synthetic-text` or optional `pdfplumber` adapter and writes validated page records without creating a full-text copy. It reports exact adapter/version identity and never falls back to OCR or another adapter.
-6. `record promote` loads a private mutation request, injects IDs/timestamps/fingerprints, enforces actor authority, and promotes one canonical store.
-7. A `question-mapping` request selects Card Units for a user-supplied or explicitly approved question. Core derives evidence and required boundaries before atomic promotion.
-8. `question list/show` retrieves deterministic structured mappings without writing a reading view, report, event, or journal.
-9. `question render` validates one mapping and emits its complete Markdown reading view to stdout without persisting the view or changing structured state.
-10. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
-11. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
+1. `capability show` reports public Core contracts and installed adapter availability without loading a workspace.
+2. `workspace init --dry-run` validates an existing config and reports planned managed actions without deliberate filesystem mutation.
+3. `workspace init` binds the managed root with a deterministic marker. Repeating it with the same config returns `no_change`.
+4. `compatibility inspect` uses only adapters explicitly injected by a private in-process caller. It emits a read-only report to stdout and never persists compatibility state.
+5. `registry add` resolves a declared source root, hashes the source read-only, and preserves exact duplicates as reciprocal candidates. `--metadata -` accepts one bounded JSON object through stdin.
+6. `parse run` uses the explicitly requested `synthetic-text` or optional `pdfplumber` adapter and writes validated page records without creating a full-text copy. It reports exact adapter/version identity and never falls back to OCR or another adapter.
+7. `parse show` emits all validated active pages or one positive PDF page after source-fingerprint checks, without creating a full-text copy or read artifact.
+8. `record promote` loads a file request or bounded stdin JSON object, injects IDs/timestamps/fingerprints, enforces actor authority, and promotes one canonical store.
+9. A `question-mapping` request selects Card Units for a user-supplied or explicitly approved question. Core derives evidence and required boundaries before atomic promotion.
+10. `paper status` projects deterministic stage, freshness, Guardian and transaction safety facts without scientific content or a resume decision.
+11. `question list/show` retrieves deterministic structured mappings without writing a reading view, report, event, or journal.
+12. `question render` validates one mapping and emits its complete Markdown reading view to stdout without persisting the view or changing structured state.
+13. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
+14. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
 
-Every runtime command uses the same semantic validator and requires a matching workspace marker. No command accepts a raw `knowledge_root` override or a source-write operation. `local_inbox` remains user-owned and is never created or scanned by bootstrap.
+Every workspace-bound runtime command uses the same semantic validator and requires a matching workspace marker. `capability show` is the sole workspace-independent product command in this slice. No command accepts a raw `knowledge_root` override or a source-write operation. `local_inbox` remains user-owned and is never created or scanned by bootstrap.
 
 Compatibility reports classify what can be read directly, projected through an adapter, left unsupported, or retained as a legacy reading view. They do not select a migration target or change authority. Core rechecks all declared protected files and trees in a `finally` path; source change takes precedence over an ordinary adapter failure.
 
@@ -72,3 +75,9 @@ Structured JSON/YAML/JSONL records are inputs. Markdown views are one-way render
 M2B-2 renders exactly one stdout-only Question Reading View. It includes selected Paper Card Units, mapped canonical evidence, non-evidence review queue boundaries, and current freshness diagnostics. It creates no Markdown file or view store.
 
 Evidence matrices, relations, gap maps, contradictions, persisted Question Layer Markdown, and Step 7 output remain outside the implemented runtime.
+
+## Skill-Facing Read And Handoff Boundary
+
+The transient JSON read interface is version `1.0`. Core reports capability and current state; the future Skill decides the procedural resume step and the Agent remains responsible for scientific interpretation. No read command persists a status snapshot or workflow run.
+
+Stdin accepts JSON only for Registry metadata and mutation requests. Empty, invalid, non-object or oversized input fails before service dispatch. File-based JSON/YAML remains supported, but YAML is never accepted through stdin.

@@ -115,3 +115,19 @@ registered immutable PDF and SHA-256
 `pdfplumber` is an optional, lazily imported dependency. The CLI never discovers adapters and never falls back from an explicit `pdfplumber` request. Real Evidence uses zero-based, end-exclusive character locators over stored page text; invented synthetic fixtures retain block locators only under whitespace-normalized same-page containment.
 
 Complete-bundle validation owns active page order, uniqueness, parse-run identity, parser identity, and Evidence resolution. `RecordService` separately owns filesystem source-stability checks before and after Evidence replacement. This adds no schema or layout state and does not make PDF extraction a scientific interpretation step.
+
+## M3A-0B Deterministic Skill-Facing Interface
+
+```text
+public capability facts
++ validated paper-stage and safety projection
++ selected parsed-page records
++ bounded JSON stdin
+-> later Skill procedure without a second workflow store
+```
+
+`CapabilityService` is workspace-independent and reports both implemented adapters and installed availability. `ParseReadService` and `PaperStatusService` require an initialized workspace and complete bundle validation. They build transient interface `1.0` documents in memory and never write a cache, view, report, event, journal or lock.
+
+Paper status derives only structural facts: source state, active parse identity, Card and Unit status counts, Evidence/queue counts, linked mapping freshness, Guardian finding codes, and transaction phase counts. It contains no scientific payload and does not prescribe a next action. Parsed-page reads may contain private page text for the explicitly selected paper and recheck source SHA-256 before returning.
+
+Bounded stdin input is a transport boundary, not a new mutation path. Registry metadata and mutation requests enter their existing services after strict UTF-8 JSON-object and byte-limit validation. No schema, layout, ID namespace, dependency or persisted workflow state is added.

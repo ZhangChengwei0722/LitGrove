@@ -4,7 +4,7 @@ Cross-platform, local-first contracts and deterministic CLI primitives for evide
 
 ## Current Scope
 
-Milestone 1B, M2A-1, M2A-2, M2B-1, and M2B-2 provide:
+Milestone 1B through M3A-0B provide:
 
 - versioned workspace, domain, record, and candidate schemas;
 - portable source references and stable IDs;
@@ -27,6 +27,8 @@ Milestone 1B, M2A-1, M2A-2, M2B-1, and M2B-2 provide:
 - one deterministic, stdout-only Question Reading View with selected Card Units, canonical evidence trace, non-evidence boundaries, and current freshness diagnostics.
 - an explicit optional `pdfplumber` adapter with exact package-version provenance and one row per PDF page;
 - strict same-paper page/locator/quote validation for canonical Evidence, including bounded synthetic block compatibility.
+- a versioned transient capability report, bounded one-paper status projection, and validated parsed-page read surface;
+- bounded stdin JSON handoff into the existing Registry and mutation authority paths without temporary request files.
 
 The installed CLI contains no private adapter and performs no adapter discovery. Scientific claim generation, OCR, Review runtime, persisted or additional derived views, Step 7 runtime, migration, and the Portable Agent Skill remain later milestones. The CLI never calls an LLM or makes scientific judgments.
 
@@ -62,14 +64,19 @@ research-kb workspace init --workspace <workspace.yaml> [--dry-run]
 
 Bootstrap validates source/config relationships, creates only the approved managed scaffold, and writes `.research-kb/workspace.json`. It never creates or scans `local_inbox`, changes source assets, creates canonical records, or emits a process event.
 
-All runtime commands then resolve paths through the initialized workspace:
+Capability probing is workspace-independent; all commands with `--workspace` resolve paths through the initialized workspace:
 
 ```text
+research-kb capability show
 research-kb compatibility inspect --workspace <workspace.yaml> --adapter <adapter_id>
 research-kb registry add --workspace <workspace.yaml> --root-id <root> --relative-path <path> --metadata <metadata.json>
+research-kb registry add --workspace <workspace.yaml> --root-id <root> --relative-path <path> --metadata -
 research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapter synthetic-text
 research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapter pdfplumber
+research-kb parse show --workspace <workspace.yaml> --paper-id <paper_id> [--page <positive_integer>]
+research-kb paper status --workspace <workspace.yaml> --paper-id <paper_id>
 research-kb record promote --workspace <workspace.yaml> --request <request.json> --actor <agent|cli|user>
+research-kb record promote --workspace <workspace.yaml> --request - --actor <agent|cli|user>
 research-kb question list --workspace <workspace.yaml>
 research-kb question show --workspace <workspace.yaml> --question-id <question_id>
 research-kb question render --workspace <workspace.yaml> --question-id <question_id>
@@ -78,6 +85,10 @@ research-kb transaction recover --workspace <workspace.yaml> [--dry-run]
 ```
 
 Source assets remain read-only. Canonical writes stay under `knowledge_root` and emit a process event only after a validated atomic replacement.
+
+`capability show`, `parse show`, and `paper status` emit transient interface `1.0` JSON and write no workspace state. Capability output distinguishes an implemented adapter from its installed availability. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
+
+Stdin accepts one UTF-8 JSON object only. Registry metadata is capped at 64 KiB and mutation requests at 4 MiB; YAML remains file-only. Invalid input never reaches a mutation service, and no temporary request file is created.
 
 The PDF adapter records exact `pdfplumber` version identity and emits `page:<n>:text` page locators. Real-PDF Evidence must use `page:<n>:char:<start>-<end>` with an exact zero-based, end-exclusive slice of stored page text. Missing PDF dependencies and unsupported PDF sources fail explicitly; there is no OCR or synthetic fallback.
 

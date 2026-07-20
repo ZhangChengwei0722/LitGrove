@@ -20,8 +20,19 @@ def _run_json(python: Path, cwd: Path, *args: str) -> dict:
     return json.loads(completed.stdout)
 
 
-def _write_json(path: Path, value: dict) -> None:
-    path.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
+def _run_json_stdin(python: Path, cwd: Path, value: dict, *args: str) -> dict:
+    completed = subprocess.run(
+        [str(python), "-m", "research_kb", *args],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        input=json.dumps(value),
+        text=True,
+        encoding="utf-8",
+    )
+    if completed.stderr:
+        raise SystemExit("base wheel stdin command wrote unexpected stderr")
+    return json.loads(completed.stdout)
 
 
 def _tree_snapshot(root: Path) -> dict[str, bytes]:
@@ -43,6 +54,15 @@ def main() -> int:
         python = environment / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
         subprocess.run([str(python), "-m", "pip", "install", str(wheels[-1])], check=True)
         subprocess.run([str(python), "-m", "research_kb", "--version"], cwd=temporary, check=True)
+        capability = _run_json(python, Path(temporary), "capability", "show")
+        pdf_capability = next(item for item in capability["parse_adapters"] if item["adapter"] == "pdfplumber")
+        if pdf_capability != {
+            "adapter": "pdfplumber",
+            "availability": "dependency_missing",
+            "version": None,
+            "diagnostic_code": "RKBC-028",
+        }:
+            raise SystemExit("base wheel capability report did not expose the missing PDF dependency")
         subprocess.run(
             [
                 str(python), "-c",
@@ -135,9 +155,9 @@ def main() -> int:
 
         source = sources / "wheel-study.txt"
         source.write_text("The invented wheel response increased.\n", encoding="utf-8", newline="\n")
-        metadata_path = workspace_root / "metadata.json"
-        _write_json(
-            metadata_path,
+        paper_id = _run_json_stdin(
+            python,
+            Path(temporary),
             {
                 "bibliography": {
                     "title": "Synthetic Wheel Study",
@@ -147,10 +167,6 @@ def main() -> int:
                 },
                 "fixture_origin": "synthetic_from_scratch",
             },
-        )
-        paper_id = _run_json(
-            python,
-            Path(temporary),
             "registry",
             "add",
             "--workspace",
@@ -160,7 +176,7 @@ def main() -> int:
             "--relative-path",
             source.name,
             "--metadata",
-            str(metadata_path),
+            "-",
         )["paper_id"]
         source_before_parse = source.read_bytes()
         unavailable = subprocess.run(
@@ -195,28 +211,40 @@ def main() -> int:
         )
         if parse_output["parser"] != {"adapter": "synthetic-text", "version": "1.0"}:
             raise SystemExit("base wheel synthetic parser identity is incorrect")
+        parse_read = _run_json(
+            python,
+            Path(temporary),
+            "parse",
+            "show",
+            "--workspace",
+            str(config_path),
+            "--paper-id",
+            paper_id,
+            "--page",
+            "1",
+        )
+        if parse_read["returned_page_count"] != 1:
+            raise SystemExit("base wheel parse show did not return one selected page")
         if source.read_bytes() != source_before_parse:
             raise SystemExit("base wheel parse changed the source asset")
 
-        def promote(name: str, request: dict) -> dict:
-            request_path = workspace_root / f"{name}.json"
-            _write_json(request_path, request)
-            return _run_json(
+        def promote(request: dict) -> dict:
+            return _run_json_stdin(
                 python,
                 Path(temporary),
+                request,
                 "record",
                 "promote",
                 "--workspace",
                 str(config_path),
                 "--request",
-                str(request_path),
+                "-",
                 "--actor",
                 "agent",
             )
 
         common_context = {"paper_id": paper_id}
         evidence_id = promote(
-            "evidence-request",
             {
                 "contract_version": "1.0",
                 "operation": "append",
@@ -242,7 +270,6 @@ def main() -> int:
             },
         )["record_id"]
         queue_id = promote(
-            "queue-request",
             {
                 "contract_version": "1.0",
                 "operation": "append",
@@ -288,7 +315,6 @@ def main() -> int:
             }
         )
         promote(
-            "card-request",
             {
                 "contract_version": "1.0",
                 "operation": "append",
@@ -307,7 +333,6 @@ def main() -> int:
         card = json.loads(card_path.read_text(encoding="utf-8"))
         unit_id = next(unit["unit_id"] for section in card["sections"] for unit in section["units"])
         question_id = promote(
-            "question-request",
             {
                 "contract_version": "1.0",
                 "operation": "append",
@@ -334,6 +359,24 @@ def main() -> int:
 
         before_knowledge = _tree_snapshot(workspace_root / "knowledge")
         before_sources = _tree_snapshot(sources)
+        status = _run_json(
+            python,
+            Path(temporary),
+            "paper",
+            "status",
+            "--workspace",
+            str(config_path),
+            "--paper-id",
+            paper_id,
+        )
+        if status["paper_card"]["unit_count"] != 1 or status["question_mappings"]["linked_count"] != 1:
+            raise SystemExit("base wheel paper status did not project the completed synthetic chain")
+        if not status["integrity"]["mutation_safe"]:
+            raise SystemExit("base wheel paper status unexpectedly blocked mutation")
+        if _tree_snapshot(workspace_root / "knowledge") != before_knowledge:
+            raise SystemExit("base wheel deterministic reads changed managed workspace files")
+        if _tree_snapshot(sources) != before_sources:
+            raise SystemExit("base wheel deterministic reads changed source files")
         rendered = subprocess.run(
             [
                 str(python),

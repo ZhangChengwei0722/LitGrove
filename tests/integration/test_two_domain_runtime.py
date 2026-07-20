@@ -9,6 +9,8 @@ from research_kb.guardian import GuardianService
 from research_kb.mutation import MutationRequest
 from research_kb.parse.synthetic_text import SyntheticTextAdapter
 from research_kb.services.parse import ParseService
+from research_kb.services.parse_read import ParseReadService
+from research_kb.services.paper_status import PaperStatusService
 from research_kb.services.records import RecordService
 from research_kb.services.registry import RegistryService
 from research_kb.services.bootstrap import WorkspaceBootstrapService
@@ -125,6 +127,27 @@ def test_two_domains_run_same_core_from_intake_to_guardian(tmp_path: Path, domai
     assert guardian.report["status"] == expected["guardian_status"]
     assert GuardianService(layout).check().report["status"] == "success"
     assert {path.name: file_sha256(path) for path in source_paths} == source_hashes_before
+
+    knowledge_before_read = {
+        path.relative_to(layout.knowledge_root).as_posix(): path.read_bytes()
+        for path in layout.knowledge_root.rglob("*")
+        if path.is_file()
+    }
+    for paper in papers:
+        parsed_read = ParseReadService(layout).show(paper_id=paper["paper_id"], page="1")
+        paper_status = PaperStatusService(layout).show(paper_id=paper["paper_id"])
+        assert parsed_read["returned_page_count"] == 1
+        assert paper_status["source"]["state"] == "current"
+        assert paper_status["parse"]["state"] == "current"
+        assert paper_status["paper_card"]["unit_count"] == 1
+        assert paper_status["evidence"]["count"] == 1
+        assert paper_status["review_queue"]["count"] == 1
+        assert paper_status["integrity"]["mutation_safe"] is True
+    assert {
+        path.relative_to(layout.knowledge_root).as_posix(): path.read_bytes()
+        for path in layout.knowledge_root.rglob("*")
+        if path.is_file()
+    } == knowledge_before_read
 
     stored_papers = read_jsonl(layout.registry_path, record_kind="registry-paper", id_field="paper_id")
     assert len(stored_papers) == expected["papers"]
