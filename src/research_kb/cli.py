@@ -42,6 +42,7 @@ from research_kb.services.registry import RegistryService
 from research_kb.services.parse import ParseService
 from research_kb.services.bootstrap import WorkspaceBootstrapService
 from research_kb.services.compatibility import CompatibilityAdapterRegistry, CompatibilityInspectionService
+from research_kb.services.intake_inspect import IntakeInspectService
 from research_kb.compatibility import LegacyReaderAdapter
 from research_kb.storage.json_io import read_jsonl, serialize_json
 from research_kb.storage.transactions import MANUAL_RESOLUTION_ACTIONS, TransactionManager
@@ -74,6 +75,12 @@ def build_parser() -> argparse.ArgumentParser:
     workspace_init = workspace_commands.add_parser("init", help="validate and initialize one workspace")
     workspace_init.add_argument("--workspace", required=True, type=Path)
     workspace_init.add_argument("--dry-run", action="store_true")
+
+    intake = commands.add_parser("intake", help="inspect source intake state")
+    intake_commands = intake.add_subparsers(dest="intake_command", required=True)
+    intake_inspect = intake_commands.add_parser("inspect", help="project one source path for deterministic intake")
+    intake_inspect.add_argument("--workspace", required=True, type=Path)
+    intake_inspect.add_argument("--source", required=True, type=Path)
 
     compatibility = commands.add_parser("compatibility", help="inspect legacy data through explicit read-only adapters")
     compatibility_commands = compatibility.add_subparsers(dest="compatibility_command", required=True)
@@ -175,6 +182,8 @@ def main(
             return _capability_show(args)
         if args.command == "workspace" and args.workspace_command == "init":
             return _workspace_init(args)
+        if args.command == "intake" and args.intake_command == "inspect":
+            return _intake_inspect(args)
         if args.command == "compatibility" and args.compatibility_command == "inspect":
             return _compatibility_inspect(args, compatibility_adapters)
         if args.command == "contract" and args.contract_command == "validate":
@@ -233,6 +242,12 @@ def _workspace_init(args: argparse.Namespace) -> int:
     result = WorkspaceBootstrapService(args.workspace).run(dry_run=args.dry_run)
     _write_json(result.to_dict())
     return result.exit_code
+
+
+def _intake_inspect(args: argparse.Namespace) -> int:
+    layout = WorkspaceLayout.load(args.workspace)
+    _write_json_once(IntakeInspectService(layout).inspect(source=args.source))
+    return 0
 
 
 def _capability_show(args: argparse.Namespace) -> int:

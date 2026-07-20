@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from research_kb.config.loader import load_config
 from research_kb.guardian import GuardianService
 from research_kb.mutation import MutationRequest
 from research_kb.parse.synthetic_text import SyntheticTextAdapter
@@ -15,6 +14,7 @@ from research_kb.services.paper_context import PaperContextService
 from research_kb.services.records import RecordService
 from research_kb.services.registry import RegistryService
 from research_kb.services.bootstrap import WorkspaceBootstrapService
+from research_kb.services.intake_inspect import IntakeInspectService
 from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl
 from research_kb.workspace import WorkspaceLayout
 
@@ -35,25 +35,42 @@ def test_two_domains_run_same_core_from_intake_to_guardian(tmp_path: Path, domai
     source_paths = sorted((runtime_root / "sources").glob("*.txt"))
     source_hashes_before = {path.name: file_sha256(path) for path in source_paths}
     registry = RegistryService(layout)
+    intake = IntakeInspectService(layout)
     parser = ParseService(layout)
     records = RecordService(layout)
 
     papers = []
+    profile = None
     for source in source_paths:
+        before_registration = intake.inspect(source=source)
+        assert before_registration["registration"] == {"state": "unregistered", "paper_ids": []}
+        assert before_registration["source"] == {
+            "root_id": f"{domain.removeprefix('domain_')}-sources",
+            "relative_path": source.name,
+            "fingerprint_algorithm": "sha256",
+        }
+        assert before_registration["domain_profile"]["id"] == f"domain-{domain.removeprefix('domain_')}"
+        profile = before_registration["domain_profile"]
         paper, _ = registry.add(
-            root_id=f"{domain.removeprefix('domain_')}-sources",
-            relative_path=source.name,
+            root_id=before_registration["source"]["root_id"],
+            relative_path=before_registration["source"]["relative_path"],
             metadata={
                 "bibliography": {"title": f"Invented {source.stem.replace('-', ' ')}"},
                 "fixture_origin": "synthetic_from_scratch",
             },
             actor="cli",
         )
+        after_registration = intake.inspect(source=source)
+        assert after_registration["registration"] == {
+            "state": "registered_current",
+            "paper_ids": [paper["paper_id"]],
+        }
+        assert after_registration["domain_profile"] == profile
         papers.append(paper)
     registered_after_intake = read_jsonl(layout.registry_path, record_kind="registry-paper", id_field="paper_id")
     assert sum(bool(paper["duplicate_candidate_ids"]) for paper in registered_after_intake) == expected["duplicate_records"]
 
-    profile = load_config(layout.domain_profile_path, "domain-profile").data
+    assert profile is not None
     section_ids = [item["section_id"] for item in profile["paper_card_sections"]]
     for paper in papers:
         pages, _ = parser.run(paper_id=paper["paper_id"], adapter=SyntheticTextAdapter())
@@ -170,7 +187,7 @@ def test_two_domains_run_same_core_from_intake_to_guardian(tmp_path: Path, domai
     assert len(read_jsonl(layout.process_events_path, record_kind="process-event", id_field="event_id")) == expected["process_events_after_written_guardian"]
     assert all(
         read_json_document(layout.paper_card_path(paper["paper_id"]), record_kind="paper-card")["domain_profile_id"]
-        == profile["domain_profile"]["id"]
+        == profile["id"]
         for paper in papers
     )
     assert (layout.knowledge_root / "questions").is_dir()
