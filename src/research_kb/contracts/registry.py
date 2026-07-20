@@ -23,6 +23,7 @@ SCHEMA_FILES: dict[str, str] = {
     "paper-card": "paper-card.schema.json",
     "evidence": "evidence.schema.json",
     "review-queue": "review-queue.schema.json",
+    "review-memory": "review-memory.schema.json",
     "question-mapping": "question-mapping.schema.json",
     "step7-common": "step7-common.schema.json",
     "step7-synthesis": "step7-synthesis.schema.json",

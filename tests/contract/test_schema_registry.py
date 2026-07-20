@@ -15,4 +15,5 @@ def test_public_kinds_exclude_internal_definition_schemas() -> None:
     assert "definitions" not in kinds
     assert "step7-common" not in kinds
     assert "paper-card" in kinds
+    assert "review-memory" in kinds
     assert "step7-insight" in kinds

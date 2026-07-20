@@ -16,7 +16,7 @@ Milestone 1B implements this deterministic storage lifecycle. M3A-0A adds explic
 
 ## Runtime Sequence
 
-1. `capability show` reports public Core contracts and installed adapter availability without loading a workspace.
+1. `capability show` reports public Core contracts, Review runtime and installed adapter availability without loading a workspace.
 2. `workspace init --dry-run` validates an existing config and reports planned managed actions without deliberate filesystem mutation.
 3. `workspace init` binds the managed root with a deterministic marker. Repeating it with the same config returns `no_change`.
 4. `intake inspect` maps one absolute source path to a portable source reference, exact Registry state and active Card sections without writing or registering it.
@@ -25,13 +25,14 @@ Milestone 1B implements this deterministic storage lifecycle. M3A-0A adds explic
 7. `parse run` uses the explicitly requested `synthetic-text` or optional `pdfplumber` adapter and writes validated page records without creating a full-text copy. It reports exact adapter/version identity and never falls back to OCR or another adapter.
 8. `parse show` emits all validated active pages or one positive PDF page after source-fingerprint checks, without creating a full-text copy or read artifact.
 9. `record promote` loads a file request or bounded stdin JSON object, injects IDs/timestamps/fingerprints, enforces actor authority, and promotes one canonical store.
-10. `paper context` returns the selected paper's stored Card, Evidence and review queue context after source-stability checks, without exposing canonical paths or creating a read artifact.
-11. A `question-mapping` request selects Card Units for a user-supplied or explicitly approved question. Core derives evidence and required boundaries before atomic promotion.
-12. `paper status` projects deterministic stage, freshness, Guardian and transaction safety facts without scientific content or a resume decision.
-13. `question list/show` retrieves deterministic structured mappings without writing a reading view, report, event, or journal.
-14. `question render` validates one mapping and emits its complete Markdown reading view to stdout without persisting the view or changing structured state.
-15. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
-16. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
+10. `paper context` returns the selected primary paper's stored Card, Evidence and review queue context after source-stability checks, without exposing canonical paths or creating a read artifact.
+11. `review context` separately returns one Review Memory, freshness and transient exact DOI matches without changing `paper context 1.0`.
+12. A `question-mapping` request selects Card Units for a user-supplied or explicitly approved question. Core derives evidence and required boundaries before atomic promotion.
+13. `paper status` projects deterministic stage, freshness, Guardian and transaction safety facts without scientific content or a resume decision.
+14. `question list/show` retrieves deterministic structured mappings without writing a reading view, report, event, or journal.
+15. `question render` validates one mapping and emits its complete Markdown reading view to stdout without persisting the view or changing structured state.
+16. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
+17. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
 
 Every workspace-bound runtime command uses the same semantic validator and requires a matching workspace marker. `capability show` is the sole workspace-independent product command in this slice. No command accepts a raw `knowledge_root` override or a source-write operation. `local_inbox` remains user-owned and is never created or scanned by bootstrap.
 
@@ -58,7 +59,7 @@ Question origins are explicit mutation context:
 
 - Bootstrap performs a complete read-only preflight before creating its lock scaffold, then repeats mutation-sensitive checks while holding the workspace lock.
 - A conflicting marker, unknown managed content, incomplete transaction, unsafe path type, or invalid markerless bundle blocks initialization without rewriting canonical records.
-- An exact `m2a-1` marker requires `workspace init`; runtime commands never write through an old layout.
+- An exact `m2b-1` marker requires `workspace init`; runtime commands never write through an old layout.
 - Validation failure preserves the previous target bytes.
 - A pre-replacement failure records a failure event when possible.
 - Source-dependent services recheck source stability after replacement and before emitting success.
@@ -84,14 +85,27 @@ The transient JSON read interface is version `1.0`. Core reports capability and 
 
 `intake inspect` is the only path-facing read. The Skill must call it before `registry add`, reuse the sole returned paper ID for `registered_current`, register only `unregistered`, and stop on `registered_stale` or `ambiguous`. It must use the returned source reference and ordered Card sections rather than parsing workspace, profile or Registry files. This is sequential routing, not an atomic concurrency guarantee.
 
-`paper context` is the only read in this slice that returns stored Card, Evidence and queue scientific content together. It is bounded to an explicit paper, omits paths and unrelated records, and exists to recover Core-owned IDs for resume and Question Mapping. It is not permission to read canonical files directly or treat review queue records as evidence.
+`paper context` is the primary-route read that returns stored Card, Evidence and queue scientific content together. `review context` is the separate review-route read and returns a complete background-only Review Memory. Both are bounded to an explicit paper, omit paths and unrelated records, and exist to recover Core-owned IDs without direct store access.
 
 Stdin accepts JSON only for Registry metadata and mutation requests. Empty, invalid, non-object or oversized input fails before service dispatch. File-based JSON/YAML remains supported, but YAML is never accepted through stdin.
 
 ## Portable Skill Workflow
 
-The repo-owned `research-kb` Skill accepts an existing workspace config and absolute local PDF paths. It performs capability/workspace preflight, processes one source at a time, resolves or registers the exact path, resumes from current Core state, parses with explicit `pdfplumber`, grounds a complete question-independent Card, maps only an approved question and runs Guardian read-only.
+The repo-owned `research-kb` Skill accepts an existing workspace config and absolute local PDF paths. It performs capability/workspace preflight, processes one source at a time, resolves or registers the exact path, resumes from current Core state, parses with explicit `pdfplumber`, then selects one mutually exclusive route: ground a complete question-independent primary Card or build one background-only Review Memory. Only the primary route maps approved questions.
 
 The Skill maintains no checkpoint. Reruns recover state through `intake inspect`, `paper status` and `paper context`; exact existing records are reused, while stale state, ambiguous sources and uncertain near-duplicates stop. Paper-local unsupported-PDF or document-type failures may be isolated, but workspace/transaction integrity failures stop the batch.
 
-Document classification and the final report remain local to the active task. The primary route stops reviews and ambiguous document types before Paper Card or Evidence promotion. Review processing, Step 7, discovery, acquisition, OCR, migration and workspace-config generation are not implemented.
+Document classification and the final report remain local to the active task. Supported high-confidence reviews use the common Review Memory route; ambiguous, mixed and unsupported types stop before mutation. Subtype-specific review schemas, Field Map integration, Review Unit Question Mapping, Step 7, discovery, acquisition, OCR, migration and workspace-config generation are not implemented.
+
+## Review Memory Flow
+
+```text
+current parse + supported review classification
+-> fixed seven-section reusable memory draft
+-> same-review page/section provenance
+-> append or explicit AI-owned replace
+-> review context ID recovery
+-> Guardian read-only
+```
+
+Ordinary reruns reuse a current memory without writing. A stale parse requires rereading before explicit refresh. A low-value review may persist zero Units with a reason. Review-derived content remains non-evidence and receives no Field Map, Question Mapping or Step 7 identity in M3A-2A.

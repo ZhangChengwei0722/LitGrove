@@ -14,6 +14,7 @@ EXPECTED_FILES = {
     "references/authority-and-failure-boundaries.md",
     "references/cli-contract.md",
     "references/local-intake-workflow.md",
+    "references/review-intake-workflow.md",
     "references/task" "-report-contract.md",
 }
 
@@ -60,6 +61,7 @@ def test_skill_frontmatter_and_progressive_disclosure_contract() -> None:
         "resume",
         "status",
         "evidence",
+        "review",
         "question",
         "guardian",
     ):
@@ -76,9 +78,9 @@ def test_openai_metadata_is_exact_and_mentions_skill() -> None:
     assert metadata == {
         "interface": {
             "display_name": "Research KB",
-            "short_description": "Process local papers with traceable evidence",
+            "short_description": "Process local research and review papers",
             "default_prompt": (
-                "Use $research-kb to ingest a local primary-research PDF and process it through Guardian."
+                "Use $research-kb to ingest a local primary-research or review PDF through the appropriate route and run Guardian."
             ),
         }
     }
@@ -94,7 +96,6 @@ def test_skill_is_generic_private_safe_and_has_no_hidden_fallback() -> None:
         "T" + "PD",
         "doi.org/",
         "research-kb ingest",
-        "research-kb review",
         "research-kb step7",
         "research-kb discover",
         "research-kb workspace create",
@@ -103,8 +104,11 @@ def test_skill_is_generic_private_safe_and_has_no_hidden_fallback() -> None:
     assert re.search(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", text, flags=re.IGNORECASE) is None
     assert "Do not parse workspace or domain-profile configuration" in text
     assert "Do not read canonical JSON or JSONL files directly" in text
-    assert "Review processing is not implemented" in text
-    assert "Step 7 is not implemented" in text
+    assert "Review Memory is background-only" in text
+    assert "can_enter_canonical_evidence: false" in text
+    assert "review context" in text
+    assert "Field Map integration" in text
+    assert "Step 7 support" in text
 
 
 def test_skill_required_read_commands_match_public_capability() -> None:
@@ -118,18 +122,19 @@ def test_skill_required_read_commands_match_public_capability() -> None:
         "parse show",
         "question list",
         "question show",
+        "review context",
     }
 
     assert required_reads <= set(capability["read_commands"])
     assert capability["features"]["real_pdf_parse"] is True
-    assert capability["features"]["review_runtime"] is False
+    assert capability["features"]["review_runtime"] is True
     assert capability["features"]["step7_runtime"] is False
 
 
 def test_cli_reference_contains_minimal_stdin_promotion_envelopes() -> None:
     text = (SKILL_ROOT / "references" / "cli-contract.md").read_text(encoding="utf-8")
 
-    for record_kind in ("evidence", "review-queue", "paper-card", "question-mapping"):
+    for record_kind in ("evidence", "review-queue", "paper-card", "review-memory", "question-mapping"):
         assert f'"record_kind": "{record_kind}"' in text
     for required_field in (
         '"target_record_id": null',
@@ -153,6 +158,28 @@ def test_cli_reference_contains_minimal_stdin_promotion_envelopes() -> None:
     ):
         assert f"| `{statement_type}` |" in text
     assert "There is no Card `other` type" in text
+
+
+def test_review_workflow_is_actionable_and_keeps_downstream_boundaries() -> None:
+    text = (SKILL_ROOT / "references" / "review-intake-workflow.md").read_text(encoding="utf-8")
+
+    for required in (
+        "narrative_review",
+        "systematic_review",
+        "scoping_review",
+        "meta_analysis",
+        "perspective_or_commentary",
+        "review_objective_scope",
+        "primary_leads_reuse",
+        "review context",
+        "background_only: true",
+        "locator: null",
+        "zero Units",
+        "Field Map",
+        "Step 7",
+    ):
+        assert required in text
+    assert "Do not summarize a review for completeness" in text
 
 
 def test_task_report_defines_new_and_no_change_completion_outcomes() -> None:

@@ -41,6 +41,20 @@ def test_mutation_request_mapping_uses_the_same_contract_validation() -> None:
     assert caught.value.diagnostic.code == "RKBC-002"
 
 
+def test_review_memory_mutation_request_is_paper_scoped() -> None:
+    request = mutation_request_from_mapping({
+        "contract_version": "1.0",
+        "operation": "append",
+        "record_kind": "review-memory",
+        "target_record_id": None,
+        "context": {"paper_id": "paper_a1111111-1111-4111-8111-111111111111"},
+        "payload": {"review_subtype": "narrative_review"},
+    })
+
+    assert request.record_kind == "review-memory"
+    assert request.paper_id == "paper_a1111111-1111-4111-8111-111111111111"
+
+
 def test_replace_mutation_requires_target_id(tmp_path: Path) -> None:
     path = tmp_path / "request.json"
     path.write_text(json.dumps({

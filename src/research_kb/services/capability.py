@@ -44,7 +44,14 @@ class CapabilityService:
             },
             "parse_adapters": adapters,
             "mutation_record_kinds": sorted(
-                ("registry-paper", "paper-card", "evidence", "review-queue", "question-mapping")
+                (
+                    "registry-paper",
+                    "paper-card",
+                    "evidence",
+                    "review-queue",
+                    "review-memory",
+                    "question-mapping",
+                )
             ),
             "read_commands": sorted(
                 (
@@ -57,12 +64,13 @@ class CapabilityService:
                     "question list",
                     "question show",
                     "question render",
+                    "review context",
                 )
             ),
             "features": {
                 "real_pdf_parse": True,
                 "stdin_json_handoff": True,
-                "review_runtime": False,
+                "review_runtime": True,
                 "step7_runtime": False,
             },
         }

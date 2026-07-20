@@ -16,6 +16,7 @@ from research_kb.errors import (
 )
 from research_kb.identifiers import Namespace, allocate_id
 from research_kb.process_events import timestamp
+from research_kb.review_memory_provenance import build_active_parse_index, review_memory_freshness
 from research_kb.services.question_mapping import mapping_freshness_diagnostics
 from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl, serialize_jsonl
 from research_kb.storage.transactions import TransactionManager, TransactionResult, build_journal_event
@@ -58,6 +59,10 @@ class GuardianService:
                     "question-mapping", mapping, actor="stored"
                 ):
                     diagnostics.extend(mapping_freshness_diagnostics(mapping, entries))
+                elif kind == "review-memory" and not validate_record(
+                    "review-memory", mapping, actor="stored"
+                ):
+                    diagnostics.extend(review_memory_freshness_diagnostics(mapping, entries))
         diagnostics.extend(self._canonical_path_diagnostics())
         process_events = [record for kind, record in entries if kind == "process-event"]
         diagnostics.extend(self._transaction_diagnostics(process_events))
@@ -118,6 +123,7 @@ class GuardianService:
             (self.layout.knowledge_root / "parse" / "by_paper", "*.pages.jsonl"),
             (self.layout.knowledge_root / "paper_cards" / "by_paper", "*.card.json"),
             (self.layout.knowledge_root / "evidence" / "by_paper", "*.evidence.jsonl"),
+            (self.layout.knowledge_root / "review_memories" / "by_paper", "*.review.json"),
         ):
             if directory.exists():
                 paths.extend(directory.glob(pattern))
@@ -225,6 +231,27 @@ def status_for_findings(findings: list[dict[str, Any]]) -> str:
     return "success"
 
 
+def review_memory_freshness_diagnostics(
+    memory: dict[str, Any],
+    entries: list[BundleEntry],
+) -> list[Diagnostic]:
+    active, failures = build_active_parse_index(
+        record for kind, record in entries if kind == "parsed-page"
+    )
+    if failures or review_memory_freshness(memory, active) != "stale_parse":
+        return []
+    return [
+        Diagnostic(
+            SNAPSHOT_MISMATCH,
+            "review-memory",
+            memory["review_memory_id"],
+            "/parse_snapshot",
+            "Review Memory parse snapshot is stale relative to the active parse",
+            severity="warning",
+        )
+    ]
+
+
 def _finding_from_diagnostic(diagnostic: Diagnostic, defined_ids: set[str]) -> dict[str, Any]:
     remediation = {
         GROUNDING_MISMATCH: "Restore the registered source or correct parsed-page and Evidence provenance against the current source.",
@@ -232,6 +259,8 @@ def _finding_from_diagnostic(diagnostic: Diagnostic, defined_ids: set[str]) -> d
         PATH_ESCAPE: "Move the canonical target under knowledge_root and correct the workspace path contract.",
         SNAPSHOT_MISMATCH: "Refresh the Question Mapping from its current Paper Card, evidence, and review queue inputs.",
     }.get(diagnostic.code, "Inspect the referenced structured record and correct the reported contract violation.")
+    if diagnostic.code == SNAPSHOT_MISMATCH and diagnostic.record_kind == "review-memory":
+        remediation = "Reread the current parse and explicitly refresh the AI-owned Review Memory; do not rebind old source notes."
     return {
         "code": diagnostic.code,
         "severity": diagnostic.severity,
@@ -245,6 +274,7 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
     result: set[str] = set()
     fields = {
         "registry-paper": "paper_id",
+        "review-memory": "review_memory_id",
         "evidence": "evidence_id",
         "review-queue": "queue_id",
         "process-event": "event_id",
@@ -261,6 +291,10 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
         elif kind == "paper-card":
             for section in record.get("sections", []):
                 result.update(unit["unit_id"] for unit in section.get("units", []))
+        elif kind == "review-memory":
+            result.add(record["review_memory_id"])
+            for section in record.get("sections", []):
+                result.update(unit["review_unit_id"] for unit in section.get("units", []))
         elif kind == "question-mapping":
             result.add(record["question_id"])
             result.update(link["question_link_id"] for link in record.get("paper_links", []))

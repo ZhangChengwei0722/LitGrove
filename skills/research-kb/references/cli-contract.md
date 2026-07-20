@@ -13,6 +13,7 @@ Use only public `research-kb` commands. Build every command result completely be
 | `research-kb registry add --workspace <config> --root-id <root> --relative-path <path> --metadata -` | mutation | paper ID, duplicate candidates | Use only source values returned by intake inspection. |
 | `research-kb paper status --workspace <config> --paper-id <id>` | read | structural stage, freshness and integrity facts | Route resume without treating status as a semantic instruction. |
 | `research-kb paper context --workspace <config> --paper-id <id>` | read | stored Card, Evidence and review queue | Recover Core-owned IDs and exact existing records. |
+| `research-kb review context --workspace <config> --paper-id <id>` | read | stored Review Memory, freshness and transient exact DOI matches | Recover Review IDs without reading canonical files. |
 | `research-kb parse run --workspace <config> --paper-id <id> --adapter pdfplumber` | mutation | parse run, parser identity, page count | Run only when parse is missing and mutation is safe. |
 | `research-kb parse show --workspace <config> --paper-id <id>` | read | validated parsed pages | Use as the only source for scientific text and locators. |
 | `research-kb record promote --workspace <config> --request - --actor agent` | mutation | promoted top-level record ID | Submit one bounded JSON mutation request through existing authority. |
@@ -34,6 +35,7 @@ paper status
 parse show
 question list
 question show
+review context
 ```
 
 Require `real_pdf_parse: true`, plus `pdfplumber` with `availability: available` and a non-empty version. A declared feature with a missing optional dependency is not executable.
@@ -43,6 +45,7 @@ Require `real_pdf_parse: true`, plus `pdfplumber` with `availability: available`
 - `intake inspect` owns absolute-path confinement, portable source projection, exact Registry matching and active Card section discovery.
 - `paper status` exposes deterministic stage and integrity facts, not scientific content or a next action.
 - `paper context` is the only public recovery surface for Paper Card, Evidence and queue records.
+- `review context` is the only public recovery surface for Review Memory and Review Unit IDs.
 - `parse show` is the only public parsed-text read surface.
 - `guardian check` is read-only unless an explicit future task authorizes report persistence.
 
@@ -186,6 +189,82 @@ Choose `statement_type` by the statement's meaning, not by a fixed domain sectio
 | `interpretation` | A clearly marked interpretation that is not represented as a direct result. |
 
 There is no Card `other` type. When an aim statement also describes the experimental design, split it or use `method_description` for the design-specific Unit. Do not copy an Evidence type into `statement_type` without applying this semantic mapping.
+
+Review Memory:
+
+```json
+{
+  "contract_version": "1.0",
+  "operation": "append",
+  "record_kind": "review-memory",
+  "target_record_id": null,
+  "context": {"paper_id": "<paper_id>"},
+  "payload": {
+    "review_subtype": "narrative_review",
+    "review_subtype_source": "agent_high_confidence",
+    "review_subtype_reason": "<classification reason from parsed text>",
+    "read_status": "targeted_read",
+    "scope_tags": ["<generic_scope_slug>"],
+    "one_sentence_reuse_value": "<specific future reuse value>",
+    "memory_value": {
+      "status": "reusable",
+      "reason": "<why retained>"
+    },
+    "coverage_limits": {
+      "unread_sections": ["<section not read>"],
+      "weakly_read_sections": [],
+      "reason": "<bounded coverage reason>"
+    },
+    "sections": [
+      {
+        "section_id": "review_objective_scope",
+        "units": [
+          {
+            "section_id": "review_objective_scope",
+            "unit_type": "field_axis",
+            "content": "<actionable reusable content>",
+            "source_notes": [
+              {
+                "pdf_page": 1,
+                "printed_page": null,
+                "section": "<source section>",
+                "figure_or_table": null,
+                "note_type": "paraphrase",
+                "text": "<concise source-located paraphrase>",
+                "locator": null,
+                "reopen_priority": "high"
+              }
+            ],
+            "workflow_impacts": [
+              {
+                "target": "primary_paper_reading",
+                "action": "<concrete later action>"
+              }
+            ],
+            "evidence_use": {
+              "can_support_canonical_evidence": false,
+              "can_guide_primary_grounding": true,
+              "primary_grounding_required_before": ["comparative_claim"]
+            },
+            "reuse_quality": {
+              "reuse_confidence": "medium",
+              "staleness_risk": "low",
+              "reason": "<reuse-quality reason>"
+            },
+            "primary_paper_lead": null
+          }
+        ]
+      }
+    ],
+    "non_reusable_notes": [],
+    "review_status": "ai_checked"
+  }
+}
+```
+
+Include all seven fixed Review Memory sections in the order defined by the review workflow. The example shows one section only for readability. Do not submit `review_memory_id`, `review_unit_id`, source fingerprint, parse snapshot, boundary constants, timestamps or automation status on append. Paraphrases require `locator: null`; quote excerpts require an exact character locator. A non-`reusable` memory value requires zero Units.
+
+On explicit replace, use the current `review_memory_id` as `target_record_id`. Existing Units may retain only IDs returned by `review context`; new Units omit their ID. Review Memory cannot coexist with Paper Card or canonical Evidence for the same paper.
 
 Question Mapping:
 

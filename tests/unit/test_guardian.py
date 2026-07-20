@@ -2,16 +2,19 @@ from pathlib import Path
 
 import pytest
 
+from research_kb.bundle import load_workspace_entries
 from research_kb.guardian import GuardianService, status_for_findings
 from research_kb.mutation import MutationRequest
-from research_kb.bundle import load_workspace_entries
+from research_kb.parse.synthetic_text import SyntheticTextAdapter
+from research_kb.services.parse import ParseService
 from research_kb.services.question_mapping import QuestionMappingService, mapping_freshness_diagnostics
 from research_kb.services.records import RecordService
 from research_kb.services.registry import RegistryService
-from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl, serialize_jsonl
+from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl, serialize_json, serialize_jsonl
 from research_kb.storage.transactions import TransactionManager
 from tests.runtime_helpers import make_runtime_workspace
 from tests.unit.test_question_mapping_service import _append_request, _link, _prepare_paper
+from tests.unit.test_review_memory_service import prepare_review_paper, review_request
 
 
 def _register_source(layout) -> tuple[dict, Path]:
@@ -254,3 +257,42 @@ def test_upstream_card_update_is_allowed_then_mapping_refresh_clears_stale_warni
 
     assert extra_queue["queue_id"] in refreshed["paper_links"][0]["boundary_refs"]
     assert GuardianService(layout).check().report["status"] == "success"
+
+
+def test_guardian_reports_stale_review_memory_as_warning_without_rewrite(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    paper, _ = prepare_review_paper(layout)
+    memory, _ = RecordService(layout).promote(review_request(paper["paper_id"]), actor="agent")
+    target = layout.review_memory_path(paper["paper_id"])
+    before = target.read_bytes()
+    ParseService(layout).run(paper_id=paper["paper_id"], adapter=SyntheticTextAdapter())
+
+    result = GuardianService(layout).check()
+
+    assert result.report["status"] == "warning"
+    finding = next(item for item in result.report["findings"] if item["code"] == "RKBC-014")
+    assert finding["record_ref"] == memory["review_memory_id"]
+    assert target.read_bytes() == before
+
+
+def test_guardian_rejects_broken_current_review_quote_provenance(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    paper, _ = prepare_review_paper(layout)
+    memory, _ = RecordService(layout).promote(review_request(paper["paper_id"]), actor="agent")
+    target = layout.review_memory_path(paper["paper_id"])
+    note = memory["sections"][2]["units"][0]["source_notes"][0]
+    note.update(
+        {
+            "note_type": "quote_excerpt",
+            "text": "SENSITIVE INVENTED EXCERPT",
+            "locator": "page:1:char:0-5",
+        }
+    )
+    target.write_bytes(serialize_json(memory))
+
+    result = GuardianService(layout).check()
+
+    assert result.report["status"] == "failure"
+    finding = next(item for item in result.report["findings"] if item["record_ref"] == memory["review_memory_id"])
+    assert finding["code"] == "RKBC-009"
+    assert "SENSITIVE" not in finding["message"]

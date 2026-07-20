@@ -75,6 +75,9 @@ class WorkspaceLayout:
     def evidence_path(self, paper_id: str) -> Path:
         return self.knowledge_root / "evidence" / "by_paper" / f"{paper_id}.evidence.jsonl"
 
+    def review_memory_path(self, paper_id: str) -> Path:
+        return self.knowledge_root / "review_memories" / "by_paper" / f"{paper_id}.review.json"
+
     def journal_path(self, event_id: str) -> Path:
         return self.transactions_root / f"{event_id}.json"
 

@@ -63,26 +63,31 @@ def main() -> int:
             "diagnostic_code": "RKBC-028",
         }:
             raise SystemExit("base wheel capability report did not expose the missing PDF dependency")
-        if not {"intake inspect", "paper context"}.issubset(capability["read_commands"]):
+        if not {"intake inspect", "paper context", "review context"}.issubset(capability["read_commands"]):
             raise SystemExit("base wheel capability report lacks deterministic intake/context reads")
+        if capability["features"]["review_runtime"] is not True:
+            raise SystemExit("base wheel capability report lacks Review Memory runtime")
         subprocess.run(
             [
                 str(python), "-c",
                 "from research_kb.compatibility import CompatibilitySourceRef, LegacyReaderAdapter; "
                 "from research_kb.contracts.registry import SchemaRegistry; "
                 "from research_kb.guardian import GuardianService; "
-                "from research_kb.services import CompatibilityAdapterRegistry, CompatibilityInspectionService, IntakeInspectService, PaperContextService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService; "
+                "from research_kb.services import CompatibilityAdapterRegistry, CompatibilityInspectionService, IntakeInspectService, PaperContextService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService, ReviewContextService, ReviewMemoryService; "
                 "registry = SchemaRegistry(); "
                 "assert registry.schema('mutation-request')['$id'].endswith('mutation-request'); "
                 "assert registry.schema('compatibility-difference')['$id'].endswith('compatibility-difference'); "
                 "assert registry.schema('compatibility-report')['$id'].endswith('compatibility-report'); "
                 "assert registry.schema('question-mapping')['$id'].endswith('question-mapping'); "
+                "assert registry.schema('review-memory')['$id'].endswith('review-memory'); "
                 "assert LegacyReaderAdapter.__name__ == 'LegacyReaderAdapter'; "
                 "assert CompatibilitySourceRef.__name__ == 'CompatibilitySourceRef'; "
                 "assert CompatibilityAdapterRegistry.__name__ == 'CompatibilityAdapterRegistry'; "
                 "assert CompatibilityInspectionService.__name__ == 'CompatibilityInspectionService'; "
                 "assert IntakeInspectService.__name__ == 'IntakeInspectService'; "
                 "assert PaperContextService.__name__ == 'PaperContextService'; "
+                "assert ReviewContextService.__name__ == 'ReviewContextService'; "
+                "assert ReviewMemoryService.__name__ == 'ReviewMemoryService'; "
                 "assert QuestionMappingService.__name__ == 'QuestionMappingService'; "
                 "assert QuestionReadingViewService.__name__ == 'QuestionReadingViewService'",
             ],
@@ -150,12 +155,16 @@ def main() -> int:
         if outputs != ["planned", "initialized", "no_change"]:
             raise SystemExit(f"unexpected workspace init results: {outputs}")
         marker = json.loads((workspace_root / "knowledge" / ".research-kb" / "workspace.json").read_text(encoding="utf-8"))
-        if marker["layout_contract_version"] != "m2b-1":
-            raise SystemExit("wheel workspace did not initialize at m2b-1")
+        if marker["layout_contract_version"] != "m3a-2a":
+            raise SystemExit("wheel workspace did not initialize at m3a-2a")
         if not (workspace_root / "knowledge" / "questions").is_dir():
             raise SystemExit("wheel workspace lacks questions directory")
         if (workspace_root / "knowledge" / "questions" / "mappings.jsonl").exists():
             raise SystemExit("workspace init created an empty question store")
+        if not (workspace_root / "knowledge" / "review_memories" / "by_paper").is_dir():
+            raise SystemExit("wheel workspace lacks review memory directories")
+        if any((workspace_root / "knowledge" / "review_memories" / "by_paper").iterdir()):
+            raise SystemExit("workspace init created a review memory record")
 
         source = sources / "wheel-study.txt"
         source.write_text("The invented wheel response increased.\n", encoding="utf-8", newline="\n")
@@ -493,6 +502,127 @@ def main() -> int:
             raise SystemExit("wheel render changed source files")
         if (workspace_root / "knowledge" / "views").exists():
             raise SystemExit("wheel render created a views directory")
+
+        review_source = sources / "wheel-review.txt"
+        review_source.write_text(
+            "The fabricated wheel review repeats an existing orientation.\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        review_intake = _run_json(
+            python,
+            Path(temporary),
+            "intake",
+            "inspect",
+            "--workspace",
+            str(config_path),
+            "--source",
+            str(review_source),
+        )
+        review_paper_id = _run_json_stdin(
+            python,
+            Path(temporary),
+            {
+                "bibliography": {"title": "Synthetic Wheel Review"},
+                "fixture_origin": "synthetic_from_scratch",
+            },
+            "registry",
+            "add",
+            "--workspace",
+            str(config_path),
+            "--root-id",
+            review_intake["source"]["root_id"],
+            "--relative-path",
+            review_intake["source"]["relative_path"],
+            "--metadata",
+            "-",
+        )["paper_id"]
+        _run_json(
+            python,
+            Path(temporary),
+            "parse",
+            "run",
+            "--workspace",
+            str(config_path),
+            "--paper-id",
+            review_paper_id,
+            "--adapter",
+            "synthetic-text",
+        )
+        review_sections = [
+            {"section_id": section_id, "units": []}
+            for section_id in (
+                "review_objective_scope",
+                "review_question_search_boundaries",
+                "taxonomy_field_structure",
+                "major_synthesis",
+                "methods_metrics_guardrails",
+                "gaps_frontiers",
+                "primary_leads_reuse",
+            )
+        ]
+        review_memory_id = promote(
+            {
+                "contract_version": "1.0",
+                "operation": "append",
+                "record_kind": "review-memory",
+                "target_record_id": None,
+                "context": {"paper_id": review_paper_id},
+                "payload": {
+                    "review_subtype": "narrative_review",
+                    "review_subtype_source": "agent_high_confidence",
+                    "review_subtype_reason": "The synthetic source is explicitly a secondary orientation.",
+                    "read_status": "deep_read",
+                    "scope_tags": ["synthetic_review"],
+                    "one_sentence_reuse_value": "Records that the fabricated review is redundant.",
+                    "memory_value": {
+                        "status": "low_value",
+                        "reason": "The fabricated orientation duplicates existing synthetic context.",
+                    },
+                    "coverage_limits": {
+                        "unread_sections": [],
+                        "weakly_read_sections": [],
+                        "reason": "The one-line synthetic source was read completely.",
+                    },
+                    "sections": review_sections,
+                    "non_reusable_notes": [
+                        {"content": "The orientation is duplicated.", "reason": "duplicate"}
+                    ],
+                    "review_status": "ai_checked",
+                    "fixture_origin": "synthetic_from_scratch",
+                },
+                "fixture_origin": "synthetic_from_scratch",
+            }
+        )["record_id"]
+        review_before = _tree_snapshot(workspace_root / "knowledge")
+        review_context = _run_json(
+            python,
+            Path(temporary),
+            "review",
+            "context",
+            "--workspace",
+            str(config_path),
+            "--paper-id",
+            review_paper_id,
+        )
+        if review_context["review_memory"]["review_memory_id"] != review_memory_id:
+            raise SystemExit("base wheel review context did not recover Review Memory")
+        if review_context["freshness"]["state"] != "current":
+            raise SystemExit("base wheel Review Memory is unexpectedly stale")
+        if review_context["review_memory"]["memory_value"]["status"] != "low_value":
+            raise SystemExit("base wheel low-value Review Memory was not preserved")
+        if _tree_snapshot(workspace_root / "knowledge") != review_before:
+            raise SystemExit("base wheel review context changed managed workspace files")
+        guardian = _run_json(
+            python,
+            Path(temporary),
+            "guardian",
+            "check",
+            "--workspace",
+            str(config_path),
+        )
+        if guardian["status"] != "success":
+            raise SystemExit("base wheel Guardian rejected valid Review Memory")
         subprocess.run(
             [
                 str(python), "-m", "research_kb", "contract", "validate",

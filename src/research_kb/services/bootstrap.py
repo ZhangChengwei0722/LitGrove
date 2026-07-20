@@ -353,6 +353,7 @@ class WorkspaceBootstrapService:
             ("parse/by_paper", "*.pages.jsonl"),
             ("paper_cards/by_paper", "*.card.json"),
             ("evidence/by_paper", "*.evidence.jsonl"),
+            ("review_memories/by_paper", "*.review.json"),
             (".research-kb/transactions", "*.json"),
         ):
             directory = context.knowledge_root / Path(*relative.split("/"))
@@ -464,6 +465,21 @@ class WorkspaceBootstrapService:
                         Diagnostic(
                             WORKSPACE_LAYOUT_CONFLICT,
                             "paper-card",
+                            expected_paper_id,
+                            "/paper_id",
+                            "store filename does not match contained paper_id",
+                        )
+                    )
+        review_directory = layout.knowledge_root / "review_memories" / "by_paper"
+        if review_directory.is_dir():
+            for path in sorted(review_directory.glob("*.review.json")):
+                expected_paper_id = path.name[: -len(".review.json")]
+                memory = read_json_document(path, record_kind="review-memory")
+                if memory.get("paper_id") != expected_paper_id:
+                    raise ResearchKBError(
+                        Diagnostic(
+                            WORKSPACE_LAYOUT_CONFLICT,
+                            "review-memory",
                             expected_paper_id,
                             "/paper_id",
                             "store filename does not match contained paper_id",
@@ -590,6 +606,7 @@ def _journal_target_matches_store(target_store: str, relative_path: str) -> bool
         "parsed_pages": ("parse/by_paper/", ".pages.jsonl"),
         "paper_cards": ("paper_cards/by_paper/", ".card.json"),
         "evidence": ("evidence/by_paper/", ".evidence.jsonl"),
+        "review_memories": ("review_memories/by_paper/", ".review.json"),
     }
     match = patterns.get(target_store)
     if match is None:
