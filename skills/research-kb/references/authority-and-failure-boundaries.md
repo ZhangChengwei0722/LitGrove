@@ -14,9 +14,17 @@ The Agent may create or check candidates only where the public contract permits.
 
 A generated Research Question remains report-only until the user approves it.
 
+Discovery results remain report-only in M3C-1 even when the user approves a subset. Approval does not create a candidate store, authorize a download or choose a destination path.
+
 Ordinary knowledge queries are read-only. If persistence intent is ambiguous, use `ephemeral_query` and report `persistent_writes: 0`.
 
 Query and Step 7 maintenance preflight is dry-run-only. A workspace action must be handled as a separate authorized intake/bootstrap task, never hidden inside a query or candidate rerun.
+
+## Discovery Authority
+
+Use only `discovery search` with the built-in `europe-pmc` connector. The Agent resolves exact dates and field-bound keywords; Core validates, searches, normalizes and locally refilters.
+
+Do not pad zero results, accept an arbitrary endpoint, follow a provider full-text link, persist candidates, download a source, initialize a workspace or chain into intake. `full_text_status` is metadata only. A connector or later-page failure invalidates the complete discovery response.
 
 ## Evidence Boundary
 
@@ -102,6 +110,8 @@ Use these only in the non-canonical task report:
 | `resume_available` | Current state supports a deterministic next incomplete stage. |
 | `completed_no_change` | The current chain is already complete and current. |
 | `query_completed_no_write` | An ephemeral query returned a bounded answer with zero persistent writes. |
+| `discovery_completed_no_write` | Public metadata discovery returned 0-15 results with zero persistent writes. |
+| `discovery_failed` | The bounded request, connector or provider output failed before a complete report. |
 | `step7_no_change` | An exact existing candidate satisfied the requested maintenance without a write. |
 | `step7_near_duplicate_stop` | Semantic overlap could not be resolved safely before append/replace. |
 
@@ -109,4 +119,4 @@ These labels never become stored statuses.
 
 ## No Fallbacks
 
-Do not parse workspace or domain-profile configuration. Do not read canonical JSON or JSONL files directly. Do not call a private legacy CLI, fallback parser, browser, network service or hidden script. Report the boundary and stop.
+Do not parse workspace or domain-profile configuration. Do not read canonical JSON or JSONL files directly. Outside the explicit `discovery search` route, do not call a private legacy CLI, fallback parser, browser, network service or hidden script. Report the boundary and stop.

@@ -14,6 +14,7 @@ EXPECTED_FILES = {
     "agents/openai.yaml",
     "references/authority-and-failure-boundaries.md",
     "references/cli-contract.md",
+    "references/discovery-workflow.md",
     "references/local-intake-workflow.md",
     "references/knowledge-query-and-step7-workflow.md",
     "references/review-intake-workflow.md",
@@ -70,6 +71,7 @@ def test_skill_frontmatter_and_progressive_disclosure_contract() -> None:
         "comparison",
         "trace-back",
         "step 7",
+        "discovery",
     ):
         assert trigger in description
     assert len((SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8").splitlines()) < 500
@@ -84,9 +86,9 @@ def test_openai_metadata_is_exact_and_mentions_skill() -> None:
     assert metadata == {
         "interface": {
             "display_name": "Research KB",
-            "short_description": "Ingest and query a traceable research knowledge base",
+            "short_description": "Discover, ingest, and query traceable research",
             "default_prompt": (
-                "Use $research-kb to ingest local papers, answer traceable knowledge-base questions, or explicitly maintain Step 7 candidates."
+                "Use $research-kb to discover papers on demand, ingest local papers, answer traceable knowledge-base questions, or explicitly maintain Step 7 candidates."
             ),
         }
     }
@@ -102,7 +104,6 @@ def test_skill_is_generic_private_safe_and_has_no_hidden_fallback() -> None:
         "T" + "PD",
         "doi.org/",
         "research-kb ingest",
-        "research-kb discover",
         "research-kb workspace create",
     ):
         assert forbidden not in text
@@ -133,12 +134,14 @@ def test_skill_required_read_commands_match_public_capability() -> None:
         "review context",
         "step7 context",
         "step7 render",
+        "discovery search",
     }
 
     assert required_reads <= set(capability["read_commands"])
     assert capability["features"]["real_pdf_parse"] is True
     assert capability["features"]["review_runtime"] is True
     assert capability["features"]["step7_runtime"] is True
+    assert capability["features"]["on_demand_discovery"] is True
 
 
 def test_cli_reference_contains_minimal_stdin_promotion_envelopes() -> None:
@@ -259,6 +262,7 @@ def test_skill_routes_modes_before_mutation_and_preserves_query_ephemerality() -
 
     for mode in (
         "local_intake",
+        "on_demand_discovery",
         "ephemeral_query",
         "explicit_step7_maintenance",
         "full_workflow_step7_refresh",
@@ -268,6 +272,29 @@ def test_skill_routes_modes_before_mutation_and_preserves_query_ephemerality() -
     assert "Ordinary knowledge queries never persist" in body
     assert "Allow only `already_present` plus the planned `acquire_workspace_lock` action" in body
     assert "Exact reruns write nothing" in body
+
+
+def test_discovery_workflow_is_task_report_only_and_acquisition_free() -> None:
+    text = (SKILL_ROOT / "references" / "discovery-workflow.md").read_text(encoding="utf-8")
+
+    for required in (
+        "on_demand_discovery",
+        "date_from",
+        "date_until",
+        "title_keywords",
+        "abstract_keywords",
+        "include_preprints",
+        "max_results",
+        "0-15",
+        "persistent_writes: 0",
+        "discovery search",
+        "metadata only",
+        "report-only",
+    ):
+        assert required in text
+    assert "Do not pad a zero-result search" in text
+    assert "Do not persist a discovery candidate" in text
+    assert "Do not download full text" in text
 
 
 def test_review_workflow_is_actionable_and_keeps_downstream_boundaries() -> None:

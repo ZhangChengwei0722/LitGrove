@@ -109,8 +109,20 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Match intake registration only by exact `root_id + relative_path`; test unregistered, current, stale, ambiguous and same-bytes-at-another-path states.
 - Hash intake sources before and after projection, keep failure stdout empty, and prove source plus managed trees remain byte-identical.
 - Read stdin as raw bytes with a command-specific limit plus one byte; never echo invalid payloads.
-- Accept stdin only for Registry metadata and mutation requests, and route successful objects through existing services.
+- Accept stdin only for discovery requests, Registry metadata and mutation requests, and route successful objects through existing services.
 - Exercise base and `[pdf]` installed wheels so intake inspection, availability, stdin, parse reads, status and paper context do not depend on the editable tree.
+
+## Discovery Connector Rules
+
+- Register public connectors explicitly in Core; do not add arbitrary URL input, plugin discovery, credentials or environment-driven endpoints.
+- Keep M3C-1 workspace-independent and persistence-free. A discovery report is external metadata, not Registry, Evidence or candidate state.
+- Bound request bytes, date span, keywords, provider pages, raw results, response bytes and timeout.
+- Reject redirects and reuse provider cursors only against the fixed endpoint; never fetch a provider-returned next-page or full-text URL.
+- Reapply date, field-keyword and preprint filters locally. Exact DOI may deduplicate; title similarity may only mark a candidate pair.
+- Use structured HTML parsing for provider markup and validate every provider field before output.
+- Treat later-page failure as whole-request failure and leave stdout empty.
+- Write fake transport tests from scratch. Automated tests must not call a live provider or contain copied real metadata.
+- State the reproducibility boundary: identical request and provider payloads normalize identically, while live provider state may change.
 
 ## Platform Rules
 

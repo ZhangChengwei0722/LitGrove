@@ -8,6 +8,11 @@ import yaml
 
 from research_kb.cli import _configure_standard_streams, _write_bytes_once, _write_json, main
 from research_kb.errors import Diagnostic
+from research_kb.discovery.base import (
+    DiscoveryCandidate,
+    DiscoveryProviderResult,
+    DiscoverySource,
+)
 from research_kb.parse.synthetic_text import SyntheticTextAdapter
 from research_kb.services.parse import ParseService
 from research_kb.services.registry import RegistryService
@@ -80,6 +85,110 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert "review context" in output["read_commands"]
     assert "review-memory" in output["mutation_record_kinds"]
     assert output["features"]["review_runtime"] is True
+    assert "discovery search" in output["read_commands"]
+    assert output["features"]["on_demand_discovery"] is True
+
+
+def test_discovery_search_cli_stdin_and_file_are_equal_and_read_only(
+    tmp_path,
+    capsys,
+    monkeypatch,
+) -> None:
+    class FakeConnector:
+        connector_id = "europe-pmc"
+        network_required = True
+
+        def search(self, discovery_request):
+            assert discovery_request.date_from.isoformat() == "2026-07-14"
+            return DiscoveryProviderResult(
+                provider="europe-pmc",
+                provider_api_version="synthetic-1",
+                provider_hit_count=1,
+                scanned_result_count=1,
+                exhausted=True,
+                candidates=(
+                    DiscoveryCandidate(
+                        title="Targeted degradation in an invented system",
+                        authors=("Alpha Researcher",),
+                        first_publication_date="2026-07-20",
+                        journal_or_server="Invented Journal",
+                        doi="10.0000/synthetic.discovery",
+                        paper_type="article",
+                        publication_types=("Journal Article",),
+                        abstract="Delivery was measured in the invented system.",
+                        discovery_sources=(
+                            DiscoverySource("europe-pmc", "MED", "SYNTH-1"),
+                        ),
+                        full_text_status="unknown",
+                    ),
+                ),
+            )
+
+    request = {
+        "request_version": "1.0",
+        "date_from": "2026-07-14",
+        "date_until": "2026-07-21",
+        "title_keywords": ["targeted degradation"],
+        "abstract_keywords": ["delivery"],
+        "keyword_mode": "any",
+        "include_preprints": True,
+        "max_results": 15,
+    }
+    request_bytes = json.dumps(request).encode("utf-8")
+    request_path = tmp_path / "request.json"
+    request_path.write_bytes(request_bytes)
+    before = _tree_bytes(tmp_path)
+
+    stream = TextIOWrapper(BytesIO(request_bytes), encoding="utf-8")
+    monkeypatch.setattr("sys.stdin", stream)
+    argv = ["discovery", "search", "--provider", "europe-pmc", "--request", "-"]
+    assert main(argv, discovery_connectors=(FakeConnector(),)) == 0
+    stdin_output = capsys.readouterr()
+
+    argv[-1] = str(request_path)
+    assert main(argv, discovery_connectors=(FakeConnector(),)) == 0
+    file_output = capsys.readouterr()
+
+    output = json.loads(stdin_output.out)
+    assert stdin_output.err == file_output.err == ""
+    assert stdin_output.out == file_output.out
+    assert output["returned_result_count"] == 1
+    assert output["persistent_writes"] == 0
+    assert _tree_bytes(tmp_path) == before
+
+
+def test_discovery_search_cli_failure_has_empty_stdout(tmp_path, capsys) -> None:
+    request_path = tmp_path / "request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "request_version": "1.0",
+                "date_from": "2026-07-14",
+                "date_until": "2026-07-21",
+                "title_keywords": ["synthetic"],
+                "abstract_keywords": [],
+                "keyword_mode": "any",
+                "include_preprints": True,
+                "max_results": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    before = _tree_bytes(tmp_path)
+
+    assert main([
+        "discovery",
+        "search",
+        "--provider",
+        "missing",
+        "--request",
+        str(request_path),
+    ], discovery_connectors=()) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err)["diagnostic"]["code"] == "RKBC-032"
+    assert _tree_bytes(tmp_path) == before
 
 
 def test_intake_inspect_cli_is_deterministic_bounded_and_read_only(tmp_path, capsys) -> None:

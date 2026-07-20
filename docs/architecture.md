@@ -14,6 +14,7 @@ Core owns deterministic contracts, validation, path and ID handling, structured 
 
 ```text
 Source Intake -> Registry -> Parse
+-> On-demand discovery: fixed public connector -> transient metadata report
 -> Primary route: Paper Card Core -> Evidence Grounding -> Question Mapping
 -> Review route: background-only Review Memory
 -> Ephemeral query route: Paper Card Units -> optional Evidence trace-back -> task report
@@ -175,7 +176,7 @@ natural-language local primary-paper task
 -> non-canonical task report
 ```
 
-`skills/research-kb/` is the reviewed Agent-layer source. Its concise `SKILL.md` routes detailed command, primary intake, review intake, query/Step 7, authority and reporting rules to six one-level reference files. It contains no scripts, duplicate schemas, persistent state or scientific fixtures.
+`skills/research-kb/` is the reviewed Agent-layer source. Its concise `SKILL.md` routes detailed command, discovery, primary intake, review intake, query/Step 7, authority and reporting rules to seven one-level reference files. It contains no scripts, duplicate schemas, persistent state or scientific fixtures.
 
 The Skill processes sources sequentially, uses `intake inspect` before registration, reads current state through `paper status` and `paper context`, reads scientific text through `parse show`, and submits candidates through existing CLI mutation authority. It classifies document type only in task memory and stops non-primary documents before Paper Card or Evidence promotion.
 
@@ -232,3 +233,22 @@ explicit Step 7 maintenance
 The Skill classifies intent before mutation. Ordinary seven-section explanations, overview, methods, comparison, claim trace-back and research-direction discussions remain in the task report only. Review Memory may inform labeled background discussion but cannot become primary support.
 
 Step 7 persistence requires an explicit maintenance request or an intake invocation that explicitly requests the complete workflow. Exact semantic reruns write nothing; same-candidate changes use replace; materially distinct candidates may append; uncertain near-duplicates stop. Core still owns IDs, closure, snapshots and states, while the Agent owns scientific semantics and duplicate judgment. M3B-2 adds no Python runtime, schema, layout, dependency, query-answer store or direct JSONL access.
+
+## M3C-1 On-Demand Europe PMC Discovery
+
+```text
+explicit date and field-keyword request
+-> built-in Europe PMC connector at one fixed HTTPS endpoint
+-> bounded provider pages
+-> local date / keyword / preprint filters
+-> exact DOI deduplication and possible-title-duplicate marking
+-> transient interface 1.0 task report data
+```
+
+Discovery is workspace-independent and has no mutation path. `DiscoveryRequest` closes dates, field assignments, match mode, preprint inclusion and the 1-15 result bound. The connector protocol is provider-neutral, but the installed registry contains only `europe-pmc`; there is no plugin discovery or caller-supplied endpoint.
+
+The standard-library transport rejects redirects, bounds timeout and bytes, ignores provider-returned next-page URLs and reuses only an opaque cursor against the same endpoint. Provider metadata remains untrusted: Core validates shape and size, strips markup with an HTML parser and reapplies all user filters locally.
+
+Exact normalized DOI identity may merge duplicate provider rows. Different or missing DOI identities are retained; similar titles only create symmetric possible-duplicate references. `paper_type`, full-text availability and unresolved version relation are metadata projections, not scientific judgment or acquisition authority.
+
+Live provider state can change, so M3C-1 does not promise byte-identical searches across time. It guarantees that the same validated request plus the same provider page payloads produce the same normalized bytes. Any page, transport or output failure produces no partial stdout report. Candidate persistence, source download, browser login, downstream intake and Crossref remain separate milestones.

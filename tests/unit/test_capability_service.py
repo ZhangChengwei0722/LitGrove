@@ -28,6 +28,13 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
                 "diagnostic_code": None,
             },
         ],
+        "discovery_connectors": [
+            {
+                "connector": "europe-pmc",
+                "availability": "available",
+                "network_required": True,
+            },
+        ],
         "mutation_record_kinds": [
             "evidence",
             "paper-card",
@@ -42,6 +49,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
         ],
         "read_commands": [
             "capability show",
+            "discovery search",
             "guardian check",
             "intake inspect",
             "paper context",
@@ -59,6 +67,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "stdin_json_handoff": True,
             "review_runtime": True,
             "step7_runtime": True,
+            "on_demand_discovery": True,
         },
     }
 

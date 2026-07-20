@@ -78,10 +78,12 @@ def main() -> int:
             "diagnostic_code": None,
         }:
             raise SystemExit("PDF wheel capability report does not match the installed adapter")
-        if not {"intake inspect", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
+        if not {"discovery search", "intake inspect", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
             raise SystemExit("PDF wheel capability report lacks deterministic intake/context reads")
-        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True:
-            raise SystemExit("PDF wheel capability report lacks Review Memory or Step 7 runtime")
+        if capability["discovery_connectors"] != [{"connector": "europe-pmc", "availability": "available", "network_required": True}]:
+            raise SystemExit("PDF wheel capability report lacks the Europe PMC connector")
+        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True:
+            raise SystemExit("PDF wheel capability report lacks Review Memory, Step 7 or discovery runtime")
         for command in ("context", "render"):
             subprocess.run(
                 [str(python), "-m", "research_kb", "step7", command, "--help"],

@@ -7,6 +7,7 @@ Use only public `research-kb` commands. Build every command result completely be
 | Command | Mode | Consume | Skill decision |
 | --- | --- | --- | --- |
 | `research-kb capability show` | read | `read_commands`, adapters, feature flags | Require the approved reads and an available `pdfplumber` adapter. |
+| `research-kb discovery search --provider europe-pmc --request -` | external read | normalized public metadata report | Use only for discovery reported in the active task; never infer persistence or acquisition. |
 | `research-kb workspace init --workspace <config> --dry-run` | read-only preflight | result, actions, diagnostics | Apply only an existing valid config with bounded safe actions. |
 | `research-kb workspace init --workspace <config>` | operational mutation | result, diagnostics | Bind or validate the managed layout; never author config. |
 | `research-kb intake inspect --workspace <config> --source <absolute-path>` | read | portable source, registration state, Card sections | Reuse, register or stop exactly as reported. |
@@ -31,6 +32,7 @@ Require these read commands:
 
 ```text
 capability show
+discovery search
 guardian check
 intake inspect
 paper context
@@ -44,7 +46,9 @@ step7 context
 step7 render
 ```
 
-Require `real_pdf_parse: true`, plus `pdfplumber` with `availability: available` and a non-empty version. A declared feature with a missing optional dependency is not executable.
+For `on_demand_discovery`, require `on_demand_discovery: true` and an available `europe-pmc` connector. Do not require a workspace or `pdfplumber`.
+
+For local intake, query and Step 7 modes, require `real_pdf_parse: true`, plus `pdfplumber` with `availability: available` and a non-empty version. A declared feature with a missing optional dependency is not executable.
 
 For query and Step 7 maintenance, use `workspace init --dry-run` only. Its successful `result` is `planned`; determine whether the workspace is already usable from `managed_actions`. Only `already_present` entries plus the planned `acquire_workspace_lock` entry are no-change preflight. Any create, marker write, adoption or upgrade action stops this route. Do not call operational init merely because the dry-run result says `planned`.
 
@@ -59,14 +63,32 @@ For query and Step 7 maintenance, use `workspace init --dry-run` only. Its succe
 - `step7 context` is the only public recovery and freshness surface for Step 7 candidates.
 - `parse show` is the only public parsed-text read surface.
 - `guardian check` is read-only unless an explicit future task authorizes report persistence.
+- `discovery search` reads one fixed public metadata provider and writes no local state. Its live results are mutable external input.
 
 Do not parse workspace or domain-profile configuration. Do not read canonical JSON or JSONL files directly. Do not infer IDs or canonical paths.
 
 ## Stdin Handoff
 
-Send one UTF-8 JSON object through stdin for Registry metadata or mutation requests. Do not send YAML, exceed published limits, create temporary request files or bypass `record promote`.
+Send one UTF-8 JSON object through stdin for discovery, Registry metadata or mutation requests. Do not send YAML, exceed published limits or create temporary request files. Mutations must still use `record promote`.
 
 Use `actor: agent`. Never request user-only review or screening states.
+
+### Discovery request
+
+```json
+{
+  "request_version": "1.0",
+  "date_from": "2026-07-14",
+  "date_until": "2026-07-21",
+  "title_keywords": ["<title phrase>"],
+  "abstract_keywords": ["<abstract phrase>"],
+  "keyword_mode": "any",
+  "include_preprints": true,
+  "max_results": 15
+}
+```
+
+Use dates resolved for the active task rather than copying the example. The request limit is 64 KiB. A successful report has `persistent_writes: 0`; it is not a candidate store or download receipt.
 
 ### Registry metadata
 
@@ -450,3 +472,5 @@ Allowed `candidate_status` values are `keep`, `revise`, `rejected` and `needs_re
 ## Failure Output
 
 Expect successful JSON on stdout. Structured command failures write an error diagnostic and leave stdout empty. Preserve the diagnostic code and bounded message in the private task report; never replace it with a guessed cause or expose private paths in shared artifacts.
+
+`RKBC-032` is a discovery connector/transport stop. `RKBC-033` is invalid provider output. Neither permits a partial report or direct browser/API fallback.

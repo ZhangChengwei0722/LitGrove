@@ -63,17 +63,20 @@ def main() -> int:
             "diagnostic_code": "RKBC-028",
         }:
             raise SystemExit("base wheel capability report did not expose the missing PDF dependency")
-        if not {"intake inspect", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
+        if not {"discovery search", "intake inspect", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
             raise SystemExit("base wheel capability report lacks deterministic intake/context reads")
-        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True:
-            raise SystemExit("base wheel capability report lacks Review Memory or Step 7 runtime")
+        if capability["discovery_connectors"] != [{"connector": "europe-pmc", "availability": "available", "network_required": True}]:
+            raise SystemExit("base wheel capability report lacks the Europe PMC connector")
+        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True:
+            raise SystemExit("base wheel capability report lacks Review Memory, Step 7 or discovery runtime")
         subprocess.run(
             [
                 str(python), "-c",
                 "from research_kb.compatibility import CompatibilitySourceRef, LegacyReaderAdapter; "
                 "from research_kb.contracts.registry import SchemaRegistry; "
                 "from research_kb.guardian import GuardianService; "
-                "from research_kb.services import CompatibilityAdapterRegistry, CompatibilityInspectionService, IntakeInspectService, PaperContextService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService, ReviewContextService, ReviewMemoryService, Step7CandidateService, Step7ContextService, Step7ReadingViewService; "
+                "from research_kb.discovery.europe_pmc import EuropePmcConnector; "
+                "from research_kb.services import CompatibilityAdapterRegistry, CompatibilityInspectionService, DiscoveryConnectorRegistry, DiscoveryService, IntakeInspectService, PaperContextService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService, ReviewContextService, ReviewMemoryService, Step7CandidateService, Step7ContextService, Step7ReadingViewService; "
                 "registry = SchemaRegistry(); "
                 "assert registry.schema('mutation-request')['$id'].endswith('mutation-request'); "
                 "assert registry.schema('compatibility-difference')['$id'].endswith('compatibility-difference'); "
@@ -84,6 +87,9 @@ def main() -> int:
                 "assert CompatibilitySourceRef.__name__ == 'CompatibilitySourceRef'; "
                 "assert CompatibilityAdapterRegistry.__name__ == 'CompatibilityAdapterRegistry'; "
                 "assert CompatibilityInspectionService.__name__ == 'CompatibilityInspectionService'; "
+                "assert DiscoveryConnectorRegistry.__name__ == 'DiscoveryConnectorRegistry'; "
+                "assert DiscoveryService.__name__ == 'DiscoveryService'; "
+                "assert EuropePmcConnector.connector_id == 'europe-pmc'; "
                 "assert IntakeInspectService.__name__ == 'IntakeInspectService'; "
                 "assert PaperContextService.__name__ == 'PaperContextService'; "
                 "assert ReviewContextService.__name__ == 'ReviewContextService'; "
@@ -96,6 +102,12 @@ def main() -> int:
             ],
             cwd=temporary,
             check=True,
+        )
+        subprocess.run(
+            [str(python), "-m", "research_kb", "discovery", "search", "--help"],
+            cwd=temporary,
+            check=True,
+            capture_output=True,
         )
         workspace_root = Path(temporary) / "synthetic-workspace"
         sources = workspace_root / "sources"

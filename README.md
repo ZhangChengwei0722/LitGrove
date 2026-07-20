@@ -4,7 +4,7 @@ Cross-platform, local-first contracts and deterministic CLI primitives for evide
 
 ## Current Scope
 
-Milestone 1B through the M3B-1 repository slice provide:
+Milestone 1B through the M3C-1 repository slice provide:
 
 - versioned workspace, domain, record, and candidate schemas;
 - portable source references and stable IDs;
@@ -38,8 +38,9 @@ Milestone 1B through the M3B-1 repository slice provide:
 - four deterministic Step 7 candidate stores with CLI-owned IDs, evidence/boundary closure and atomic append/replace;
 - Question Mapping admission, stale-upstream projection, `step7 context`, stdout-only `step7 render`, and Guardian `RKBC-014` warnings.
 - Portable Skill routes for read-only paper/question queries, canonical claim trace-back and explicitly gated Step 7 maintenance.
+- one workspace-independent Europe PMC metadata connector that reports only in the active task, with bounded local filtering, DOI deduplication and no acquisition or persistence.
 
-The installed CLI contains no private adapter and performs no adapter discovery. The CLI never calls an LLM or makes scientific judgments. OCR, subtype-specific review runtime, persisted Markdown or additional derived views, Field Map integration, Review Unit Question Mapping and migration remain later milestones.
+The installed CLI contains no private adapter and performs no adapter or connector discovery. The CLI never calls an LLM or makes scientific judgments. OCR, subtype-specific review runtime, persisted Markdown or additional derived views, Field Map integration, Review Unit Question Mapping, discovery-candidate persistence, acquisition and migration remain later milestones.
 
 ## Privacy Boundary
 
@@ -65,9 +66,9 @@ On macOS, use `.venv/bin/python` instead.
 
 ## Portable Skill
 
-The reviewed Skill source lives at `skills/research-kb/`. It orchestrates existing Core commands for mutually exclusive primary-research and common Review Memory intake, read-only knowledge queries and explicitly gated Step 7 maintenance. It adds no Core service, schema, ID or workflow store.
+The reviewed Skill source lives at `skills/research-kb/`. It orchestrates bounded on-demand metadata discovery, mutually exclusive primary-research and common Review Memory intake, read-only knowledge queries and explicitly gated Step 7 maintenance. It adds no schema, ID or workflow store.
 
-The Python wheel does not install the Skill. Local CC Switch installation is a separate, explicitly authorized post-merge operation. The Skill requires an existing workspace config and does not generate workspace/domain configuration, discover literature or integrate Review Units downstream. Ordinary queries remain non-persistent; only explicit Step 7 maintenance or an explicitly complete intake workflow may promote candidates through Core.
+The Python wheel does not install the Skill. Local CC Switch installation is a separate, explicitly authorized post-merge operation. Discovery is workspace-independent; all intake/query/Step 7 modes require an existing workspace config. The Skill does not generate workspace/domain configuration, acquire sources or integrate Review Units downstream. Discovery and ordinary queries remain non-persistent; only explicit Step 7 maintenance or an explicitly complete intake workflow may promote candidates through Core.
 
 ## Runtime Commands
 
@@ -83,6 +84,8 @@ Capability probing is workspace-independent; all commands with `--workspace` res
 
 ```text
 research-kb capability show
+research-kb discovery search --provider europe-pmc --request <request.json>
+research-kb discovery search --provider europe-pmc --request -
 research-kb intake inspect --workspace <workspace.yaml> --source <absolute-source-path>
 research-kb compatibility inspect --workspace <workspace.yaml> --adapter <adapter_id>
 research-kb registry add --workspace <workspace.yaml> --root-id <root> --relative-path <path> --metadata <metadata.json>
@@ -106,7 +109,9 @@ research-kb transaction recover --workspace <workspace.yaml> [--dry-run]
 
 Source assets remain read-only. Canonical writes stay under `knowledge_root` and emit a process event only after a validated atomic replacement.
 
-`capability show`, `intake inspect`, `parse show`, `paper status`, `paper context`, `review context`, and `step7 context` emit transient interface `1.0` JSON and write no workspace state. Capability output distinguishes an implemented adapter from its installed availability. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
+`capability show`, `discovery search`, `intake inspect`, `parse show`, `paper status`, `paper context`, `review context`, and `step7 context` emit transient interface `1.0` JSON and write no workspace state. Capability output distinguishes installed adapters and built-in connectors without calling the network. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
+
+`discovery search` accepts an explicit date range, field-bound keywords, preprint choice and maximum of 1-15 results. It calls only the built-in fixed Europe PMC HTTPS endpoint, reapplies filters locally, merges exact DOI identity and marks possible title duplicates without merging them. It creates no workspace, candidate, event, report file or downloaded source. Public provider state is mutable; identical requests and provider page payloads produce identical normalized bytes.
 
 `intake inspect` accepts one absolute source path, confines it to exactly one declared source root, and returns only portable `root_id + relative_path`, exact-path registration state, and ordered Paper Card section IDs/labels. It hashes the source before and after projection, never returns the hash or absolute path, and performs no registration. The Portable Skill uses it for sequential reruns; concurrent inspect-and-register deduplication is not guaranteed.
 
@@ -114,7 +119,7 @@ Source assets remain read-only. Canonical writes stay under `knowledge_root` and
 
 `review context` returns one complete Review Memory or `null`, `absent/current/stale_parse` freshness, and transient exact local DOI matches for primary-paper leads. Review Memory remains `background_only`, `can_enter_canonical_evidence: false`, and `not_fact: true`; stale notes are never rebound to a newer parse automatically.
 
-Stdin accepts one UTF-8 JSON object only. Registry metadata is capped at 64 KiB and mutation requests at 4 MiB; YAML remains file-only. Invalid input never reaches a mutation service, and no temporary request file is created.
+Stdin accepts one UTF-8 JSON object only. Discovery requests and Registry metadata are capped at 64 KiB; mutation requests are capped at 4 MiB. YAML remains file-only. Invalid input never reaches its service, and no temporary request file is created.
 
 The PDF adapter records exact `pdfplumber` version identity and emits `page:<n>:text` page locators. Real-PDF Evidence must use `page:<n>:char:<start>-<end>` with an exact zero-based, end-exclusive slice of stored page text. Missing PDF dependencies and unsupported PDF sources fail explicitly; there is no OCR or synthetic fallback.
 
@@ -128,4 +133,4 @@ Step 7 requests also use `record promote`, but require `paper_id: null` and `que
 
 ## Contracts
 
-JSON Schema Draft 2020-12 files live under `schemas/`. YAML inputs are parsed into mappings and validated against the same schemas. Markdown is documentation or a future rendered view, never a structured source of truth.
+JSON Schema Draft 2020-12 files live under `schemas/`. YAML canonical inputs are parsed into mappings and validated against the same schemas. The closed discovery request and report are transient interface `1.0` documents, not canonical schemas or persisted records. Markdown is documentation or a future rendered view, never a structured source of truth.
