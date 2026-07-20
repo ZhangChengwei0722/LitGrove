@@ -6,6 +6,8 @@ import pytest
 
 from research_kb.errors import ResearchKBError
 from research_kb.mutation import MutationRequest
+from research_kb.parse.synthetic_text import SyntheticTextAdapter
+from research_kb.services.parse import ParseService
 from research_kb.services.question_mapping import QuestionMappingService
 from research_kb.services.records import RecordService
 from research_kb.services.registry import RegistryService
@@ -18,7 +20,11 @@ from tests.runtime_helpers import make_runtime_workspace
 def _register(layout, name: str) -> dict:
     root_id, source_root = next(iter(layout.source_roots.items()))
     source = source_root / name
-    source.write_text(f"Invented source for {name}.\n", encoding="utf-8", newline="\n")
+    source.write_text(
+        f"Invented response increased for {name}.\nInvented source for {name}.\n",
+        encoding="utf-8",
+        newline="\n",
+    )
     paper, _ = RegistryService(layout).add(
         root_id=root_id,
         relative_path=name,
@@ -29,6 +35,7 @@ def _register(layout, name: str) -> dict:
 
 def _prepare_paper(layout, name: str) -> dict[str, object]:
     paper = _register(layout, name)
+    ParseService(layout).run(paper_id=paper["paper_id"], adapter=SyntheticTextAdapter())
     records = RecordService(layout)
     evidence, _ = records.promote(
         MutationRequest(

@@ -4,21 +4,29 @@ import pytest
 
 from research_kb.errors import ResearchKBError
 from research_kb.mutation import MutationRequest
+from research_kb.parse.synthetic_text import SyntheticTextAdapter
+from research_kb.services.parse import ParseService
 from research_kb.services.records import RecordService
 from research_kb.services.registry import RegistryService
 from research_kb.storage.json_io import read_json_document, read_jsonl
+from research_kb.process_events import read_process_events
 from tests.fixture_factory import SECTIONS
 from tests.runtime_helpers import make_runtime_workspace
 
 
 def _registered_paper(layout, name: str = "study.txt") -> dict:
     source = layout.source_roots["alpha-sources"] / name
-    source.write_text(f"Invented source for {name}.\n", encoding="utf-8", newline="\n")
+    source.write_text(
+        f"The fabricated response increased in chamber A.\nInvented source for {name}.\n",
+        encoding="utf-8",
+        newline="\n",
+    )
     paper, _ = RegistryService(layout).add(
         root_id="alpha-sources",
         relative_path=name,
         metadata={"fixture_origin": "synthetic_from_scratch"},
     )
+    ParseService(layout).run(paper_id=paper["paper_id"], adapter=SyntheticTextAdapter())
     return paper
 
 
@@ -186,6 +194,80 @@ def test_record_service_rejects_cross_paper_evidence_reference(tmp_path: Path) -
         service.promote(request, actor="agent")
 
     assert caught.value.diagnostic.code == "RKBC-009"
+
+
+def test_evidence_promotion_requires_current_source_and_preserves_existing_store(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    paper = _registered_paper(layout)
+    service = RecordService(layout)
+    service.promote(_evidence_request(paper["paper_id"]), actor="agent")
+    target = layout.evidence_path(paper["paper_id"])
+    target_before = target.read_bytes()
+    source = layout.source_roots["alpha-sources"] / "study.txt"
+    source.write_text("Changed invented source.\n", encoding="utf-8", newline="\n")
+
+    with pytest.raises(ResearchKBError) as caught:
+        service.promote(_evidence_request(paper["paper_id"]), actor="agent")
+
+    assert caught.value.diagnostic.code == "RKBC-009"
+    assert caught.value.diagnostic.json_path == "/source_fingerprint"
+    assert target.read_bytes() == target_before
+
+
+def test_invalid_evidence_replace_preserves_previous_target_bytes(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    paper = _registered_paper(layout)
+    service = RecordService(layout)
+    evidence, _ = service.promote(_evidence_request(paper["paper_id"]), actor="agent")
+    target = layout.evidence_path(paper["paper_id"])
+    target_before = target.read_bytes()
+
+    with pytest.raises(ResearchKBError) as caught:
+        service.promote(
+            MutationRequest(
+                operation="replace",
+                record_kind="evidence",
+                target_record_id=evidence["evidence_id"],
+                paper_id=paper["paper_id"],
+                payload={"quote": "An absent invented quote."},
+            ),
+            actor="agent",
+        )
+
+    assert caught.value.diagnostic.code == "RKBC-009"
+    assert target.read_bytes() == target_before
+
+
+def test_evidence_source_change_after_replace_requires_manual_resolution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    paper = _registered_paper(layout)
+    source = layout.source_roots["alpha-sources"] / "study.txt"
+    existing_events = read_process_events(layout.process_events_path)
+    from research_kb.storage import transactions
+
+    original_replace = transactions.replace_temp
+
+    def replace_and_change_source(temporary: Path, target: Path) -> None:
+        original_replace(temporary, target)
+        if target == layout.evidence_path(paper["paper_id"]).resolve():
+            source.write_text("Changed during Evidence commit.\n", encoding="utf-8", newline="\n")
+
+    monkeypatch.setattr(transactions, "replace_temp", replace_and_change_source)
+
+    with pytest.raises(ResearchKBError) as caught:
+        RecordService(layout).promote(_evidence_request(paper["paper_id"]), actor="agent")
+
+    assert caught.value.diagnostic.code == "RKBC-018"
+    assert read_process_events(layout.process_events_path) == existing_events
+    journals = [
+        read_json_document(path, record_kind="transaction-journal")
+        for path in layout.transactions_root.glob("*.json")
+    ]
+    journal = next(item for item in journals if item["operation"] == "record_append" and item["phase"] == "needs_resolution")
+    assert journal["result"] == "needs_resolution"
 
 
 def test_record_service_dispatches_registry_mutation_request(tmp_path: Path) -> None:

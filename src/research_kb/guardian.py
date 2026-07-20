@@ -227,7 +227,7 @@ def status_for_findings(findings: list[dict[str, Any]]) -> str:
 
 def _finding_from_diagnostic(diagnostic: Diagnostic, defined_ids: set[str]) -> dict[str, Any]:
     remediation = {
-        GROUNDING_MISMATCH: "Restore the registered source or register the changed asset as a new controlled input.",
+        GROUNDING_MISMATCH: "Restore the registered source or correct parsed-page and Evidence provenance against the current source.",
         INCOMPLETE_TRANSACTION: "Run transaction recover and inspect ambiguous digests before any further mutation.",
         PATH_ESCAPE: "Move the canonical target under knowledge_root and correct the workspace path contract.",
         SNAPSHOT_MISMATCH: "Refresh the Question Mapping from its current Paper Card, evidence, and review queue inputs.",

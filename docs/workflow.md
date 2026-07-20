@@ -12,7 +12,7 @@ candidate input
 -> Guardian
 ```
 
-Milestone 1B implements this deterministic storage lifecycle for Registry, synthetic Parse, Paper Card Core, Evidence, and review queue records. It does not generate scientific content.
+Milestone 1B implements this deterministic storage lifecycle. M3A-0A adds explicit real-PDF page extraction and strict Evidence provenance validation without generating scientific content.
 
 ## Runtime Sequence
 
@@ -20,7 +20,7 @@ Milestone 1B implements this deterministic storage lifecycle for Registry, synth
 2. `workspace init` binds the managed root with a deterministic marker. Repeating it with the same config returns `no_change`.
 3. `compatibility inspect` uses only adapters explicitly injected by a private in-process caller. It emits a read-only report to stdout and never persists compatibility state.
 4. `registry add` resolves a declared source root, hashes the source read-only, and preserves exact duplicates as reciprocal candidates.
-5. `parse run` uses only `SyntheticTextAdapter` in M1B and writes validated page records without creating a full-text copy.
+5. `parse run` uses the explicitly requested `synthetic-text` or optional `pdfplumber` adapter and writes validated page records without creating a full-text copy. It reports exact adapter/version identity and never falls back to OCR or another adapter.
 6. `record promote` loads a private mutation request, injects IDs/timestamps/fingerprints, enforces actor authority, and promotes one canonical store.
 7. A `question-mapping` request selects Card Units for a user-supplied or explicitly approved question. Core derives evidence and required boundaries before atomic promotion.
 8. `question list/show` retrieves deterministic structured mappings without writing a reading view, report, event, or journal.
@@ -57,6 +57,8 @@ Question origins are explicit mutation context:
 - Validation failure preserves the previous target bytes.
 - A pre-replacement failure records a failure event when possible.
 - Source-dependent services recheck source stability after replacement and before emitting success.
+- Evidence promotion requires an active same-paper parsed page, a supported page-matching locator, and an exact quote slice or bounded synthetic block containment.
+- Missing `research-kb-core[pdf]` returns `RKBC-028`; unsupported, malformed, encrypted, or text-unavailable PDFs return `RKBC-029` without exposing source paths or text.
 - A failed post-replacement source check emits no success event, records `needs_resolution`, and requires manual inspection.
 - A post-replacement event failure leaves an incomplete journal and returns a recovery-required error.
 - Completed journals record their final result and must match exactly one journal-derived process event; Guardian reports missing or altered events.

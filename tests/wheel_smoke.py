@@ -134,7 +134,7 @@ def main() -> int:
             raise SystemExit("workspace init created an empty question store")
 
         source = sources / "wheel-study.txt"
-        source.write_text("Invented wheel source.\n", encoding="utf-8", newline="\n")
+        source.write_text("The invented wheel response increased.\n", encoding="utf-8", newline="\n")
         metadata_path = workspace_root / "metadata.json"
         _write_json(
             metadata_path,
@@ -162,6 +162,41 @@ def main() -> int:
             "--metadata",
             str(metadata_path),
         )["paper_id"]
+        source_before_parse = source.read_bytes()
+        unavailable = subprocess.run(
+            [
+                str(python), "-m", "research_kb", "parse", "run",
+                "--workspace", str(config_path),
+                "--paper-id", paper_id,
+                "--adapter", "pdfplumber",
+            ],
+            cwd=temporary,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if unavailable.returncode != 2 or unavailable.stdout:
+            raise SystemExit("base wheel did not fail closed for unavailable PDF adapter")
+        unavailable_payload = json.loads(unavailable.stderr)
+        if unavailable_payload["diagnostic"]["code"] != "RKBC-028":
+            raise SystemExit("base wheel returned the wrong unavailable-adapter diagnostic")
+        parse_output = _run_json(
+            python,
+            Path(temporary),
+            "parse",
+            "run",
+            "--workspace",
+            str(config_path),
+            "--paper-id",
+            paper_id,
+            "--adapter",
+            "synthetic-text",
+        )
+        if parse_output["parser"] != {"adapter": "synthetic-text", "version": "1.0"}:
+            raise SystemExit("base wheel synthetic parser identity is incorrect")
+        if source.read_bytes() != source_before_parse:
+            raise SystemExit("base wheel parse changed the source asset")
 
         def promote(name: str, request: dict) -> dict:
             request_path = workspace_root / f"{name}.json"

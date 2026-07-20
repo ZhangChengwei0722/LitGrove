@@ -1,4 +1,5 @@
 import json
+from importlib.metadata import version
 from io import BytesIO, StringIO, TextIOWrapper
 from pathlib import Path
 
@@ -8,9 +9,10 @@ import yaml
 from research_kb.cli import _configure_standard_streams, _write_bytes_once, _write_json, main
 from research_kb.errors import Diagnostic
 from research_kb.services.records import RecordService
-from research_kb.storage.json_io import serialize_json
+from research_kb.storage.json_io import file_sha256, read_jsonl, serialize_json
 from research_kb.storage.transactions import TransactionManager
 from tests.fixture_factory import make_bundle
+from tests.pdf_helpers import write_synthetic_pdf
 from tests.runtime_helpers import make_runtime_workspace
 from tests.unit.test_question_mapping_service import _append_request, _link, _prepare_paper
 
@@ -210,7 +212,9 @@ def test_m1b_cli_runs_registry_parse_record_and_guardian(tmp_path, capsys) -> No
         "parse", "run", "--workspace", str(layout.config.path),
         "--paper-id", paper_id, "--adapter", "synthetic-text",
     ]) == 0
-    assert json.loads(capsys.readouterr().out)["pages"] == 2
+    parse_output = json.loads(capsys.readouterr().out)
+    assert parse_output["pages"] == 2
+    assert parse_output["parser"] == {"adapter": "synthetic-text", "version": "1.0"}
 
     request = tmp_path / "evidence-request.json"
     request.write_text(json.dumps({
@@ -244,6 +248,85 @@ def test_m1b_cli_runs_registry_parse_record_and_guardian(tmp_path, capsys) -> No
     guardian_output = json.loads(capsys.readouterr().out)
     assert guardian_output["status"] == "success"
     assert guardian_output["report_written"] is True
+
+
+def test_parse_cli_dispatches_pdfplumber_and_reports_exact_identity(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = write_synthetic_pdf(
+        layout.source_roots["alpha-sources"] / "cli-real.pdf",
+        ["Invented PDF CLI response."],
+    )
+    source_before = file_sha256(source)
+    metadata = tmp_path / "metadata.json"
+    metadata.write_text(json.dumps({"fixture_origin": "synthetic_from_scratch"}), encoding="utf-8")
+
+    assert main([
+        "registry", "add", "--workspace", str(layout.config.path),
+        "--root-id", "alpha-sources", "--relative-path", source.name, "--metadata", str(metadata),
+    ]) == 0
+    paper_id = json.loads(capsys.readouterr().out)["paper_id"]
+
+    assert main([
+        "parse", "run", "--workspace", str(layout.config.path),
+        "--paper-id", paper_id, "--adapter", "pdfplumber",
+    ]) == 0
+    output = json.loads(capsys.readouterr().out)
+
+    assert output["parser"] == {"adapter": "pdfplumber", "version": version("pdfplumber")}
+    assert output["pages"] == 1
+    stored = read_jsonl(layout.parse_path(paper_id), record_kind="parsed-page")
+    assert stored[0]["parser"] == output["parser"]
+    assert file_sha256(source) == source_before
+
+
+def test_parse_cli_does_not_fallback_when_pdfplumber_source_is_wrong_type(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = layout.source_roots["alpha-sources"] / "not-pdf.txt"
+    source.write_text("Invented non-PDF source.\n", encoding="utf-8", newline="\n")
+    metadata = tmp_path / "metadata.json"
+    metadata.write_text("{}", encoding="utf-8")
+    assert main([
+        "registry", "add", "--workspace", str(layout.config.path),
+        "--root-id", "alpha-sources", "--relative-path", source.name, "--metadata", str(metadata),
+    ]) == 0
+    paper_id = json.loads(capsys.readouterr().out)["paper_id"]
+
+    assert main([
+        "parse", "run", "--workspace", str(layout.config.path),
+        "--paper-id", paper_id, "--adapter", "pdfplumber",
+    ]) == 2
+    streams = capsys.readouterr()
+    diagnostic = json.loads(streams.err)["diagnostic"]
+    assert streams.out == ""
+    assert diagnostic["code"] == "RKBC-029"
+    assert not layout.parse_path(paper_id).exists()
+
+
+def test_parse_cli_reports_unavailable_pdf_extra_without_target_write(tmp_path, capsys, monkeypatch) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = write_synthetic_pdf(
+        layout.source_roots["alpha-sources"] / "missing-extra.pdf",
+        ["Invented dependency boundary."],
+    )
+    metadata = tmp_path / "metadata.json"
+    metadata.write_text("{}", encoding="utf-8")
+    assert main([
+        "registry", "add", "--workspace", str(layout.config.path),
+        "--root-id", "alpha-sources", "--relative-path", source.name, "--metadata", str(metadata),
+    ]) == 0
+    paper_id = json.loads(capsys.readouterr().out)["paper_id"]
+
+    def missing_dependency(name: str):
+        raise ModuleNotFoundError(name)
+
+    monkeypatch.setattr("research_kb.parse.pdfplumber_adapter.import_module", missing_dependency)
+    assert main([
+        "parse", "run", "--workspace", str(layout.config.path),
+        "--paper-id", paper_id, "--adapter", "pdfplumber",
+    ]) == 2
+    diagnostic = json.loads(capsys.readouterr().err)["diagnostic"]
+    assert diagnostic["code"] == "RKBC-028"
+    assert not layout.parse_path(paper_id).exists()
 
 
 def test_guardian_cli_returns_findings_exit_for_changed_source(tmp_path, capsys) -> None:

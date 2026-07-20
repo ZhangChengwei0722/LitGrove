@@ -213,13 +213,24 @@ def test_inline_and_multiline_markdown_are_escaped_without_changing_line_order()
     mapping["scope"] = "Scope *bounded* (only)."
     evidence = _records(entries, "evidence")[0]
     evidence["quote"] = "line # one\r\nline > two"
-    evidence["locator"] = " page`one``two "
+    evidence["locator"] = "page:1:block:1"
     evidence["source_page"] = {
-        "pdf_page": 3,
+        "pdf_page": 1,
         "printed_page": "A[1]",
         "section": "Result#1",
         "figure_or_table": "Table|2",
     }
+    page = next(
+        item
+        for item in _records(entries, "parsed-page")
+        if item["paper_id"] == evidence["paper_id"]
+    )
+    page["text"] = (
+        "line # one\nline > two\n"
+        "A matched control was used for the fabricated procedure."
+    )
+    boundary = _records(entries, "review-queue")[0]
+    boundary["locator"] = " page`one``two "
 
     rendered = QuestionReadingViewService(entries).render(mapping["question_id"]).decode("utf-8")
 
@@ -228,7 +239,7 @@ def test_inline_and_multiline_markdown_are_escaped_without_changing_line_order()
     assert "> line \\# one\n> line \\> two" in rendered
     assert "- Locator: ```  page`one``two  ```" in rendered
     assert (
-        "PDF Page: 3; Printed Page: A\\[1\\]; Section: Result\\#1; Figure/Table: Table\\|2"
+        "PDF Page: 1; Printed Page: A\\[1\\]; Section: Result\\#1; Figure/Table: Table\\|2"
         in rendered
     )
     assert "\r" not in rendered

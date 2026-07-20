@@ -60,6 +60,37 @@ def test_parse_failure_records_failure_event_without_replacing_output(tmp_path: 
     assert read_process_events(layout.process_events_path)[-1]["result"] == "failure"
 
 
+def test_parse_service_rejects_adapter_that_returns_no_pages(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = layout.source_roots["alpha-sources"] / "empty-adapter.txt"
+    source.write_text("Invented source.\n", encoding="utf-8", newline="\n")
+    paper, _ = RegistryService(layout).add(
+        root_id="alpha-sources",
+        relative_path=source.name,
+        metadata={},
+    )
+
+    class EmptyAdapter:
+        name = "empty-adapter"
+        version = "1.0"
+
+        def parse(
+            self,
+            source_path: Path,
+            *,
+            paper_id: str,
+            parse_run_id: str,
+        ) -> list[dict[str, object]]:
+            return []
+
+    with pytest.raises(ResearchKBError) as caught:
+        ParseService(layout).run(paper_id=paper["paper_id"], adapter=EmptyAdapter())
+
+    assert caught.value.diagnostic.code == "RKBC-029"
+    assert not layout.parse_path(paper["paper_id"]).exists()
+    assert read_process_events(layout.process_events_path)[-1]["result"] == "failure"
+
+
 def test_parse_source_change_at_commit_requires_manual_resolution(tmp_path: Path, monkeypatch) -> None:
     layout = make_runtime_workspace(tmp_path)
     source = layout.source_roots["alpha-sources"] / "study.txt"

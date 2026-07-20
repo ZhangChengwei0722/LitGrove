@@ -8,6 +8,7 @@ from research_kb.bundle import load_workspace_entries, records_of_kind, validate
 from research_kb.contracts.validator import validate_record
 from research_kb.errors import (
     DUPLICATE_PAPER_CARD,
+    GROUNDING_MISMATCH,
     INVALID_AUTHORITY,
     SCHEMA_VALIDATION_FAILED,
     UNRESOLVED_REFERENCE,
@@ -159,7 +160,7 @@ class RecordService:
             proposed = [*read_jsonl(target, record_kind="review-queue", id_field="queue_id"), record]
         self._validate_candidate(request.record_kind, record, actor)
         record["automation_status"] = "passed_auto_checks"
-        return self._promote_store(request, actor, target, proposed, record)
+        return self._promote_store(request, actor, target, proposed, record, paper)
 
     def _replace(
         self,
@@ -210,7 +211,7 @@ class RecordService:
             target = self.layout.review_queue_path
             store = read_jsonl(target, record_kind="review-queue", id_field="queue_id")
             proposed = [updated if item["queue_id"] == request.target_record_id else item for item in store]
-        return self._promote_store(request, actor, target, proposed, updated)
+        return self._promote_store(request, actor, target, proposed, updated, paper)
 
     def _promote_store(
         self,
@@ -219,12 +220,37 @@ class RecordService:
         target: Path,
         proposed: list[dict[str, Any]],
         record: dict[str, Any],
+        paper: dict[str, Any],
     ) -> tuple[dict[str, Any], TransactionResult]:
+        validate_source_stability: Callable[[], None] | None = None
+        if request.record_kind == "evidence":
+            _, source = self.layout.resolve_source(
+                paper["source_ref"]["root_id"],
+                paper["source_ref"]["relative_path"],
+            )
+            expected_hash = paper["source_fingerprint"]["value"]
+
+            def validate_source_stability() -> None:
+                if file_sha256(source) != expected_hash:
+                    raise ResearchKBError(
+                        Diagnostic(
+                            GROUNDING_MISMATCH,
+                            "evidence",
+                            self._record_id(request.record_kind, record),
+                            "/source_fingerprint",
+                            "registered source fingerprint is stale during Evidence promotion",
+                        )
+                    )
+
+            validate_source_stability()
+
         target_before = file_sha256(target)
         content = serialize_json(record) if request.record_kind == "paper-card" else serialize_jsonl(proposed)
         output_id = self._record_id(request.record_kind, record)
 
         def validate_temp(path: Path) -> None:
+            if validate_source_stability is not None:
+                validate_source_stability()
             if request.record_kind == "paper-card":
                 from research_kb.storage.json_io import read_json_document
 
@@ -251,6 +277,7 @@ class RecordService:
             input_refs=input_refs,
             output_refs=[output_id],
             validator=validate_temp,
+            post_replace_validator=validate_source_stability,
             expected_before_sha256=target_before,
         )
         return record, result

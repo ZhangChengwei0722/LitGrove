@@ -15,9 +15,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+pdf = [
+  "pdfplumber>=0.11.9,<0.12",
+]
 test = [
   "build>=1.2,<2",
   "pytest>=8.3,<10",
+  "reportlab>=4.2,<5",
 ]
 
 [project.scripts]

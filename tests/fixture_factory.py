@@ -50,8 +50,17 @@ def make_bundle(domain: str) -> dict[str, Any]:
         _paper(ids["paper_2"], f"{domain}/study-two.txt", fingerprint_2, ids["paper_1"], domain, 2),
     ]
     pages = [
-        _page(ids["paper_1"], ids["event"], f"Synthetic {domain} observation one."),
-        _page(ids["paper_2"], ids["event"], f"Synthetic {domain} observation two."),
+        _page(
+            ids["paper_1"],
+            ids["event"],
+            "Primary response was higher in the fabricated comparison.\n"
+            "A matched control was used for the fabricated procedure.",
+        ),
+        _page(
+            ids["paper_2"],
+            ids["event"],
+            "The fabricated response followed the same direction.",
+        ),
     ]
     evidence = [
         _evidence(ids["evidence_1"], ids["paper_1"], "The synthetic intervention changed the primary response.", "Primary response was higher in the fabricated comparison.", fingerprint_1),
