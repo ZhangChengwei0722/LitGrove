@@ -49,6 +49,6 @@ Reuse current records on rerun. Do not append a candidate when an exact existing
 
 Do not parse workspace or domain-profile configuration. Do not read canonical JSON or JSONL files directly. Do not allocate IDs, write canonical stores, call an LLM API, move source files or infer success from file presence.
 
-Review Memory is background-only and cannot become canonical Evidence, Question Mapping support or Step 7 support. Subtype-specific review schemas, Field Map integration, Review Unit Question Mapping and Step 7 are not implemented. Discovery, acquisition, OCR, figure or table interpretation, supplementary-data processing, manuscript audit and migration are outside this Skill.
+Review Memory is background-only and cannot become canonical Evidence, Question Mapping support or Step 7 support. Subtype-specific review schemas, Field Map integration and Review Unit Question Mapping are not implemented. Core exposes a deterministic Step 7 persistence/read/render runtime, but this Skill version does not invoke it or generate Step 7 candidates. Discovery, acquisition, OCR, figure or table interpretation, supplementary-data processing, manuscript audit and migration are outside this Skill.
 
 Never assign `human_checked`, `verified`, final screening or source-disposition authority. Review queue records are boundaries, not evidence.

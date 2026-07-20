@@ -192,4 +192,5 @@ def test_two_domains_run_same_core_from_intake_to_guardian(tmp_path: Path, domai
     )
     assert (layout.knowledge_root / "questions").is_dir()
     assert not layout.question_mappings_path.exists()
-    assert not (layout.knowledge_root / "step7").exists()
+    assert (layout.knowledge_root / "step7").is_dir()
+    assert not any((layout.knowledge_root / "step7").iterdir())

@@ -31,8 +31,10 @@ Milestone 1B implements this deterministic storage lifecycle. M3A-0A adds explic
 13. `paper status` projects deterministic stage, freshness, Guardian and transaction safety facts without scientific content or a resume decision.
 14. `question list/show` retrieves deterministic structured mappings without writing a reading view, report, event, or journal.
 15. `question render` validates one mapping and emits its complete Markdown reading view to stdout without persisting the view or changing structured state.
-16. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
-17. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
+16. A Step 7 `record promote` request selects grounded/revised Card Units already admitted by one current Question Mapping. Core derives exact Evidence and Unit-boundary closure before atomic promotion.
+17. `step7 context` returns only one question's complete candidates plus deterministic current/stale projections; `step7 render` emits the corresponding non-canonical Markdown reading view to stdout.
+18. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
+19. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
 
 Every workspace-bound runtime command uses the same semantic validator and requires a matching workspace marker. `capability show` is the sole workspace-independent product command in this slice. No command accepts a raw `knowledge_root` override or a source-write operation. `local_inbox` remains user-owned and is never created or scanned by bootstrap.
 
@@ -59,7 +61,7 @@ Question origins are explicit mutation context:
 
 - Bootstrap performs a complete read-only preflight before creating its lock scaffold, then repeats mutation-sensitive checks while holding the workspace lock.
 - A conflicting marker, unknown managed content, incomplete transaction, unsafe path type, or invalid markerless bundle blocks initialization without rewriting canonical records.
-- An exact `m2b-1` marker requires `workspace init`; runtime commands never write through an old layout.
+- An exact `m3a-2a` marker requires `workspace init`; runtime commands never write through an old layout.
 - Validation failure preserves the previous target bytes.
 - A pre-replacement failure records a failure event when possible.
 - Source-dependent services recheck source stability after replacement and before emitting success.
@@ -75,9 +77,9 @@ Question origins are explicit mutation context:
 
 Structured JSON/YAML/JSONL records are inputs. Markdown views are one-way renders and cannot be used to rewrite structured facts.
 
-M2B-2 renders exactly one stdout-only Question Reading View. It includes selected Paper Card Units, mapped canonical evidence, non-evidence review queue boundaries, and current freshness diagnostics. It creates no Markdown file or view store.
+M2B-2 renders exactly one stdout-only Question Reading View. M3B-1 adds a separate stdout-only Step 7 Reading View grouped by candidate type. Both are built from validated structured records, label queue references as non-evidence, and create no Markdown file or view store.
 
-Evidence matrices, relations, gap maps, contradictions, persisted Question Layer Markdown, and Step 7 output remain outside the implemented runtime.
+Evidence matrices, relations, gap maps, contradictions, persisted Question Layer Markdown, persisted Step 7 Markdown and additional derived views remain outside the implemented runtime.
 
 ## Skill-Facing Read And Handoff Boundary
 
@@ -95,7 +97,20 @@ The repo-owned `research-kb` Skill accepts an existing workspace config and abso
 
 The Skill maintains no checkpoint. Reruns recover state through `intake inspect`, `paper status` and `paper context`; exact existing records are reused, while stale state, ambiguous sources and uncertain near-duplicates stop. Paper-local unsupported-PDF or document-type failures may be isolated, but workspace/transaction integrity failures stop the batch.
 
-Document classification and the final report remain local to the active task. Supported high-confidence reviews use the common Review Memory route; ambiguous, mixed and unsupported types stop before mutation. Subtype-specific review schemas, Field Map integration, Review Unit Question Mapping, Step 7, discovery, acquisition, OCR, migration and workspace-config generation are not implemented.
+Document classification and the final report remain local to the active task. Supported high-confidence reviews use the common Review Memory route; ambiguous, mixed and unsupported types stop before mutation. Core now exposes deterministic Step 7 persistence/read/render, but this Skill version does not generate or refresh Step 7 candidates. Subtype-specific review schemas, Field Map integration, Review Unit Question Mapping, discovery, acquisition, OCR, migration and workspace-config generation are not implemented.
+
+## Step 7 Candidate Flow
+
+```text
+current Question Mapping
+-> selected grounded/revised Card Units
+-> Agent semantic candidate
+-> Core-derived Evidence and Unit-boundary closure
+-> append/replace in one Step 7 JSONL store
+-> context / stdout render / Guardian
+```
+
+Step 7 cannot create a question. The request uses `paper_id: null` and `question_origin: existing_question`; callers must not submit candidate IDs, evidence/queue closure, snapshots or status constants. Synthesis spans at least two papers. Cross-View sources are same-question, current and admissible. Upstream drift leaves a valid candidate readable as `stale_upstream`; structural corruption still blocks the bundle. Candidate generation, duplicate judgment, scientific quality assessment and refresh decisions remain Agent work outside this Skill release.
 
 ## Review Memory Flow
 

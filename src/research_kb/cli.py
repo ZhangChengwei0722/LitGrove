@@ -39,6 +39,8 @@ from research_kb.services.paper_status import PaperStatusService
 from research_kb.services.paper_context import PaperContextService
 from research_kb.services.review_context import ReviewContextService
 from research_kb.services.question_view import QuestionReadingViewService
+from research_kb.services.step7_context import Step7ContextService
+from research_kb.services.step7_view import Step7ReadingViewService
 from research_kb.services.registry import RegistryService
 from research_kb.services.parse import ParseService
 from research_kb.services.bootstrap import WorkspaceBootstrapService
@@ -57,6 +59,10 @@ ID_FIELDS = {
     "process-event": "event_id",
     "guardian-report": "guardian_report_id",
     "question-mapping": "question_id",
+    "step7-synthesis": "candidate_id",
+    "step7-review-angle": "candidate_id",
+    "step7-insight": "candidate_id",
+    "step7-cross-view": "candidate_id",
 }
 REGISTRY_METADATA_STDIN_LIMIT = 64 * 1024
 MUTATION_REQUEST_STDIN_LIMIT = 4 * 1024 * 1024
@@ -168,6 +174,15 @@ def build_parser() -> argparse.ArgumentParser:
     question_render.add_argument("--workspace", required=True, type=Path)
     question_render.add_argument("--question-id", required=True)
 
+    step7 = commands.add_parser("step7", help="inspect persisted Step 7 candidates")
+    step7_commands = step7.add_subparsers(dest="step7_command", required=True)
+    step7_context = step7_commands.add_parser("context", help="emit one question's Step 7 candidate context")
+    step7_context.add_argument("--workspace", required=True, type=Path)
+    step7_context.add_argument("--question-id", required=True)
+    step7_render = step7_commands.add_parser("render", help="render one Step 7 reading view")
+    step7_render.add_argument("--workspace", required=True, type=Path)
+    step7_render.add_argument("--question-id", required=True)
+
     transaction = commands.add_parser("transaction", help="inspect or recover interrupted writes")
     transaction_commands = transaction.add_subparsers(dest="transaction_command", required=True)
     recover = transaction_commands.add_parser("recover", help="recover transaction journals by digest")
@@ -221,6 +236,10 @@ def main(
             return _question_show(args)
         if args.command == "question" and args.question_command == "render":
             return _question_render(args)
+        if args.command == "step7" and args.step7_command == "context":
+            return _step7_context(args)
+        if args.command == "step7" and args.step7_command == "render":
+            return _step7_render(args)
         if args.command == "transaction" and args.transaction_command == "recover":
             return _transaction_recover(args)
     except ResearchKBError as error:
@@ -514,6 +533,20 @@ def _question_render(args: argparse.Namespace) -> int:
     return 0
 
 
+def _step7_context(args: argparse.Namespace) -> int:
+    layout = WorkspaceLayout.load(args.workspace)
+    _write_json_once(Step7ContextService(layout).show(question_id=args.question_id))
+    return 0
+
+
+def _step7_render(args: argparse.Namespace) -> int:
+    layout = WorkspaceLayout.load(args.workspace)
+    entries = load_workspace_entries(layout)
+    content = Step7ReadingViewService(entries).render(args.question_id)
+    _write_bytes_once(content)
+    return 0
+
+
 def _record_id(kind: str, record: dict[str, Any]) -> str:
     id_field = {
         "registry-paper": "paper_id",
@@ -522,6 +555,10 @@ def _record_id(kind: str, record: dict[str, Any]) -> str:
         "review-queue": "queue_id",
         "review-memory": "review_memory_id",
         "question-mapping": "question_id",
+        "step7-synthesis": "candidate_id",
+        "step7-review-angle": "candidate_id",
+        "step7-insight": "candidate_id",
+        "step7-cross-view": "candidate_id",
     }[kind]
     return record[id_field]
 

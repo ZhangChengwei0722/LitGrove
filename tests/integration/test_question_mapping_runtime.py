@@ -146,4 +146,5 @@ def test_two_domains_promote_and_read_question_mappings_without_source_changes(
         for path in next(iter(layout.source_roots.values())).glob("*.txt")
     } == source_hashes
     assert not (layout.knowledge_root / "views").exists()
-    assert not (layout.knowledge_root / "step7").exists()
+    assert (layout.knowledge_root / "step7").is_dir()
+    assert not any((layout.knowledge_root / "step7").iterdir())

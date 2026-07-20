@@ -8,7 +8,7 @@ Shared Core + CLI
 -> Separate private workspaces
 ```
 
-Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, Guardian checks, real-PDF page extraction, and bounded stdout read surfaces. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Persisted and additional derived views remain deferred after M2B-2.
+Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, Guardian checks, real-PDF page extraction, Step 7 candidate persistence, and bounded stdout read surfaces. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Persisted Markdown and additional derived views remain deferred.
 
 ## Knowledge Flow
 
@@ -16,6 +16,7 @@ Core owns deterministic contracts, validation, path and ID handling, structured 
 Source Intake -> Registry -> Parse
 -> Primary route: Paper Card Core -> Evidence Grounding -> Question Mapping
 -> Review route: background-only Review Memory
+-> Candidate thinking route: mapped grounded Card Units -> Step 7 structured candidates
 -> Guardian / Feedback
 ```
 
@@ -89,7 +90,7 @@ The Agent supplies the semantic selection, role, and rationale. Core owns `quest
 
 `questions/mappings.jsonl` is canonical organizational state, not canonical scientific evidence. It points back to Paper Card Units and canonical evidence rather than duplicating their scientific content. Guardian warns with `RKBC-014` when linked Card, evidence, or queue records are newer than a mapping; it never refreshes the mapping automatically.
 
-New workspaces initialize at layout `m3a-2a`. Exact `m2b-1` predecessors are runtime-blocked with `RKBC-027` and can be upgraded only through `workspace init`. The current upgrade creates empty `review_memories/by_paper/` directories and replaces operational marker metadata; it rewrites no canonical record and creates no empty record, process event or journal.
+New workspaces initialize at layout `m3b-1`. Exact `m3a-2a` predecessors are runtime-blocked with `RKBC-027` and can be upgraded only through `workspace init`. The current upgrade creates an empty `step7/` directory and replaces operational marker metadata; it rewrites no canonical record and creates no empty JSONL store, process event or journal.
 
 ## M2B-2 Question Reading View Boundary
 
@@ -196,3 +197,19 @@ Review Memory and Review Unit IDs are generic record references for transactions
 `review context 1.0` is separate from `paper context 1.0`. It returns the complete selected memory, bounded freshness and transient exact local DOI matches. A stale parse produces `RKBC-014` warning and never rebinds old provenance; broken provenance against the current snapshot is an error.
 
 The Portable Skill adds one review route and no second deterministic implementation. Subtype-specific schemas, Field Map integration, Review Unit Question Mapping, Step 7, discovery and acquisition remain outside M3A-2A.
+
+## M3B-1 Deterministic Step 7 Candidate Runtime
+
+```text
+current Question Mapping + selected grounded/revised Card Units
+-> Agent semantic candidate
+-> Core-derived Evidence and Unit-boundary closure
+-> one type-specific Step 7 JSONL store
+-> context / stdout Markdown / Guardian freshness
+```
+
+Four type-specific stores live under `step7/`: synthesis, review angle, insight and cross-view. `Step7CandidateService` accepts append or complete semantic replace through `record promote`. It owns candidate identity, type, exact `evidence_base`, `review_queue_refs`, `input_snapshot`, timestamps and fixed candidate-only status constants. A candidate cannot create a question, select Units outside the current mapping, use non-factual Units, accept caller-owned closure fields or use Review Memory as support.
+
+The transaction validator reloads the current relevant mapping, Cards, Evidence, queue records and Cross-View sources while holding the workspace lock. Process events and journals contain IDs, never candidate scientific text. Cross-View sources must be current, same-question and non-rejected at promotion time.
+
+Valid upstream changes do not corrupt an older candidate. `candidate_freshness` projects `current` or `stale_upstream` with stable reasons; Guardian emits `RKBC-014` without rewriting. Missing IDs, impossible ownership, unexplained closure mismatches and cross-question references remain errors. `step7 context` is the structured recovery surface; `step7 render` is a one-way, non-canonical UTF-8/LF Markdown view on stdout. M3B-1 does not add Agent generation/refresh orchestration, Review Unit support, Field Map integration, persisted Markdown or an LLM inside Core.

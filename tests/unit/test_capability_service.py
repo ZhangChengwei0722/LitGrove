@@ -12,7 +12,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
         "core": {
             "version": "0.1.0",
             "contract_versions": ["1.0"],
-            "layout_versions": ["m3a-2a"],
+            "layout_versions": ["m3b-1"],
         },
         "parse_adapters": [
             {
@@ -35,6 +35,10 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "registry-paper",
             "review-memory",
             "review-queue",
+            "step7-cross-view",
+            "step7-insight",
+            "step7-review-angle",
+            "step7-synthesis",
         ],
         "read_commands": [
             "capability show",
@@ -47,12 +51,14 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "question render",
             "question show",
             "review context",
+            "step7 context",
+            "step7 render",
         ],
         "features": {
             "real_pdf_parse": True,
             "stdin_json_handoff": True,
             "review_runtime": True,
-            "step7_runtime": False,
+            "step7_runtime": True,
         },
     }
 

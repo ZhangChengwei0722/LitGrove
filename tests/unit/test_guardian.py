@@ -163,6 +163,15 @@ def test_guardian_reports_stale_question_mapping_without_rewriting_it(tmp_path: 
         ),
         actor="agent",
     )
+    unrelated = layout.source_roots["alpha-sources"] / "unrelated-after-stale.txt"
+    unrelated.write_text("Unrelated invented source.\n", encoding="utf-8", newline="\n")
+    registered, _ = RegistryService(layout).add(
+        root_id="alpha-sources",
+        relative_path=unrelated.name,
+        metadata={"fixture_origin": "synthetic_from_scratch"},
+        actor="cli",
+    )
+    assert registered["paper_id"]
 
     result = GuardianService(layout).check()
 
@@ -272,6 +281,79 @@ def test_guardian_reports_stale_review_memory_as_warning_without_rewrite(tmp_pat
     assert result.report["status"] == "warning"
     finding = next(item for item in result.report["findings"] if item["code"] == "RKBC-014")
     assert finding["record_ref"] == memory["review_memory_id"]
+    assert target.read_bytes() == before
+
+
+def test_guardian_reports_stale_step7_candidate_without_rewriting_it(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    prepared = _prepare_paper(layout, "step7-staleness.txt")
+    mapping, _ = QuestionMappingService(layout).promote(
+        _append_request([_link(prepared)]),
+        actor="agent",
+    )
+    candidate, _ = RecordService(layout).promote(
+        MutationRequest(
+            operation="append",
+            record_kind="step7-insight",
+            target_record_id=None,
+            paper_id=None,
+            question_origin="existing_question",
+            payload={
+                "question_id": mapping["question_id"],
+                "title": "Synthetic stale-candidate check",
+                "candidate_status": "keep",
+                "analysis_operator": "experiment_design",
+                "paper_card_base": [
+                    {
+                        "paper_id": prepared["paper"]["paper_id"],
+                        "card_unit_ids": [prepared["grounded_unit"]["unit_id"]],
+                    }
+                ],
+                "missing_evidence": ["One independent fabricated observation"],
+                "assumptions": ["The synthetic record remains comparable"],
+                "risk": ["The fixture represents one setting"],
+                "testability": "Add one fabricated observation.",
+                "next_action": "Refresh only after upstream review.",
+                "trace_status": "traceable",
+                "insight_type": "experimental_idea",
+                "hypothesis_or_idea": "One added control may narrow the synthetic interpretation.",
+                "rationale": "The selected Card Unit retains one explicit boundary.",
+                "falsification_condition": "The added control leaves interpretation unchanged.",
+                "minimum_test": "Add one fabricated control arm.",
+            },
+            fixture_origin="synthetic_from_scratch",
+        ),
+        actor="agent",
+    )
+    target = layout.step7_store_path("step7-insight")
+    before = target.read_bytes()
+    RecordService(layout).promote(
+        MutationRequest(
+            operation="replace",
+            record_kind="evidence",
+            target_record_id=prepared["evidence"]["evidence_id"],
+            paper_id=prepared["paper"]["paper_id"],
+            payload={"claim": "The revised fabricated response remains bounded."},
+        ),
+        actor="agent",
+    )
+    unrelated = layout.source_roots["alpha-sources"] / "unrelated-step7-stale.txt"
+    unrelated.write_text("Unrelated invented source.\n", encoding="utf-8", newline="\n")
+    registered, _ = RegistryService(layout).add(
+        root_id="alpha-sources",
+        relative_path=unrelated.name,
+        metadata={"fixture_origin": "synthetic_from_scratch"},
+        actor="cli",
+    )
+    assert registered["paper_id"]
+
+    result = GuardianService(layout).check()
+
+    assert result.report["status"] == "warning"
+    finding = next(item for item in result.report["findings"] if item["record_ref"] == candidate["candidate_id"])
+    assert finding["code"] == "RKBC-014"
+    assert "evidence_newer" in finding["message"]
+    assert "do not rewrite it automatically" in finding["remediation"]
     assert target.read_bytes() == before
 
 

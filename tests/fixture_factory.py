@@ -106,7 +106,7 @@ def make_bundle(domain: str) -> dict[str, Any]:
     synthesis = _step7_common(
         ids["synthesis"], "synthesis", ids["question_1"],
         [{"paper_id": ids["paper_1"], "card_unit_ids": [ids["unit_1"]]}, {"paper_id": ids["paper_2"], "card_unit_ids": [ids["unit_6"]]}],
-        [ids["evidence_1"], ids["evidence_3"]], [ids["queue_1"]], "aggregate",
+        [ids["evidence_1"], ids["evidence_3"]], [], "aggregate",
     )
     synthesis.update({
         "claim": "Both synthetic studies report a response in the same direction.",
@@ -118,7 +118,7 @@ def make_bundle(domain: str) -> dict[str, Any]:
     angle = _step7_common(
         ids["angle"], "review_angle", ids["question_1"],
         [{"paper_id": ids["paper_1"], "card_unit_ids": [ids["unit_1"]]}, {"paper_id": ids["paper_2"], "card_unit_ids": [ids["unit_6"]]}],
-        [ids["evidence_1"], ids["evidence_3"]], [ids["queue_1"]], "compare",
+        [ids["evidence_1"], ids["evidence_3"]], [], "compare",
     )
     angle.update({
         "thesis": "Organize the synthetic studies by response comparability and control completeness.",
@@ -130,7 +130,7 @@ def make_bundle(domain: str) -> dict[str, Any]:
     insight = _step7_common(
         ids["insight"], "insight", ids["question_2"],
         [{"paper_id": ids["paper_1"], "card_unit_ids": [ids["unit_2"]]}],
-        [ids["evidence_2"]], [ids["queue_3"]], "experiment_design",
+        [ids["evidence_2"]], [], "experiment_design",
     )
     insight.update({
         "insight_type": "experimental_idea",
@@ -142,7 +142,7 @@ def make_bundle(domain: str) -> dict[str, Any]:
     crossview = _step7_common(
         ids["crossview"], "cross_view", ids["question_1"],
         [{"paper_id": ids["paper_1"], "card_unit_ids": [ids["unit_1"]]}, {"paper_id": ids["paper_2"], "card_unit_ids": [ids["unit_6"]]}],
-        [ids["evidence_1"], ids["evidence_3"]], [ids["queue_1"]], "contrast",
+        [ids["evidence_1"], ids["evidence_3"]], [], "contrast",
     )
     crossview.update({
         "source_views": [ids["synthesis"], ids["angle"]],

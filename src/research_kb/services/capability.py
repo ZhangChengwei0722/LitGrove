@@ -51,6 +51,10 @@ class CapabilityService:
                     "review-queue",
                     "review-memory",
                     "question-mapping",
+                    "step7-synthesis",
+                    "step7-review-angle",
+                    "step7-insight",
+                    "step7-cross-view",
                 )
             ),
             "read_commands": sorted(
@@ -65,13 +69,15 @@ class CapabilityService:
                     "question show",
                     "question render",
                     "review context",
+                    "step7 context",
+                    "step7 render",
                 )
             ),
             "features": {
                 "real_pdf_parse": True,
                 "stdin_json_handoff": True,
                 "review_runtime": True,
-                "step7_runtime": False,
+                "step7_runtime": True,
             },
         }
 

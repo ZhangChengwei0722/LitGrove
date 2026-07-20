@@ -18,6 +18,7 @@ from research_kb.identifiers import Namespace, allocate_id
 from research_kb.process_events import timestamp
 from research_kb.review_memory_provenance import build_active_parse_index, review_memory_freshness
 from research_kb.services.question_mapping import mapping_freshness_diagnostics
+from research_kb.step7_support import STEP7_RECORD_KINDS, candidate_freshness
 from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl, serialize_jsonl
 from research_kb.storage.transactions import TransactionManager, TransactionResult, build_journal_event
 from research_kb.workspace import WorkspaceLayout
@@ -63,6 +64,10 @@ class GuardianService:
                     "review-memory", mapping, actor="stored"
                 ):
                     diagnostics.extend(review_memory_freshness_diagnostics(mapping, entries))
+                elif kind in STEP7_RECORD_KINDS and not validate_record(
+                    kind, mapping, actor="stored"
+                ):
+                    diagnostics.extend(step7_freshness_diagnostics(kind, mapping, entries))
         diagnostics.extend(self._canonical_path_diagnostics())
         process_events = [record for kind, record in entries if kind == "process-event"]
         diagnostics.extend(self._transaction_diagnostics(process_events))
@@ -118,6 +123,7 @@ class GuardianService:
             self.layout.process_events_path,
             self.layout.guardian_reports_path,
             self.layout.question_mappings_path,
+            *(self.layout.step7_store_path(kind) for kind in STEP7_RECORD_KINDS),
         ]
         for directory, pattern in (
             (self.layout.knowledge_root / "parse" / "by_paper", "*.pages.jsonl"),
@@ -252,6 +258,27 @@ def review_memory_freshness_diagnostics(
     ]
 
 
+def step7_freshness_diagnostics(
+    kind: str,
+    candidate: dict[str, Any],
+    entries: list[BundleEntry],
+) -> list[Diagnostic]:
+    freshness = candidate_freshness(candidate, entries)
+    if freshness["state"] == "current":
+        return []
+    return [
+        Diagnostic(
+            SNAPSHOT_MISMATCH,
+            kind,
+            candidate["candidate_id"],
+            "/input_snapshot",
+            "Step 7 candidate is stale relative to upstream records: "
+            + ", ".join(freshness["reasons"]),
+            severity="warning",
+        )
+    ]
+
+
 def _finding_from_diagnostic(diagnostic: Diagnostic, defined_ids: set[str]) -> dict[str, Any]:
     remediation = {
         GROUNDING_MISMATCH: "Restore the registered source or correct parsed-page and Evidence provenance against the current source.",
@@ -261,6 +288,8 @@ def _finding_from_diagnostic(diagnostic: Diagnostic, defined_ids: set[str]) -> d
     }.get(diagnostic.code, "Inspect the referenced structured record and correct the reported contract violation.")
     if diagnostic.code == SNAPSHOT_MISMATCH and diagnostic.record_kind == "review-memory":
         remediation = "Reread the current parse and explicitly refresh the AI-owned Review Memory; do not rebind old source notes."
+    elif diagnostic.code == SNAPSHOT_MISMATCH and diagnostic.record_kind in STEP7_RECORD_KINDS:
+        remediation = "Refresh the candidate from the current Question Mapping and selected grounded Card Units; do not rewrite it automatically."
     return {
         "code": diagnostic.code,
         "severity": diagnostic.severity,

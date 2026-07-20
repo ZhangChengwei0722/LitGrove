@@ -9,6 +9,9 @@ from research_kb.services.parse_read import ParseReadService
 from research_kb.services.paper_context import PaperContextService
 from research_kb.services.review_context import ReviewContextService
 from research_kb.services.review_memory import ReviewMemoryService
+from research_kb.services.step7_candidate import Step7CandidateService
+from research_kb.services.step7_context import Step7ContextService
+from research_kb.services.step7_view import Step7ReadingViewService
 from research_kb.services.question_mapping import QuestionMappingService
 from research_kb.services.question_view import QuestionReadingViewService
 from research_kb.services.records import RecordService
@@ -24,6 +27,9 @@ __all__ = [
     "PaperContextService",
     "ReviewContextService",
     "ReviewMemoryService",
+    "Step7CandidateService",
+    "Step7ContextService",
+    "Step7ReadingViewService",
     "QuestionMappingService",
     "QuestionReadingViewService",
     "RecordService",

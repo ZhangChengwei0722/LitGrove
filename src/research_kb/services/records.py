@@ -32,6 +32,10 @@ SUPPORTED_KINDS = {
     "review-queue",
     "review-memory",
     "question-mapping",
+    "step7-synthesis",
+    "step7-review-angle",
+    "step7-insight",
+    "step7-cross-view",
 }
 HUMAN_REVIEW_STATES = {"human_checked", "verified"}
 COMMON_OWNED_FIELDS = {"schema_version", "automation_status", "created_at", "updated_at", "paper_id"}
@@ -80,6 +84,14 @@ class RecordService:
             from research_kb.services.review_memory import ReviewMemoryService
 
             return ReviewMemoryService(
+                self.layout,
+                transaction_manager=self.transactions,
+                id_allocator=self.id_allocator,
+            ).promote(request, actor=actor)
+        if request.record_kind.startswith("step7-"):
+            from research_kb.services.step7_candidate import Step7CandidateService
+
+            return Step7CandidateService(
                 self.layout,
                 transaction_manager=self.transactions,
                 id_allocator=self.id_allocator,
@@ -358,7 +370,11 @@ class RecordService:
             raise ResearchKBError(
                 Diagnostic(SCHEMA_VALIDATION_FAILED, "mutation-request", None, "/target_record_id", "replace target is required")
             )
-        if request.record_kind != "question-mapping" and request.question_origin is not None:
+        if (
+            request.record_kind != "question-mapping"
+            and not request.record_kind.startswith("step7-")
+            and request.question_origin is not None
+        ):
             raise ResearchKBError(
                 Diagnostic(
                     SCHEMA_VALIDATION_FAILED,
