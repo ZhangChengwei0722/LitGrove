@@ -10,6 +10,7 @@ from typing import Any, Sequence
 import yaml
 
 from research_kb import __version__
+from research_kb.cli_input import read_bounded_json_object
 from research_kb.contracts.registry import SchemaRegistry
 from research_kb.bundle import load_workspace_entries, records_of_kind, validate_workspace_entries
 from research_kb.contracts.validator import validate_bundle, validate_record
@@ -27,18 +28,21 @@ from research_kb.errors import (
 )
 from research_kb.guardian import GuardianService
 from research_kb.identifiers import Namespace, validate_id
-from research_kb.mutation import load_mutation_request
+from research_kb.mutation import load_mutation_request, mutation_request_from_mapping
 from research_kb.parse.pdfplumber_adapter import PdfPlumberAdapter
 from research_kb.parse.synthetic_text import SyntheticTextAdapter
 from research_kb.privacy import scan_repository
 from research_kb.services.records import RecordService
+from research_kb.services.capability import CapabilityService
+from research_kb.services.parse_read import ParseReadService
+from research_kb.services.paper_status import PaperStatusService
 from research_kb.services.question_view import QuestionReadingViewService
 from research_kb.services.registry import RegistryService
 from research_kb.services.parse import ParseService
 from research_kb.services.bootstrap import WorkspaceBootstrapService
 from research_kb.services.compatibility import CompatibilityAdapterRegistry, CompatibilityInspectionService
 from research_kb.compatibility import LegacyReaderAdapter
-from research_kb.storage.json_io import read_jsonl
+from research_kb.storage.json_io import read_jsonl, serialize_json
 from research_kb.storage.transactions import MANUAL_RESOLUTION_ACTIONS, TransactionManager
 from research_kb.workspace import WorkspaceLayout
 
@@ -51,12 +55,18 @@ ID_FIELDS = {
     "guardian-report": "guardian_report_id",
     "question-mapping": "question_id",
 }
+REGISTRY_METADATA_STDIN_LIMIT = 64 * 1024
+MUTATION_REQUEST_STDIN_LIMIT = 4 * 1024 * 1024
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="research-kb")
     parser.add_argument("--version", action="version", version=f"research-kb {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
+
+    capability = commands.add_parser("capability", help="inspect installed deterministic capabilities")
+    capability_commands = capability.add_subparsers(dest="capability_command", required=True)
+    capability_commands.add_parser("show", help="emit the public capability report")
 
     workspace = commands.add_parser("workspace", help="initialize deterministic workspace layout")
     workspace_commands = workspace.add_subparsers(dest="workspace_command", required=True)
@@ -112,6 +122,16 @@ def build_parser() -> argparse.ArgumentParser:
     parse_run.add_argument("--workspace", required=True, type=Path)
     parse_run.add_argument("--paper-id", required=True)
     parse_run.add_argument("--adapter", choices=("synthetic-text", "pdfplumber"), required=True)
+    parse_show = parse_commands.add_parser("show", help="emit validated parsed-page records")
+    parse_show.add_argument("--workspace", required=True, type=Path)
+    parse_show.add_argument("--paper-id", required=True)
+    parse_show.add_argument("--page")
+
+    paper = commands.add_parser("paper", help="inspect one paper's deterministic pipeline state")
+    paper_commands = paper.add_subparsers(dest="paper_command", required=True)
+    paper_status = paper_commands.add_parser("status", help="emit one bounded paper status projection")
+    paper_status.add_argument("--workspace", required=True, type=Path)
+    paper_status.add_argument("--paper-id", required=True)
 
     guardian = commands.add_parser("guardian", help="check workspace integrity")
     guardian_commands = guardian.add_subparsers(dest="guardian_command", required=True)
@@ -147,6 +167,8 @@ def main(
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if args.command == "capability" and args.capability_command == "show":
+            return _capability_show(args)
         if args.command == "workspace" and args.workspace_command == "init":
             return _workspace_init(args)
         if args.command == "compatibility" and args.compatibility_command == "inspect":
@@ -163,6 +185,10 @@ def main(
             return _registry_add(args)
         if args.command == "parse" and args.parse_command == "run":
             return _parse_run(args)
+        if args.command == "parse" and args.parse_command == "show":
+            return _parse_show(args)
+        if args.command == "paper" and args.paper_command == "status":
+            return _paper_status(args)
         if args.command == "guardian" and args.guardian_command == "check":
             return _guardian_check(args)
         if args.command == "question" and args.question_command == "list":
@@ -201,6 +227,12 @@ def _workspace_init(args: argparse.Namespace) -> int:
     result = WorkspaceBootstrapService(args.workspace).run(dry_run=args.dry_run)
     _write_json(result.to_dict())
     return result.exit_code
+
+
+def _capability_show(args: argparse.Namespace) -> int:
+    del args
+    _write_json_once(CapabilityService().show())
+    return 0
 
 
 def _compatibility_inspect(
@@ -287,7 +319,17 @@ def _transaction_recover(args: argparse.Namespace) -> int:
 
 def _record_promote(args: argparse.Namespace) -> int:
     layout = WorkspaceLayout.load(args.workspace)
-    request = load_mutation_request(args.request)
+    request = (
+        mutation_request_from_mapping(
+            read_bounded_json_object(
+                sys.stdin.buffer,
+                limit=MUTATION_REQUEST_STDIN_LIMIT,
+                record_kind="mutation-request",
+            )
+        )
+        if args.request == Path("-")
+        else load_mutation_request(args.request)
+    )
     record, transaction = RecordService(layout).promote(request, actor=args.actor)
     _write_json({
         "status": "success",
@@ -301,7 +343,15 @@ def _record_promote(args: argparse.Namespace) -> int:
 
 def _registry_add(args: argparse.Namespace) -> int:
     layout = WorkspaceLayout.load(args.workspace)
-    metadata = _load_mapping(args.metadata)
+    metadata = (
+        read_bounded_json_object(
+            sys.stdin.buffer,
+            limit=REGISTRY_METADATA_STDIN_LIMIT,
+            record_kind="registry-metadata",
+        )
+        if args.metadata == Path("-")
+        else _load_mapping(args.metadata)
+    )
     paper, transaction = RegistryService(layout).add(
         root_id=args.root_id,
         relative_path=args.relative_path,
@@ -337,6 +387,20 @@ def _parse_run(args: argparse.Namespace) -> int:
         "pages": len(pages),
         "target": layout.target_relative_path(transaction.target),
     })
+    return 0
+
+
+def _parse_show(args: argparse.Namespace) -> int:
+    layout = WorkspaceLayout.load(args.workspace)
+    result = ParseReadService(layout).show(paper_id=args.paper_id, page=args.page)
+    _write_json_once(result)
+    return 0
+
+
+def _paper_status(args: argparse.Namespace) -> int:
+    layout = WorkspaceLayout.load(args.workspace)
+    result = PaperStatusService(layout).show(paper_id=args.paper_id)
+    _write_json_once(result)
     return 0
 
 
@@ -428,6 +492,10 @@ def _load_mapping(path: Path) -> dict[str, Any]:
 def _write_json(value: dict[str, Any], stream: Any | None = None) -> None:
     output = sys.stdout if stream is None else stream
     output.write(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+
+
+def _write_json_once(value: dict[str, Any], stream: Any | None = None) -> None:
+    _write_bytes_once(serialize_json(value), stream=stream)
 
 
 def _write_bytes_once(content: bytes, stream: Any | None = None) -> None:

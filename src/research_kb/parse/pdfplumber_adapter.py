@@ -74,6 +74,14 @@ class PdfPlumberAdapter:
         return pages
 
 
+def probe_pdfplumber_version() -> str:
+    _load_pdfplumber(None)
+    try:
+        return package_version("pdfplumber")
+    except PackageNotFoundError as error:
+        raise _unavailable_error(None) from error
+
+
 def _load_pdfplumber(paper_id: str | None) -> Any:
     try:
         return import_module("pdfplumber")

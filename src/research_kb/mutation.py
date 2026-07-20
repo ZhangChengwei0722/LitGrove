@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from research_kb.config.loader import load_config
+from research_kb.contracts.validator import validate_record
+from research_kb.errors import ResearchKBError
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,12 +23,20 @@ class MutationRequest:
 
 def load_mutation_request(path: Path) -> MutationRequest:
     data = load_config(path, "mutation-request").data
+    return mutation_request_from_mapping(data)
+
+
+def mutation_request_from_mapping(data: Mapping[str, Any]) -> MutationRequest:
+    value = dict(data)
+    diagnostics = validate_record("mutation-request", value)
+    if diagnostics:
+        raise ResearchKBError(diagnostics[0])
     return MutationRequest(
-        operation=data["operation"],
-        record_kind=data["record_kind"],
-        target_record_id=data["target_record_id"],
-        paper_id=data["context"]["paper_id"],
-        payload=data["payload"],
-        question_origin=data["context"].get("question_origin"),
-        fixture_origin=data.get("fixture_origin"),
+        operation=value["operation"],
+        record_kind=value["record_kind"],
+        target_record_id=value["target_record_id"],
+        paper_id=value["context"]["paper_id"],
+        payload=value["payload"],
+        question_origin=value["context"].get("question_origin"),
+        fixture_origin=value.get("fixture_origin"),
     )

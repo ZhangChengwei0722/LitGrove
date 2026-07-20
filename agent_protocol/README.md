@@ -12,6 +12,10 @@ Question roles and rationales are candidate interpretation, not evidence. If a C
 
 For M3A-0A, the Agent may explicitly request `parse run --adapter pdfplumber` when the optional PDF capability is installed. It must select Evidence quotes from the stored normalized page text and submit `page:<n>:char:<start>-<end>` locators that reproduce the quote exactly. It must not calculate offsets from a separate full-text copy, invent block boundaries for real PDFs, trigger OCR fallback, or treat figure/table interpretation as page-text evidence.
 
-`RKBC-028` means the local PDF extra is unavailable; `RKBC-029` means the selected PDF is unsupported by this text-only adapter. Both are stop boundaries for the current operation, not permission to bypass Core with a private parser. Review processing, document classification, parsed-content read commands, and the Portable Skill remain deferred.
+`RKBC-028` means the local PDF extra is unavailable; `RKBC-029` means the selected PDF is unsupported by this text-only adapter. Both are stop boundaries for the current operation, not permission to bypass Core with a private parser. Review processing, document classification, and the Portable Skill remain deferred.
+
+For M3A-0B, the Agent may inspect `capability show`, `paper status`, and `parse show`. Capability and status output are deterministic facts, not a semantic next-action instruction. The Agent may read private page text only from the explicit selected-paper parse output and must still submit exact page/locator/quote provenance through Core.
+
+The Agent may pipe one JSON object to `registry add --metadata -` or `record promote --request -`. It must not send YAML, exceed the published limits, create a parallel temporary-request convention, allocate IDs, bypass authority, or treat successful transport as scientific validation. The Portable Skill remains a later milestone.
 
 For M2B-2, the Agent may request `question render` as a disposable reading surface. It must not edit the Markdown back into JSONL, treat the generated view as canonical knowledge, or cite review queue boundaries as evidence. Corrections still go through the owning Registry, Paper Card, evidence, queue, or Question Mapping contract.

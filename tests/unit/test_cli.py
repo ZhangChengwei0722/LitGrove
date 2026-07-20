@@ -8,6 +8,9 @@ import yaml
 
 from research_kb.cli import _configure_standard_streams, _write_bytes_once, _write_json, main
 from research_kb.errors import Diagnostic
+from research_kb.parse.synthetic_text import SyntheticTextAdapter
+from research_kb.services.parse import ParseService
+from research_kb.services.registry import RegistryService
 from research_kb.services.records import RecordService
 from research_kb.storage.json_io import file_sha256, read_jsonl, serialize_json
 from research_kb.storage.transactions import TransactionManager
@@ -18,6 +21,14 @@ from tests.unit.test_question_mapping_service import _append_request, _link, _pr
 
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _tree_bytes(root: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
 
 
 @pytest.mark.parametrize(
@@ -52,6 +63,18 @@ def test_privacy_scan_cli(capsys) -> None:
     output = json.loads(capsys.readouterr().out)
     assert result == 0
     assert output["unexpected_findings"] == []
+
+
+def test_capability_show_cli_is_workspace_independent(capsys) -> None:
+    assert main(["capability", "show"]) == 0
+
+    captured = capsys.readouterr()
+    output = json.loads(captured.out)
+    assert captured.err == ""
+    assert output["status"] == "success"
+    assert output["interface_version"] == "1.0"
+    assert "paper status" in output["read_commands"]
+    assert output["features"]["review_runtime"] is False
 
 
 def test_utf8_output_does_not_inherit_legacy_code_page(monkeypatch) -> None:
@@ -250,6 +273,125 @@ def test_m1b_cli_runs_registry_parse_record_and_guardian(tmp_path, capsys) -> No
     assert guardian_output["report_written"] is True
 
 
+def test_cli_accepts_registry_metadata_and_mutation_request_from_stdin(
+    tmp_path,
+    capsys,
+    monkeypatch,
+) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = layout.source_roots["alpha-sources"] / "stdin-study.txt"
+    source.write_text("Invented stdin result.\n", encoding="utf-8", newline="\n")
+    metadata_stream = TextIOWrapper(
+        BytesIO(json.dumps({"fixture_origin": "synthetic_from_scratch"}).encode("utf-8")),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("sys.stdin", metadata_stream)
+
+    assert main([
+        "registry", "add", "--workspace", str(layout.config.path),
+        "--root-id", "alpha-sources", "--relative-path", source.name, "--metadata", "-",
+    ]) == 0
+    paper_id = json.loads(capsys.readouterr().out)["paper_id"]
+    assert main([
+        "parse", "run", "--workspace", str(layout.config.path),
+        "--paper-id", paper_id, "--adapter", "synthetic-text",
+    ]) == 0
+    capsys.readouterr()
+
+    request = {
+        "contract_version": "1.0",
+        "operation": "append",
+        "record_kind": "evidence",
+        "target_record_id": None,
+        "context": {"paper_id": paper_id},
+        "payload": {
+            "claim": "The invented stdin result was reported.",
+            "evidence_type": "reported_result",
+            "quote": "Invented stdin result.",
+            "source_page": {
+                "pdf_page": 1,
+                "printed_page": None,
+                "section": "Synthetic",
+                "figure_or_table": None,
+            },
+            "locator": "page:1:block:1",
+            "support_scope": "The invented stdin fixture only.",
+            "what_it_does_not_support": ["Other fixtures"],
+            "review_status": "ai_checked",
+            "fixture_origin": "synthetic_from_scratch",
+        },
+        "fixture_origin": "synthetic_from_scratch",
+    }
+    request_stream = TextIOWrapper(BytesIO(json.dumps(request).encode("utf-8")), encoding="utf-8")
+    monkeypatch.setattr("sys.stdin", request_stream)
+
+    assert main([
+        "record", "promote", "--workspace", str(layout.config.path),
+        "--request", "-", "--actor", "agent",
+    ]) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["record_kind"] == "evidence"
+    assert len(read_jsonl(layout.evidence_path(paper_id), record_kind="evidence")) == 1
+    assert not list(layout.knowledge_root.rglob("*.tmp"))
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [b"[]", b"\xff", b"{" + b" " * (64 * 1024) + b"}"],
+    ids=("array", "invalid-utf8", "oversized"),
+)
+def test_registry_stdin_failure_is_bounded_and_preserves_registry(
+    tmp_path,
+    capsys,
+    monkeypatch,
+    payload: bytes,
+) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = layout.source_roots["alpha-sources"] / "invalid-stdin.txt"
+    source.write_text("Invented input boundary.\n", encoding="utf-8", newline="\n")
+    stream = TextIOWrapper(BytesIO(payload), encoding="utf-8")
+    monkeypatch.setattr("sys.stdin", stream)
+
+    assert main([
+        "registry", "add", "--workspace", str(layout.config.path),
+        "--root-id", "alpha-sources", "--relative-path", source.name, "--metadata", "-",
+    ]) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err)["diagnostic"]["code"] in {"RKBC-002", "RKBC-030"}
+    assert read_jsonl(layout.registry_path, record_kind="registry-paper") == []
+    assert not list(layout.knowledge_root.rglob("*.tmp"))
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [b"[]", b"{" + b" " * (4 * 1024 * 1024) + b"}"],
+    ids=("array", "oversized"),
+)
+def test_mutation_stdin_failure_preserves_the_complete_workspace(
+    tmp_path,
+    capsys,
+    monkeypatch,
+    payload: bytes,
+) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    before = _tree_bytes(layout.knowledge_root)
+    stream = TextIOWrapper(BytesIO(payload), encoding="utf-8")
+    monkeypatch.setattr("sys.stdin", stream)
+
+    assert main([
+        "record", "promote", "--workspace", str(layout.config.path),
+        "--request", "-", "--actor", "agent",
+    ]) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err)["diagnostic"]["code"] in {"RKBC-002", "RKBC-030"}
+    assert _tree_bytes(layout.knowledge_root) == before
+    assert not list(layout.knowledge_root.rglob("*.tmp"))
+
+
 def test_parse_cli_dispatches_pdfplumber_and_reports_exact_identity(tmp_path, capsys) -> None:
     layout = make_runtime_workspace(tmp_path)
     source = write_synthetic_pdf(
@@ -327,6 +469,81 @@ def test_parse_cli_reports_unavailable_pdf_extra_without_target_write(tmp_path, 
     diagnostic = json.loads(capsys.readouterr().err)["diagnostic"]
     assert diagnostic["code"] == "RKBC-028"
     assert not layout.parse_path(paper_id).exists()
+
+
+def test_parse_show_cli_emits_all_or_one_page_without_writes(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = layout.source_roots["alpha-sources"] / "show-pages.txt"
+    source.write_text("Invented first page.\fInvented second page.", encoding="utf-8", newline="\n")
+    paper, _ = RegistryService(layout).add(
+        root_id="alpha-sources",
+        relative_path=source.name,
+        metadata={"fixture_origin": "synthetic_from_scratch"},
+    )
+    ParseService(layout).run(paper_id=paper["paper_id"], adapter=SyntheticTextAdapter())
+    before = _tree_bytes(layout.knowledge_root)
+
+    assert main([
+        "parse", "show", "--workspace", str(layout.config.path), "--paper-id", paper["paper_id"],
+    ]) == 0
+    full = json.loads(capsys.readouterr().out)
+    assert full["page_count"] == 2
+    assert full["returned_page_count"] == 2
+    assert main([
+        "parse", "show", "--workspace", str(layout.config.path), "--paper-id", paper["paper_id"], "--page", "2",
+    ]) == 0
+    selected = json.loads(capsys.readouterr().out)
+    assert [item["pdf_page"] for item in selected["pages"]] == [2]
+    assert _tree_bytes(layout.knowledge_root) == before
+
+
+def test_parse_show_cli_invalid_page_is_structured_failure(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+
+    assert main([
+        "parse", "show", "--workspace", str(layout.config.path),
+        "--paper-id", "paper_a1111111-1111-4111-8111-111111111111", "--page", "zero",
+    ]) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err)["diagnostic"]["code"] == "RKBC-002"
+
+
+def test_paper_status_cli_is_deterministic_bounded_and_read_only(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    prepared = _prepare_paper(layout, "status-cli.txt")
+    paper_id = prepared["paper"]["paper_id"]
+    before = _tree_bytes(layout.knowledge_root)
+    argv = ["paper", "status", "--workspace", str(layout.config.path), "--paper-id", paper_id]
+
+    assert main(argv) == 0
+    first = capsys.readouterr()
+    assert main(argv) == 0
+    second = capsys.readouterr()
+
+    output = json.loads(first.out)
+    assert first.err == second.err == ""
+    assert first.out == second.out
+    assert output["interface_version"] == "1.0"
+    assert output["paper_id"] == paper_id
+    assert output["paper_card"]["unit_count"] == 3
+    assert "Invented" not in first.out
+    assert str(tmp_path) not in first.out
+    assert _tree_bytes(layout.knowledge_root) == before
+
+
+def test_paper_status_cli_unknown_paper_has_empty_stdout(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+
+    assert main([
+        "paper", "status", "--workspace", str(layout.config.path),
+        "--paper-id", "paper_a1111111-1111-4111-8111-111111111111",
+    ]) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err)["diagnostic"]["code"] == "RKBC-005"
 
 
 def test_guardian_cli_returns_findings_exit_for_changed_source(tmp_path, capsys) -> None:
@@ -479,6 +696,8 @@ def test_question_render_missing_id_has_empty_stdout(tmp_path, capsys) -> None:
     "argv",
     [
         ["guardian", "check"],
+        ["paper", "status", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111"],
+        ["parse", "show", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111"],
         [
             "question",
             "render",
@@ -508,6 +727,8 @@ def test_runtime_cli_reports_old_layout_as_upgrade_required(tmp_path, capsys, ar
     [
         ["registry", "add", "--root-id", "alpha-sources", "--relative-path", "x.txt", "--metadata", "missing.json"],
         ["parse", "run", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111", "--adapter", "synthetic-text"],
+        ["parse", "show", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111"],
+        ["paper", "status", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111"],
         ["record", "promote", "--request", "missing.json", "--actor", "agent"],
         ["compatibility", "inspect", "--adapter", "missing-adapter"],
         ["guardian", "check"],

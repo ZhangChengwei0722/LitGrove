@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from research_kb.errors import ResearchKBError
-from research_kb.mutation import load_mutation_request
+from research_kb.mutation import load_mutation_request, mutation_request_from_mapping
 
 
 def test_mutation_request_loads_valid_candidate(tmp_path: Path) -> None:
@@ -20,6 +20,25 @@ def test_mutation_request_loads_valid_candidate(tmp_path: Path) -> None:
     request = load_mutation_request(path)
     assert request.record_kind == "evidence"
     assert request.paper_id.startswith("paper_")
+
+
+def test_mutation_request_mapping_uses_the_same_contract_validation() -> None:
+    request = mutation_request_from_mapping({
+        "contract_version": "1.0",
+        "operation": "append",
+        "record_kind": "evidence",
+        "target_record_id": None,
+        "context": {"paper_id": "paper_a1111111-1111-4111-8111-111111111111"},
+        "payload": {"claim": "Synthetic claim."},
+    })
+
+    assert request.record_kind == "evidence"
+    assert request.paper_id == "paper_a1111111-1111-4111-8111-111111111111"
+
+    with pytest.raises(ResearchKBError) as caught:
+        mutation_request_from_mapping({"contract_version": "1.0"})
+
+    assert caught.value.diagnostic.code == "RKBC-002"
 
 
 def test_replace_mutation_requires_target_id(tmp_path: Path) -> None:

@@ -75,6 +75,17 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Treat synthetic golden Markdown as reviewed output: author its source records from scratch, compare bytes exactly, and update it only for an approved contract change.
 - Rendering is read-only. Do not create a view file, cache, event, journal, report, lock, or layout directory.
 
+## Deterministic Read And Stdin Rules
+
+- Build each transient JSON read document completely before one UTF-8/LF stdout write.
+- Repeat unchanged reads and compare exact bytes; snapshot source and managed trees before and after.
+- Keep capability probing workspace-independent and distinguish implemented capability from optional dependency availability.
+- Keep paper status free of source paths, statements, claims, quotes, question text, rationales and semantic next actions.
+- Recheck source SHA-256 around parsed-page projection and return only the selected paper's stored records.
+- Read stdin as raw bytes with a command-specific limit plus one byte; never echo invalid payloads.
+- Accept stdin only for Registry metadata and mutation requests, and route successful objects through existing services.
+- Exercise base and `[pdf]` installed wheels so availability, stdin, parse reads and status do not depend on the editable tree.
+
 ## Platform Rules
 
 Tests must include Windows-shaped and POSIX-shaped paths independent of the host. Persisted relative paths always use `/`.
