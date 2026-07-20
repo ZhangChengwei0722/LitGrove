@@ -18,4 +18,6 @@ For M3A-0B, the Agent may inspect `capability show`, `paper status`, and `parse 
 
 The Agent may pipe one JSON object to `registry add --metadata -` or `record promote --request -`. It must not send YAML, exceed the published limits, create a parallel temporary-request convention, allocate IDs, bypass authority, or treat successful transport as scientific validation. The Portable Skill remains a later milestone.
 
+For M3A-0C, the Agent may call `paper context` for one explicitly selected paper to recover the stored Paper Card, canonical Evidence and review queue records. It may use returned Unit, Evidence and queue IDs for safe resume and approved Question Mapping, but must not treat queue records as evidence, infer a semantic next action from record presence, or read canonical workspace paths as a fallback. The output is private task context and must not be copied into shared fixtures or logs.
+
 For M2B-2, the Agent may request `question render` as a disposable reading surface. It must not edit the Markdown back into JSONL, treat the generated view as canonical knowledge, or cite review queue boundaries as evidence. Corrections still go through the owning Registry, Paper Card, evidence, queue, or Question Mapping contract.

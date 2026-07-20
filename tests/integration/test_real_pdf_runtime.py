@@ -13,6 +13,7 @@ from research_kb.parse.pdfplumber_adapter import PdfPlumberAdapter
 from research_kb.services.parse import ParseService
 from research_kb.services.parse_read import ParseReadService
 from research_kb.services.paper_status import PaperStatusService
+from research_kb.services.paper_context import PaperContextService
 from research_kb.services.question_mapping import QuestionMappingService
 from research_kb.services.records import RecordService
 from research_kb.services.registry import RegistryService
@@ -47,6 +48,7 @@ def test_real_pdf_runs_from_registry_to_guardian_with_exact_character_provenance
         adapter=PdfPlumberAdapter(),
     )
     assert file_sha256(source) == source_before
+
     assert pages[0]["parser"] == {"adapter": "pdfplumber", "version": version("pdfplumber")}
     assert {item["parse_run_id"] for item in pages} == {parse_transaction.event_id}
 
@@ -87,6 +89,11 @@ def test_real_pdf_runs_from_registry_to_guardian_with_exact_character_provenance
         actor="agent",
     )
     assert file_sha256(source) == source_before
+
+    partial_context = PaperContextService(layout).show(paper_id=paper["paper_id"])
+    assert partial_context["paper_card"] is None
+    assert [item["evidence_id"] for item in partial_context["evidence"]] == [evidence["evidence_id"]]
+    assert [item["queue_id"] for item in partial_context["review_queue"]] == [queue["queue_id"]]
 
     evidence_target = layout.evidence_path(paper["paper_id"])
     evidence_before_invalid_attempts = evidence_target.read_bytes()
@@ -143,7 +150,9 @@ def test_real_pdf_runs_from_registry_to_guardian_with_exact_character_provenance
         ),
         actor="agent",
     )
-    unit_id = card["sections"][1]["units"][0]["unit_id"]
+    promoted_context = PaperContextService(layout).show(paper_id=paper["paper_id"])
+    assert promoted_context["paper_card"] == card
+    unit_id = promoted_context["paper_card"]["sections"][1]["units"][0]["unit_id"]
     mapping, _ = QuestionMappingService(layout).promote(
         MutationRequest(
             operation="append",
@@ -181,6 +190,7 @@ def test_real_pdf_runs_from_registry_to_guardian_with_exact_character_provenance
     }
     parsed_read = ParseReadService(layout).show(paper_id=paper["paper_id"], page="1")
     paper_status = PaperStatusService(layout).show(paper_id=paper["paper_id"])
+    paper_context = PaperContextService(layout).show(paper_id=paper["paper_id"])
     assert quote in parsed_read["pages"][0]["text"]
     assert parsed_read["returned_page_count"] == 1
     assert paper_status["source"]["state"] == "current"
@@ -189,6 +199,9 @@ def test_real_pdf_runs_from_registry_to_guardian_with_exact_character_provenance
     assert paper_status["evidence"]["count"] == 1
     assert paper_status["question_mappings"]["linked_count"] == 1
     assert paper_status["integrity"]["mutation_safe"] is True
+    assert paper_context["paper_card"] == card
+    assert [item["evidence_id"] for item in paper_context["evidence"]] == [evidence["evidence_id"]]
+    assert [item["queue_id"] for item in paper_context["review_queue"]] == [queue["queue_id"]]
     assert {
         path.relative_to(layout.knowledge_root).as_posix(): path.read_bytes()
         for path in layout.knowledge_root.rglob("*")

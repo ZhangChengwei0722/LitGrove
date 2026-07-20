@@ -11,6 +11,7 @@ from research_kb.parse.synthetic_text import SyntheticTextAdapter
 from research_kb.services.parse import ParseService
 from research_kb.services.parse_read import ParseReadService
 from research_kb.services.paper_status import PaperStatusService
+from research_kb.services.paper_context import PaperContextService
 from research_kb.services.records import RecordService
 from research_kb.services.registry import RegistryService
 from research_kb.services.bootstrap import WorkspaceBootstrapService
@@ -136,6 +137,7 @@ def test_two_domains_run_same_core_from_intake_to_guardian(tmp_path: Path, domai
     for paper in papers:
         parsed_read = ParseReadService(layout).show(paper_id=paper["paper_id"], page="1")
         paper_status = PaperStatusService(layout).show(paper_id=paper["paper_id"])
+        paper_context = PaperContextService(layout).show(paper_id=paper["paper_id"])
         assert parsed_read["returned_page_count"] == 1
         assert paper_status["source"]["state"] == "current"
         assert paper_status["parse"]["state"] == "current"
@@ -143,6 +145,13 @@ def test_two_domains_run_same_core_from_intake_to_guardian(tmp_path: Path, domai
         assert paper_status["evidence"]["count"] == 1
         assert paper_status["review_queue"]["count"] == 1
         assert paper_status["integrity"]["mutation_safe"] is True
+        assert paper_context["paper_card"]["paper_id"] == paper["paper_id"]
+        assert {item["paper_id"] for item in paper_context["evidence"]} == {paper["paper_id"]}
+        assert {item["paper_id"] for item in paper_context["review_queue"]} == {paper["paper_id"]}
+        assert len(paper_context["evidence"]) == 1
+        assert len(paper_context["review_queue"]) == 1
+        assert "source_ref" not in str(paper_context)
+        assert str(tmp_path) not in str(paper_context)
     assert {
         path.relative_to(layout.knowledge_root).as_posix(): path.read_bytes()
         for path in layout.knowledge_root.rglob("*")

@@ -82,9 +82,11 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Keep capability probing workspace-independent and distinguish implemented capability from optional dependency availability.
 - Keep paper status free of source paths, statements, claims, quotes, question text, rationales and semantic next actions.
 - Recheck source SHA-256 around parsed-page projection and return only the selected paper's stored records.
+- Bound paper context to one selected paper, sort Evidence/queue records by canonical ID, omit source references and recheck source SHA-256 before and after projection.
+- Snapshot the complete managed tree around paper context reads and test registered-only, partial-run, complete and cross-paper isolation states.
 - Read stdin as raw bytes with a command-specific limit plus one byte; never echo invalid payloads.
 - Accept stdin only for Registry metadata and mutation requests, and route successful objects through existing services.
-- Exercise base and `[pdf]` installed wheels so availability, stdin, parse reads and status do not depend on the editable tree.
+- Exercise base and `[pdf]` installed wheels so availability, stdin, parse reads, status and paper context do not depend on the editable tree.
 
 ## Platform Rules
 
