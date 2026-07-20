@@ -73,6 +73,7 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert captured.err == ""
     assert output["status"] == "success"
     assert output["interface_version"] == "1.0"
+    assert "paper context" in output["read_commands"]
     assert "paper status" in output["read_commands"]
     assert output["features"]["review_runtime"] is False
 
@@ -263,7 +264,20 @@ def test_m1b_cli_runs_registry_parse_record_and_guardian(tmp_path, capsys) -> No
         "record", "promote", "--workspace", str(layout.config.path),
         "--request", str(request), "--actor", "agent",
     ]) == 0
-    assert json.loads(capsys.readouterr().out)["record_id"].startswith("evidence_")
+    evidence_id = json.loads(capsys.readouterr().out)["record_id"]
+    assert evidence_id.startswith("evidence_")
+
+    before_context = _tree_bytes(layout.knowledge_root)
+    assert main([
+        "paper", "context", "--workspace", str(layout.config.path),
+        "--paper-id", paper_id,
+    ]) == 0
+    context = json.loads(capsys.readouterr().out)
+    assert context["paper_card"] is None
+    assert [item["evidence_id"] for item in context["evidence"]] == [evidence_id]
+    assert context["review_queue"] == []
+    assert str(tmp_path) not in json.dumps(context)
+    assert _tree_bytes(layout.knowledge_root) == before_context
 
     assert main([
         "guardian", "check", "--workspace", str(layout.config.path), "--write-report",

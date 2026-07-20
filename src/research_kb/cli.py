@@ -36,6 +36,7 @@ from research_kb.services.records import RecordService
 from research_kb.services.capability import CapabilityService
 from research_kb.services.parse_read import ParseReadService
 from research_kb.services.paper_status import PaperStatusService
+from research_kb.services.paper_context import PaperContextService
 from research_kb.services.question_view import QuestionReadingViewService
 from research_kb.services.registry import RegistryService
 from research_kb.services.parse import ParseService
@@ -127,11 +128,14 @@ def build_parser() -> argparse.ArgumentParser:
     parse_show.add_argument("--paper-id", required=True)
     parse_show.add_argument("--page")
 
-    paper = commands.add_parser("paper", help="inspect one paper's deterministic pipeline state")
+    paper = commands.add_parser("paper", help="inspect one paper's deterministic state and context")
     paper_commands = paper.add_subparsers(dest="paper_command", required=True)
     paper_status = paper_commands.add_parser("status", help="emit one bounded paper status projection")
     paper_status.add_argument("--workspace", required=True, type=Path)
     paper_status.add_argument("--paper-id", required=True)
+    paper_context = paper_commands.add_parser("context", help="emit one paper's canonical scientific context")
+    paper_context.add_argument("--workspace", required=True, type=Path)
+    paper_context.add_argument("--paper-id", required=True)
 
     guardian = commands.add_parser("guardian", help="check workspace integrity")
     guardian_commands = guardian.add_subparsers(dest="guardian_command", required=True)
@@ -189,6 +193,8 @@ def main(
             return _parse_show(args)
         if args.command == "paper" and args.paper_command == "status":
             return _paper_status(args)
+        if args.command == "paper" and args.paper_command == "context":
+            return _paper_context(args)
         if args.command == "guardian" and args.guardian_command == "check":
             return _guardian_check(args)
         if args.command == "question" and args.question_command == "list":
@@ -400,6 +406,13 @@ def _parse_show(args: argparse.Namespace) -> int:
 def _paper_status(args: argparse.Namespace) -> int:
     layout = WorkspaceLayout.load(args.workspace)
     result = PaperStatusService(layout).show(paper_id=args.paper_id)
+    _write_json_once(result)
+    return 0
+
+
+def _paper_context(args: argparse.Namespace) -> int:
+    layout = WorkspaceLayout.load(args.workspace)
+    result = PaperContextService(layout).show(paper_id=args.paper_id)
     _write_json_once(result)
     return 0
 

@@ -4,7 +4,7 @@ Cross-platform, local-first contracts and deterministic CLI primitives for evide
 
 ## Current Scope
 
-Milestone 1B through M3A-0B provide:
+Milestone 1B through M3A-0C provide:
 
 - versioned workspace, domain, record, and candidate schemas;
 - portable source references and stable IDs;
@@ -29,6 +29,7 @@ Milestone 1B through M3A-0B provide:
 - strict same-paper page/locator/quote validation for canonical Evidence, including bounded synthetic block compatibility.
 - a versioned transient capability report, bounded one-paper status projection, and validated parsed-page read surface;
 - bounded stdin JSON handoff into the existing Registry and mutation authority paths without temporary request files.
+- one source-stable, paper-scoped canonical context read for Card Unit, Evidence, and review queue recovery.
 
 The installed CLI contains no private adapter and performs no adapter discovery. Scientific claim generation, OCR, Review runtime, persisted or additional derived views, Step 7 runtime, migration, and the Portable Agent Skill remain later milestones. The CLI never calls an LLM or makes scientific judgments.
 
@@ -75,6 +76,7 @@ research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapt
 research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapter pdfplumber
 research-kb parse show --workspace <workspace.yaml> --paper-id <paper_id> [--page <positive_integer>]
 research-kb paper status --workspace <workspace.yaml> --paper-id <paper_id>
+research-kb paper context --workspace <workspace.yaml> --paper-id <paper_id>
 research-kb record promote --workspace <workspace.yaml> --request <request.json> --actor <agent|cli|user>
 research-kb record promote --workspace <workspace.yaml> --request - --actor <agent|cli|user>
 research-kb question list --workspace <workspace.yaml>
@@ -86,7 +88,9 @@ research-kb transaction recover --workspace <workspace.yaml> [--dry-run]
 
 Source assets remain read-only. Canonical writes stay under `knowledge_root` and emit a process event only after a validated atomic replacement.
 
-`capability show`, `parse show`, and `paper status` emit transient interface `1.0` JSON and write no workspace state. Capability output distinguishes an implemented adapter from its installed availability. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
+`capability show`, `parse show`, `paper status`, and `paper context` emit transient interface `1.0` JSON and write no workspace state. Capability output distinguishes an implemented adapter from its installed availability. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
+
+`paper context` returns the selected paper's complete stored Paper Card or `null`, canonical Evidence records, and review queue records after complete-bundle and source-stability checks. It excludes source references, paths, parsed pages, Question Mappings, and unrelated papers. It is the public recovery surface for CLI-owned Unit, Evidence, and queue IDs, not a generic workspace export or semantic resume decision.
 
 Stdin accepts one UTF-8 JSON object only. Registry metadata is capped at 64 KiB and mutation requests at 4 MiB; YAML remains file-only. Invalid input never reaches a mutation service, and no temporary request file is created.
 

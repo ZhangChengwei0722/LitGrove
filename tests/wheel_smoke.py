@@ -63,13 +63,15 @@ def main() -> int:
             "diagnostic_code": "RKBC-028",
         }:
             raise SystemExit("base wheel capability report did not expose the missing PDF dependency")
+        if "paper context" not in capability["read_commands"]:
+            raise SystemExit("base wheel capability report lacks paper context")
         subprocess.run(
             [
                 str(python), "-c",
                 "from research_kb.compatibility import CompatibilitySourceRef, LegacyReaderAdapter; "
                 "from research_kb.contracts.registry import SchemaRegistry; "
                 "from research_kb.guardian import GuardianService; "
-                "from research_kb.services import CompatibilityAdapterRegistry, CompatibilityInspectionService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService; "
+                "from research_kb.services import CompatibilityAdapterRegistry, CompatibilityInspectionService, PaperContextService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService; "
                 "registry = SchemaRegistry(); "
                 "assert registry.schema('mutation-request')['$id'].endswith('mutation-request'); "
                 "assert registry.schema('compatibility-difference')['$id'].endswith('compatibility-difference'); "
@@ -79,6 +81,7 @@ def main() -> int:
                 "assert CompatibilitySourceRef.__name__ == 'CompatibilitySourceRef'; "
                 "assert CompatibilityAdapterRegistry.__name__ == 'CompatibilityAdapterRegistry'; "
                 "assert CompatibilityInspectionService.__name__ == 'CompatibilityInspectionService'; "
+                "assert PaperContextService.__name__ == 'PaperContextService'; "
                 "assert QuestionMappingService.__name__ == 'QuestionMappingService'; "
                 "assert QuestionReadingViewService.__name__ == 'QuestionReadingViewService'",
             ],
@@ -293,6 +296,22 @@ def main() -> int:
                 },
             },
         )["record_id"]
+        partial_context = _run_json(
+            python,
+            Path(temporary),
+            "paper",
+            "context",
+            "--workspace",
+            str(config_path),
+            "--paper-id",
+            paper_id,
+        )
+        if partial_context["paper_card"] is not None:
+            raise SystemExit("base wheel partial context unexpectedly contains a Paper Card")
+        if [item["evidence_id"] for item in partial_context["evidence"]] != [evidence_id]:
+            raise SystemExit("base wheel partial context did not recover Evidence")
+        if [item["queue_id"] for item in partial_context["review_queue"]] != [queue_id]:
+            raise SystemExit("base wheel partial context did not recover review queue")
         sections = [
             {"section_id": item["section_id"], "units": []}
             for item in profile["paper_card_sections"]
@@ -329,9 +348,21 @@ def main() -> int:
                 },
             },
         )
-        card_path = next((workspace_root / "knowledge" / "paper_cards" / "by_paper").glob("*.card.json"))
-        card = json.loads(card_path.read_text(encoding="utf-8"))
-        unit_id = next(unit["unit_id"] for section in card["sections"] for unit in section["units"])
+        promoted_context = _run_json(
+            python,
+            Path(temporary),
+            "paper",
+            "context",
+            "--workspace",
+            str(config_path),
+            "--paper-id",
+            paper_id,
+        )
+        unit_id = next(
+            unit["unit_id"]
+            for section in promoted_context["paper_card"]["sections"]
+            for unit in section["units"]
+        )
         question_id = promote(
             {
                 "contract_version": "1.0",
@@ -369,10 +400,30 @@ def main() -> int:
             "--paper-id",
             paper_id,
         )
+        context = _run_json(
+            python,
+            Path(temporary),
+            "paper",
+            "context",
+            "--workspace",
+            str(config_path),
+            "--paper-id",
+            paper_id,
+        )
         if status["paper_card"]["unit_count"] != 1 or status["question_mappings"]["linked_count"] != 1:
             raise SystemExit("base wheel paper status did not project the completed synthetic chain")
         if not status["integrity"]["mutation_safe"]:
             raise SystemExit("base wheel paper status unexpectedly blocked mutation")
+        if next(
+            unit["unit_id"]
+            for section in context["paper_card"]["sections"]
+            for unit in section["units"]
+        ) != unit_id:
+            raise SystemExit("base wheel paper context did not preserve the Card Unit ID")
+        if [item["evidence_id"] for item in context["evidence"]] != [evidence_id]:
+            raise SystemExit("base wheel paper context did not preserve Evidence")
+        if [item["queue_id"] for item in context["review_queue"]] != [queue_id]:
+            raise SystemExit("base wheel paper context did not preserve review queue")
         if _tree_snapshot(workspace_root / "knowledge") != before_knowledge:
             raise SystemExit("base wheel deterministic reads changed managed workspace files")
         if _tree_snapshot(sources) != before_sources:

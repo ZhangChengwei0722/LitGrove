@@ -78,6 +78,8 @@ def main() -> int:
             "diagnostic_code": None,
         }:
             raise SystemExit("PDF wheel capability report does not match the installed adapter")
+        if "paper context" not in capability["read_commands"]:
+            raise SystemExit("PDF wheel capability report lacks paper context")
 
         workspace_root = temporary_root / "synthetic-pdf-workspace"
         sources = workspace_root / "sources"
@@ -213,6 +215,147 @@ def main() -> int:
             if path.is_file()
         } != knowledge_before_read:
             raise SystemExit("PDF wheel deterministic reads changed managed workspace files")
+
+        def promote(request: dict) -> dict:
+            return _run_json_stdin(
+                python,
+                temporary_root,
+                request,
+                "record",
+                "promote",
+                "--workspace",
+                str(config_path),
+                "--request",
+                "-",
+                "--actor",
+                "agent",
+            )
+
+        quote = "Invented PDF wheel response."
+        start = parse_read["pages"][0]["text"].index(quote)
+        end = start + len(quote)
+        locator = f"page:1:char:{start}-{end}"
+        common_context = {"paper_id": paper_id}
+        evidence_id = promote(
+            {
+                "contract_version": "1.0",
+                "operation": "append",
+                "record_kind": "evidence",
+                "target_record_id": None,
+                "context": common_context,
+                "payload": {
+                    "claim": "The invented PDF wheel response was reported.",
+                    "evidence_type": "reported_result",
+                    "quote": quote,
+                    "source_page": {
+                        "pdf_page": 1,
+                        "printed_page": None,
+                        "section": "Synthetic results",
+                        "figure_or_table": None,
+                    },
+                    "locator": locator,
+                    "support_scope": "The generated PDF wheel fixture only.",
+                    "what_it_does_not_support": ["Other synthetic settings"],
+                    "review_status": "ai_checked",
+                    "fixture_origin": "synthetic_from_scratch",
+                },
+                "fixture_origin": "synthetic_from_scratch",
+            }
+        )["record_id"]
+        queue_id = promote(
+            {
+                "contract_version": "1.0",
+                "operation": "append",
+                "record_kind": "review-queue",
+                "target_record_id": None,
+                "context": common_context,
+                "payload": {
+                    "issue_type": "overclaim",
+                    "claim_candidate": "The PDF wheel response is universal.",
+                    "reason": "The generated PDF contains one invented setting only.",
+                    "source_page": {
+                        "pdf_page": 1,
+                        "printed_page": None,
+                        "section": "Synthetic results",
+                        "figure_or_table": None,
+                    },
+                    "locator": locator,
+                    "resolution_status": "needs_resolution",
+                    "review_status": "ai_checked",
+                    "fixture_origin": "synthetic_from_scratch",
+                },
+                "fixture_origin": "synthetic_from_scratch",
+            }
+        )["record_id"]
+        sections = [
+            {"section_id": item["section_id"], "units": []}
+            for item in profile["paper_card_sections"]
+        ]
+        sections[1]["units"].append(
+            {
+                "section_id": sections[1]["section_id"],
+                "statement": "The generated PDF asks whether the invented response occurs.",
+                "statement_type": "reported_result",
+                "grounding_status": "grounded",
+                "evidence_ids": [evidence_id],
+                "boundary_refs": [queue_id],
+                "source_page": {
+                    "pdf_page": 1,
+                    "printed_page": None,
+                    "section": "Synthetic results",
+                    "figure_or_table": None,
+                },
+                "confidence": "medium",
+            }
+        )
+        promote(
+            {
+                "contract_version": "1.0",
+                "operation": "append",
+                "record_kind": "paper-card",
+                "target_record_id": None,
+                "context": common_context,
+                "payload": {
+                    "card_status": "calibrated",
+                    "review_status": "ai_checked",
+                    "sections": sections,
+                    "fixture_origin": "synthetic_from_scratch",
+                },
+                "fixture_origin": "synthetic_from_scratch",
+            }
+        )
+        knowledge_before_context = {
+            path.relative_to(workspace_root / "knowledge").as_posix(): path.read_bytes()
+            for path in (workspace_root / "knowledge").rglob("*")
+            if path.is_file()
+        }
+        context = _run_json(
+            python,
+            temporary_root,
+            "paper",
+            "context",
+            "--workspace",
+            str(config_path),
+            "--paper-id",
+            paper_id,
+        )
+        unit_ids = [
+            unit["unit_id"]
+            for section in context["paper_card"]["sections"]
+            for unit in section["units"]
+        ]
+        if len(unit_ids) != 1:
+            raise SystemExit("PDF wheel paper context did not return the Card Unit ID")
+        if [item["evidence_id"] for item in context["evidence"]] != [evidence_id]:
+            raise SystemExit("PDF wheel paper context did not return Evidence")
+        if [item["queue_id"] for item in context["review_queue"]] != [queue_id]:
+            raise SystemExit("PDF wheel paper context did not return review queue")
+        if {
+            path.relative_to(workspace_root / "knowledge").as_posix(): path.read_bytes()
+            for path in (workspace_root / "knowledge").rglob("*")
+            if path.is_file()
+        } != knowledge_before_context:
+            raise SystemExit("PDF wheel paper context changed managed workspace files")
         if _sha256(source) != source_before:
             raise SystemExit("PDF wheel parse changed the generated source PDF")
 

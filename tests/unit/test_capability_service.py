@@ -38,6 +38,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
         "read_commands": [
             "capability show",
             "guardian check",
+            "paper context",
             "paper status",
             "parse show",
             "question list",

@@ -8,7 +8,7 @@ Shared Core + CLI
 -> Separate private workspaces
 ```
 
-Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, Guardian checks, real-PDF page extraction, and one bounded stdout reading view. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Persisted and additional derived views remain deferred after M2B-2.
+Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, Guardian checks, real-PDF page extraction, and bounded stdout read surfaces. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Persisted and additional derived views remain deferred after M2B-2.
 
 ## Knowledge Flow
 
@@ -131,3 +131,17 @@ public capability facts
 Paper status derives only structural facts: source state, active parse identity, Card and Unit status counts, Evidence/queue counts, linked mapping freshness, Guardian finding codes, and transaction phase counts. It contains no scientific payload and does not prescribe a next action. Parsed-page reads may contain private page text for the explicitly selected paper and recheck source SHA-256 before returning.
 
 Bounded stdin input is a transport boundary, not a new mutation path. Registry metadata and mutation requests enter their existing services after strict UTF-8 JSON-object and byte-limit validation. No schema, layout, ID namespace, dependency or persisted workflow state is added.
+
+## M3A-0C Paper Context Read Boundary
+
+```text
+validated registered paper and current source fingerprint
++ stored Paper Card or null
++ same-paper canonical Evidence
++ same-paper review queue records
+-> transient interface 1.0 context on stdout
+```
+
+`PaperContextService` exists so a later Skill can recover CLI-owned Unit, Evidence and queue IDs after a partial or completed run without parsing canonical file paths. It validates the complete workspace bundle, filters exactly one paper, sorts canonical arrays by ID and rechecks source SHA-256 before returning.
+
+The output may contain private scientific content for the explicitly selected paper, but never Registry source references, paths, parsed pages, Question Mappings or unrelated-paper records. It creates no record, cache, report, event, journal, lock or workflow state and does not infer document type, scientific completion or a next action.
