@@ -8,7 +8,7 @@ Shared Core + CLI
 -> Separate private workspaces
 ```
 
-Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, Guardian checks, and one bounded stdout reading view. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Persisted and additional derived views remain deferred after M2B-2.
+Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, Guardian checks, real-PDF page extraction, and one bounded stdout reading view. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Persisted and additional derived views remain deferred after M2B-2.
 
 ## Knowledge Flow
 
@@ -35,7 +35,7 @@ candidate mutation request
 -> completed recovery journal with final result
 ```
 
-Registry, SyntheticText Parse, Paper Card, Evidence, review queue, and Guardian services use the same workspace resolver and transaction kernel. Source references are persisted as `root_id + relative_path`; local absolute paths are never canonical data.
+Registry, SyntheticText/PdfPlumber Parse, Paper Card, Evidence, review queue, and Guardian services use the same workspace resolver and transaction kernel. Source references are persisted as `root_id + relative_path`; local absolute paths are never canonical data.
 
 Guardian requires every completed journal to have exactly one matching process event. Missing or altered events and all `needs_resolution` journals fail closed instead of being inferred from target state alone.
 
@@ -71,7 +71,7 @@ Shared Core owns adapter metadata validation, source-reference confinement, diff
 
 Compatibility inspection is not migration. It allocates no replacement canonical IDs, writes no report or process event, and does not alter the legacy source of truth. If declared protected input changes, disappears, changes type, or becomes unsafe during inspection, the run fails with `RKBC-026` even when the adapter also raises.
 
-Step 7 runtime, persisted Markdown views, real PDF parsing, migration, and Agent Skill orchestration are intentionally absent.
+Step 7 runtime, persisted Markdown views, migration, and Agent Skill orchestration are intentionally absent.
 
 ## M2B-1 Question Mapping Boundary
 
@@ -101,3 +101,17 @@ validated Question Mapping + reachable Registry/Card/Evidence/Queue records
 `QuestionReadingViewService` accepts structured bundle entries rather than paths or a workspace object. It validates the complete bundle, resolves exactly one question, preserves domain-profile Card section order, expands only mapping-owned evidence and boundaries, and reuses the existing freshness diagnostic. Review queue records are rendered in a separate, explicitly non-evidence section.
 
 The CLI completes validation, projection, hashing, and rendering before its single stdout write. It creates no `views/` directory, canonical record, cache, report, event, journal, lock, or render timestamp. The view is a one-way reading surface; JSONL remains the organizational source of truth.
+
+## M3A-0A Real PDF And Evidence Provenance Boundary
+
+```text
+registered immutable PDF and SHA-256
+-> explicit PdfPlumberAdapter and exact installed version
+-> one LF-normalized parsed-page row per PDF page
+-> same-paper page/locator/quote resolution
+-> Evidence promotion and Guardian enforcement
+```
+
+`pdfplumber` is an optional, lazily imported dependency. The CLI never discovers adapters and never falls back from an explicit `pdfplumber` request. Real Evidence uses zero-based, end-exclusive character locators over stored page text; invented synthetic fixtures retain block locators only under whitespace-normalized same-page containment.
+
+Complete-bundle validation owns active page order, uniqueness, parse-run identity, parser identity, and Evidence resolution. `RecordService` separately owns filesystem source-stability checks before and after Evidence replacement. This adds no schema or layout state and does not make PDF extraction a scientific interpretation step.

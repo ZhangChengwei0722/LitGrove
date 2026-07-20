@@ -6,7 +6,13 @@ from typing import Any
 
 from research_kb.bundle import load_workspace_entries, records_of_kind, validate_workspace_entries
 from research_kb.contracts.validator import validate_record
-from research_kb.errors import GROUNDING_MISMATCH, UNRESOLVED_REFERENCE, Diagnostic, ResearchKBError
+from research_kb.errors import (
+    GROUNDING_MISMATCH,
+    PARSE_SOURCE_UNSUPPORTED,
+    UNRESOLVED_REFERENCE,
+    Diagnostic,
+    ResearchKBError,
+)
 from research_kb.identifiers import Namespace, allocate_id
 from research_kb.parse.base import ParseAdapter
 from research_kb.process_events import build_process_event, timestamp
@@ -52,6 +58,16 @@ class ParseService:
         created_at = timestamp(self.transactions.clock)
         try:
             parsed = list(adapter.parse(source, paper_id=paper_id, parse_run_id=event_id))
+            if not parsed:
+                raise ResearchKBError(
+                    Diagnostic(
+                        PARSE_SOURCE_UNSUPPORTED,
+                        "parsed-page",
+                        paper_id,
+                        "/source_ref",
+                        "parse adapter returned no page records",
+                    )
+                )
         except Exception:
             self.transactions.record_failure(
                 operation="parse_run",

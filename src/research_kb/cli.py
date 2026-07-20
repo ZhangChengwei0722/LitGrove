@@ -28,6 +28,7 @@ from research_kb.errors import (
 from research_kb.guardian import GuardianService
 from research_kb.identifiers import Namespace, validate_id
 from research_kb.mutation import load_mutation_request
+from research_kb.parse.pdfplumber_adapter import PdfPlumberAdapter
 from research_kb.parse.synthetic_text import SyntheticTextAdapter
 from research_kb.privacy import scan_repository
 from research_kb.services.records import RecordService
@@ -110,7 +111,7 @@ def build_parser() -> argparse.ArgumentParser:
     parse_run = parse_commands.add_parser("run", help="parse one registered source")
     parse_run.add_argument("--workspace", required=True, type=Path)
     parse_run.add_argument("--paper-id", required=True)
-    parse_run.add_argument("--adapter", choices=("synthetic-text",), required=True)
+    parse_run.add_argument("--adapter", choices=("synthetic-text", "pdfplumber"), required=True)
 
     guardian = commands.add_parser("guardian", help="check workspace integrity")
     guardian_commands = guardian.add_subparsers(dest="guardian_command", required=True)
@@ -319,7 +320,10 @@ def _registry_add(args: argparse.Namespace) -> int:
 
 def _parse_run(args: argparse.Namespace) -> int:
     layout = WorkspaceLayout.load(args.workspace)
-    adapter = SyntheticTextAdapter()
+    adapter = {
+        "synthetic-text": SyntheticTextAdapter,
+        "pdfplumber": PdfPlumberAdapter,
+    }[args.adapter]()
     pages, transaction = ParseService(layout).run(
         paper_id=args.paper_id,
         adapter=adapter,
@@ -329,6 +333,7 @@ def _parse_run(args: argparse.Namespace) -> int:
         "status": "success",
         "paper_id": args.paper_id,
         "parse_run_id": transaction.event_id,
+        "parser": pages[0]["parser"],
         "pages": len(pages),
         "target": layout.target_relative_path(transaction.target),
     })

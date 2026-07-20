@@ -11,6 +11,7 @@
 Use the repository virtual environment so the editable package and bounded dependencies are active:
 
 ```powershell
+.\.venv\Scripts\python -m pip install -e ".[test,pdf]"
 .\.venv\Scripts\python -m pytest -q
 .\.venv\Scripts\python -m research_kb privacy scan --root .
 ```
@@ -19,6 +20,7 @@ Release-resource smoke after `python -m build`:
 
 ```powershell
 .\.venv\Scripts\python tests/wheel_smoke.py
+.\.venv\Scripts\python tests/wheel_pdf_smoke.py
 ```
 
 Schema, state, ID, path, and directory-protocol changes require explicit user approval, focused self-review, targeted tests, and the full Windows validation gate. External collaborator review is optional.
@@ -32,6 +34,9 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Runtime fixtures must execute in a temporary copy; tests must not write canonical state into the repository fixture tree.
 - Runtime fixtures must run `WorkspaceBootstrapService` before `WorkspaceLayout.load`; contract-only fixtures remain read-only and markerless.
 - Record source hashes before a runtime scenario and assert that every hash is unchanged afterward.
+- Generate PDF fixtures at runtime under `tmp_path` with ReportLab. Do not commit generated PDFs or derive them from real papers.
+- Test blank, malformed, encrypted, all-empty, and multi-page sources with bounded diagnostics that contain no extracted text or absolute path.
+- Keep the base-wheel smoke free of the PDF extra and require `RKBC-028` for explicit PDF selection; validate real PDF parsing in the separate `[pdf]` wheel smoke.
 
 ## Mutation Service Rules
 
@@ -41,6 +46,7 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Keep source assets outside the writable boundary.
 - Emit no process event payload containing candidate scientific text.
 - Add a failure, conflict, and source-immutability test for each new mutating service.
+- For Evidence, test exact character-slice resolution, synthetic block containment, same-paper ownership, active parser/run consistency, and preservation of previous target bytes on pre-replacement failure.
 
 ## Compatibility Adapter Rules
 

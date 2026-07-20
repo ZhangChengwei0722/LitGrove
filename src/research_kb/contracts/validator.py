@@ -26,6 +26,7 @@ from research_kb.errors import (
     ResearchKBError,
     json_pointer,
 )
+from research_kb.evidence_provenance import index_active_pages, validate_evidence_against_pages
 from research_kb.paths import normalize_relative_path, validate_config_relative_path
 
 
@@ -201,6 +202,33 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
     profile_sections: dict[str, list[str]] = {}
     defined: dict[str, list[str]] = defaultdict(list)
     paper_cards: dict[str, int] = defaultdict(int)
+
+    page_index, provenance_failures = index_active_pages(
+        record for kind, record in entries if kind == "parsed-page"
+    )
+    diagnostics.extend(
+        Diagnostic(
+            failure.code,
+            failure.record_kind,
+            failure.record_id,
+            failure.json_path,
+            failure.message,
+        )
+        for failure in provenance_failures
+    )
+    for kind, record in entries:
+        if kind != "evidence":
+            continue
+        diagnostics.extend(
+            Diagnostic(
+                failure.code,
+                failure.record_kind,
+                failure.record_id,
+                failure.json_path,
+                failure.message,
+            )
+            for failure in validate_evidence_against_pages(record, page_index)
+        )
 
     for kind, record in entries:
         if kind == "workspace":

@@ -25,8 +25,10 @@ Milestone 1B, M2A-1, M2A-2, M2B-1, and M2B-2 provide:
 - CLI-owned question/link IDs and exact evidence/boundary projection;
 - read-only `question list/show` commands and Guardian mapping freshness warnings.
 - one deterministic, stdout-only Question Reading View with selected Card Units, canonical evidence trace, non-evidence boundaries, and current freshness diagnostics.
+- an explicit optional `pdfplumber` adapter with exact package-version provenance and one row per PDF page;
+- strict same-paper page/locator/quote validation for canonical Evidence, including bounded synthetic block compatibility.
 
-The installed CLI contains no private adapter and performs no adapter discovery. Real PDF parsing, scientific claim generation, persisted or additional derived views, Step 7 runtime, migration, and the Portable Agent Skill remain later milestones. The CLI never calls an LLM or makes scientific judgments.
+The installed CLI contains no private adapter and performs no adapter discovery. Scientific claim generation, OCR, Review runtime, persisted or additional derived views, Step 7 runtime, migration, and the Portable Agent Skill remain later milestones. The CLI never calls an LLM or makes scientific judgments.
 
 ## Privacy Boundary
 
@@ -40,6 +42,12 @@ python -m venv .venv
 .\.venv\Scripts\python -m pytest -q
 .\.venv\Scripts\python -m research_kb --version
 .\.venv\Scripts\python -m research_kb privacy scan --root .
+```
+
+For real local PDF parsing, install the bounded optional extra in the repository environment:
+
+```powershell
+.\.venv\Scripts\python -m pip install -e ".[test,pdf]"
 ```
 
 On macOS, use `.venv/bin/python` instead.
@@ -60,6 +68,7 @@ All runtime commands then resolve paths through the initialized workspace:
 research-kb compatibility inspect --workspace <workspace.yaml> --adapter <adapter_id>
 research-kb registry add --workspace <workspace.yaml> --root-id <root> --relative-path <path> --metadata <metadata.json>
 research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapter synthetic-text
+research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapter pdfplumber
 research-kb record promote --workspace <workspace.yaml> --request <request.json> --actor <agent|cli|user>
 research-kb question list --workspace <workspace.yaml>
 research-kb question show --workspace <workspace.yaml> --question-id <question_id>
@@ -69,6 +78,8 @@ research-kb transaction recover --workspace <workspace.yaml> [--dry-run]
 ```
 
 Source assets remain read-only. Canonical writes stay under `knowledge_root` and emit a process event only after a validated atomic replacement.
+
+The PDF adapter records exact `pdfplumber` version identity and emits `page:<n>:text` page locators. Real-PDF Evidence must use `page:<n>:char:<start>-<end>` with an exact zero-based, end-exclusive slice of stored page text. Missing PDF dependencies and unsupported PDF sources fail explicitly; there is no OCR or synthetic fallback.
 
 Question Mapping requests use `record promote`. The request selects Paper Card Unit IDs and may add question-specific review queue boundaries; Core derives `evidence_ids`, preserves required unit boundaries, allocates IDs, and stores the result in `questions/mappings.jsonl`. Unapproved Agent-generated questions remain task report candidates and cannot use a persistable `question_origin`.
 

@@ -54,6 +54,23 @@ def test_guardian_detects_changed_source_fingerprint(tmp_path: Path) -> None:
     assert finding["record_ref"] == paper["paper_id"]
 
 
+def test_guardian_detects_stored_evidence_provenance_failure_without_payload_leak(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    prepared = _prepare_paper(layout, "stored-provenance.txt")
+    evidence = prepared["evidence"]
+    target = layout.evidence_path(prepared["paper"]["paper_id"])
+    stored = read_jsonl(target, record_kind="evidence", id_field="evidence_id")
+    stored[0]["quote"] = "SENSITIVE INVENTED QUOTE"
+    target.write_bytes(serialize_jsonl(stored))
+
+    result = GuardianService(layout).check()
+
+    assert result.report["status"] == "failure"
+    finding = next(item for item in result.report["findings"] if item["record_ref"] == evidence["evidence_id"])
+    assert finding["code"] == "RKBC-009"
+    assert "SENSITIVE" not in finding["message"]
+
+
 def test_guardian_detects_incomplete_transaction(tmp_path: Path) -> None:
     layout = make_runtime_workspace(tmp_path)
     manager = TransactionManager(layout)
