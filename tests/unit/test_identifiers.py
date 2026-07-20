@@ -19,6 +19,20 @@ def test_identifier_has_no_domain_or_order_semantics() -> None:
 
 
 @pytest.mark.parametrize(
+    ("namespace", "expected"),
+    [
+        (Namespace.REVIEW_MEMORY, "reviewmem_550e8400-e29b-41d4-a716-446655440000"),
+        (Namespace.REVIEW_UNIT, "reviewunit_550e8400-e29b-41d4-a716-446655440000"),
+    ],
+)
+def test_review_memory_namespaces_are_cli_owned(namespace: Namespace, expected: str) -> None:
+    fixed = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
+    value = allocate_id(namespace, lambda: fixed)
+    assert value == expected
+    assert validate_id(value, namespace) == value
+
+
+@pytest.mark.parametrize(
     "value",
     [
         "paper_550e8400-e29b-11d4-a716-446655440000",

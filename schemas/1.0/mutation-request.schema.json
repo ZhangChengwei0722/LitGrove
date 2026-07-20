@@ -7,7 +7,7 @@
   "properties": {
     "contract_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/contract_version"},
     "operation": {"enum": ["append", "replace"]},
-    "record_kind": {"enum": ["registry-paper", "paper-card", "evidence", "review-queue", "question-mapping"]},
+    "record_kind": {"enum": ["registry-paper", "paper-card", "evidence", "review-queue", "review-memory", "question-mapping"]},
     "target_record_id": {
       "anyOf": [
         {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/record_id"},

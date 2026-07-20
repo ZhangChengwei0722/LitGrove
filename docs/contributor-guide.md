@@ -47,6 +47,7 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Emit no process event payload containing candidate scientific text.
 - Add a failure, conflict, and source-immutability test for each new mutating service.
 - For Evidence, test exact character-slice resolution, synthetic block containment, same-paper ownership, active parser/run consistency, and preservation of previous target bytes on pre-replacement failure.
+- For Review Memory, test CLI-owned Memory/Unit IDs, source and parse stability, exact quote-excerpt slices, paraphrase null locators, route exclusion, zero-Unit low-value records, stable replace IDs, stale warnings and previous-target preservation.
 
 ## Compatibility Adapter Rules
 
@@ -83,6 +84,7 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Keep paper status free of source paths, statements, claims, quotes, question text, rationales and semantic next actions.
 - Recheck source SHA-256 around parsed-page projection and return only the selected paper's stored records.
 - Bound paper context to one selected paper, sort Evidence/queue records by canonical ID, omit source references and recheck source SHA-256 before and after projection.
+- Keep review context separate from paper context; return the complete selected memory, bounded freshness and transient exact DOI matches without paths or writes.
 - Snapshot the complete managed tree around paper context reads and test registered-only, partial-run, complete and cross-paper isolation states.
 - Require an absolute path for intake inspection, resolve it to exactly one declared root, round-trip its portable source reference, and never expose its absolute path or hash.
 - Match intake registration only by exact `root_id + relative_path`; test unregistered, current, stale, ambiguous and same-bytes-at-another-path states.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import datetime
@@ -12,6 +13,7 @@ from research_kb.contracts.versions import require_supported
 from research_kb.errors import (
     DUPLICATE_ID,
     DUPLICATE_PAPER_CARD,
+    DUPLICATE_REVIEW_MEMORY,
     GROUNDING_MISMATCH,
     INVALID_AUTHORITY,
     PATH_ESCAPE,
@@ -26,8 +28,13 @@ from research_kb.errors import (
     ResearchKBError,
     json_pointer,
 )
-from research_kb.evidence_provenance import index_active_pages, validate_evidence_against_pages
+from research_kb.evidence_provenance import index_active_pages, parse_locator, validate_evidence_against_pages
 from research_kb.paths import normalize_relative_path, validate_config_relative_path
+from research_kb.review_memory_provenance import (
+    build_active_parse_index,
+    review_memory_freshness,
+    validate_review_memory_provenance,
+)
 
 
 CONFIG_KINDS = {"workspace", "domain-profile", "mutation-request"}
@@ -170,6 +177,108 @@ def _local_semantic_diagnostics(kind: str, record: dict[str, Any]) -> list[Diagn
                     diagnostics.append(Diagnostic(GROUNDING_MISMATCH, kind, unit.get("unit_id"), base, "grounded/revised unit requires evidence"))
                 if status in NON_SUPPORTING_UNIT_STATES and isinstance(evidence_ids, list) and evidence_ids:
                     diagnostics.append(Diagnostic(GROUNDING_MISMATCH, kind, unit.get("unit_id"), base, "non-supporting unit cannot expose supporting evidence"))
+    elif kind == "review-memory" and isinstance(record.get("sections"), list):
+        unit_count = 0
+        signatures: set[tuple[str, str, str]] = set()
+        for section_index, section in enumerate(record["sections"]):
+            if not isinstance(section, dict) or not isinstance(section.get("units"), list):
+                continue
+            section_id = section.get("section_id")
+            for unit_index, unit in enumerate(section["units"]):
+                if not isinstance(unit, dict):
+                    continue
+                unit_count += 1
+                base = f"/sections/{section_index}/units/{unit_index}"
+                unit_id = unit.get("review_unit_id")
+                if unit.get("section_id") != section_id:
+                    diagnostics.append(
+                        Diagnostic(
+                            GROUNDING_MISMATCH,
+                            kind,
+                            unit_id,
+                            base + "/section_id",
+                            "Review Unit section does not match parent section",
+                        )
+                    )
+                signature = (
+                    str(unit.get("unit_type", "")),
+                    str(unit.get("content", "")),
+                    json.dumps(
+                        unit.get("workflow_impacts", []),
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                )
+                if signature in signatures:
+                    diagnostics.append(
+                        Diagnostic(
+                            GROUNDING_MISMATCH,
+                            kind,
+                            unit_id,
+                            base,
+                            "Review Memory contains an exact duplicate reusable Unit",
+                        )
+                    )
+                signatures.add(signature)
+                for note_index, note in enumerate(unit.get("source_notes", [])):
+                    if not isinstance(note, dict) or note.get("note_type") != "quote_excerpt":
+                        continue
+                    try:
+                        locator = parse_locator(note.get("locator"))
+                    except ValueError:
+                        diagnostics.append(
+                            Diagnostic(
+                                GROUNDING_MISMATCH,
+                                kind,
+                                unit_id,
+                                base + f"/source_notes/{note_index}/locator",
+                                "Review Memory quote excerpt requires a valid character locator",
+                            )
+                        )
+                    else:
+                        if locator.kind != "char":
+                            diagnostics.append(
+                                Diagnostic(
+                                    GROUNDING_MISMATCH,
+                                    kind,
+                                    unit_id,
+                                    base + f"/source_notes/{note_index}/locator",
+                                    "Review Memory quote excerpt requires a character locator",
+                                )
+                            )
+                        elif locator.page != note.get("pdf_page"):
+                            diagnostics.append(
+                                Diagnostic(
+                                    GROUNDING_MISMATCH,
+                                    kind,
+                                    unit_id,
+                                    base + f"/source_notes/{note_index}/locator",
+                                    "Review Memory locator page does not match source-note PDF page",
+                                )
+                            )
+        memory_value = record.get("memory_value", {})
+        value_status = memory_value.get("status") if isinstance(memory_value, dict) else None
+        if value_status == "reusable" and unit_count == 0:
+            diagnostics.append(
+                Diagnostic(
+                    GROUNDING_MISMATCH,
+                    kind,
+                    _record_id(kind, record),
+                    "/memory_value/status",
+                    "reusable Review Memory requires at least one reusable Unit",
+                )
+            )
+        elif value_status in {"low_value", "redundant", "outdated", "outside_scope"} and unit_count:
+            diagnostics.append(
+                Diagnostic(
+                    GROUNDING_MISMATCH,
+                    kind,
+                    _record_id(kind, record),
+                    "/memory_value/status",
+                    "Review Memory with reusable Units must use reusable memory value status",
+                )
+            )
     if kind.startswith("step7-") and isinstance(record.get("evidence_base"), list):
         for value in record["evidence_base"]:
             if isinstance(value, str) and value.startswith("queue_"):
@@ -202,6 +311,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
     profile_sections: dict[str, list[str]] = {}
     defined: dict[str, list[str]] = defaultdict(list)
     paper_cards: dict[str, int] = defaultdict(int)
+    review_memories: dict[str, int] = defaultdict(int)
 
     page_index, provenance_failures = index_active_pages(
         record for kind, record in entries if kind == "parsed-page"
@@ -216,6 +326,19 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
         )
         for failure in provenance_failures
     )
+    active_review_parses, review_parse_failures = build_active_parse_index(
+        record for kind, record in entries if kind == "parsed-page"
+    )
+    diagnostics.extend(
+        Diagnostic(
+            failure.code,
+            failure.record_kind,
+            failure.record_id,
+            failure.json_path,
+            failure.message,
+        )
+        for failure in review_parse_failures
+    )
     for kind, record in entries:
         if kind != "evidence":
             continue
@@ -229,6 +352,20 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
             )
             for failure in validate_evidence_against_pages(record, page_index)
         )
+    for kind, record in entries:
+        if kind != "review-memory":
+            continue
+        if review_memory_freshness(record, active_review_parses) != "stale_parse":
+            diagnostics.extend(
+                Diagnostic(
+                    failure.code,
+                    failure.record_kind,
+                    failure.record_id,
+                    failure.json_path,
+                    failure.message,
+                )
+                for failure in validate_review_memory_provenance(record, active_review_parses)
+            )
 
     for kind, record in entries:
         if kind == "workspace":
@@ -262,6 +399,14 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                     unit_evidence[unit_id] = set(unit.get("evidence_ids", []))
                     unit_boundaries[unit_id] = set(unit.get("boundary_refs", []))
                     unit_status[unit_id] = unit.get("grounding_status", "")
+        elif kind == "review-memory":
+            review_memory_id = record.get("review_memory_id", "")
+            paper_id = record.get("paper_id", "")
+            review_memories[paper_id] += 1
+            defined["reviewmem"].append(review_memory_id)
+            for section in record.get("sections", []):
+                for unit in section.get("units", []):
+                    defined["reviewunit"].append(unit.get("review_unit_id", ""))
         elif kind == "evidence":
             evidence_id = record.get("evidence_id", "")
             evidence.add(evidence_id)
@@ -309,12 +454,24 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
             diagnostics.append(
                 Diagnostic(DUPLICATE_PAPER_CARD, "paper-card", paper_id, "/paper_id", "more than one Paper Card Core for paper")
             )
+    for paper_id, count in review_memories.items():
+        if paper_id and count > 1:
+            diagnostics.append(
+                Diagnostic(
+                    DUPLICATE_REVIEW_MEMORY,
+                    "review-memory",
+                    paper_id,
+                    "/paper_id",
+                    "more than one Review Memory exists for paper",
+                )
+            )
 
     all_object_ids = {value for values in defined.values() for value in values if value}
+    primary_route_papers = set(paper_cards) | set(evidence_paper.values())
 
     for kind, record in entries:
         record_id = _record_id(kind, record)
-        if kind in {"parsed-page", "paper-card", "evidence", "review-queue"}:
+        if kind in {"parsed-page", "paper-card", "evidence", "review-queue", "review-memory"}:
             _require_ref(diagnostics, kind, record_id, "/paper_id", record.get("paper_id"), papers, "paper")
         if kind == "workspace":
             roots = [item.get("root_id", "") for item in record.get("workspace", {}).get("source_roots", [])]
@@ -370,6 +527,40 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                         _require_ref(diagnostics, kind, unit.get("unit_id"), base + "/boundary_refs", value, queues, "review queue")
                         if value in queue_paper and queue_paper[value] != paper_id:
                             diagnostics.append(Diagnostic(GROUNDING_MISMATCH, kind, unit.get("unit_id"), base + "/boundary_refs", "Card Unit boundary belongs to another paper"))
+        elif kind == "review-memory":
+            paper_id = record.get("paper_id", "")
+            expected_fingerprint = paper_fingerprint.get(paper_id)
+            if expected_fingerprint is not None and record.get("source_fingerprint") != expected_fingerprint:
+                diagnostics.append(
+                    Diagnostic(
+                        GROUNDING_MISMATCH,
+                        kind,
+                        record_id,
+                        "/source_fingerprint",
+                        "Review Memory fingerprint does not match the registered paper source",
+                    )
+                )
+            snapshot = record.get("parse_snapshot")
+            if isinstance(snapshot, dict):
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    "/parse_snapshot/parse_run_id",
+                    snapshot.get("parse_run_id"),
+                    events,
+                    "process event",
+                )
+            if paper_id in primary_route_papers:
+                diagnostics.append(
+                    Diagnostic(
+                        GROUNDING_MISMATCH,
+                        kind,
+                        record_id,
+                        "/paper_id",
+                        "primary research and Review Memory routes are mutually exclusive",
+                    )
+                )
         elif kind == "question-mapping":
             _require_ref(diagnostics, kind, record_id, "/domain_profile_id", record.get("domain_profile_id"), profiles, "domain profile")
             linked_papers = [link.get("paper_id") for link in record.get("paper_links", [])]
@@ -527,6 +718,7 @@ def _record_id(kind: str, record: dict[str, Any]) -> str | None:
         "compatibility-difference": "difference_id",
         "registry-paper": "paper_id",
         "paper-card": "paper_id",
+        "review-memory": "review_memory_id",
         "evidence": "evidence_id",
         "review-queue": "queue_id",
         "question-mapping": "question_id",

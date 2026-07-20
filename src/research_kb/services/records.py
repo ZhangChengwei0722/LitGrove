@@ -25,7 +25,14 @@ from research_kb.workspace import WorkspaceLayout
 
 
 IdAllocator = Callable[[Namespace], str]
-SUPPORTED_KINDS = {"registry-paper", "paper-card", "evidence", "review-queue", "question-mapping"}
+SUPPORTED_KINDS = {
+    "registry-paper",
+    "paper-card",
+    "evidence",
+    "review-queue",
+    "review-memory",
+    "question-mapping",
+}
 HUMAN_REVIEW_STATES = {"human_checked", "verified"}
 COMMON_OWNED_FIELDS = {"schema_version", "automation_status", "created_at", "updated_at", "paper_id"}
 KIND_OWNED_FIELDS = {
@@ -69,10 +76,31 @@ class RecordService:
                 transaction_manager=self.transactions,
                 id_allocator=self.id_allocator,
             ).promote(request, actor=actor)
+        if request.record_kind == "review-memory":
+            from research_kb.services.review_memory import ReviewMemoryService
+
+            return ReviewMemoryService(
+                self.layout,
+                transaction_manager=self.transactions,
+                id_allocator=self.id_allocator,
+            ).promote(request, actor=actor)
 
         entries = load_workspace_entries(self.layout)
         validate_workspace_entries(entries)
         paper = self._resolve_paper(entries, request)
+        if request.record_kind in {"paper-card", "evidence"} and any(
+            record["paper_id"] == paper["paper_id"]
+            for record in records_of_kind(entries, "review-memory")
+        ):
+            raise ResearchKBError(
+                Diagnostic(
+                    GROUNDING_MISMATCH,
+                    request.record_kind,
+                    request.target_record_id,
+                    "/paper_id",
+                    "primary research and Review Memory routes are mutually exclusive",
+                )
+            )
         self._validate_payload_authority(request, actor)
         if request.operation == "append":
             return self._append(request, actor, entries, paper)

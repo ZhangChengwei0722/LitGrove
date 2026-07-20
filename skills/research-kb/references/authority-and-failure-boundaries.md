@@ -20,7 +20,7 @@ Canonical Evidence requires a current same-paper source, active parsed page, exa
 
 Review queue records are not evidence. Never cite them as support, count them as canonical Evidence or silently promote them.
 
-Review processing is not implemented. Step 7 is not implemented. Stop review-like documents before primary Paper Card and Evidence promotion.
+Review Memory is background-only. Review source notes, exact excerpts, Review Memory IDs and Review Unit IDs never support canonical Evidence, Question Mapping or Step 7. Keep the review route mutually exclusive from Paper Card and Evidence for the same paper.
 
 ## Source And Parse Stops
 
@@ -54,7 +54,9 @@ Stop the complete batch for:
 
 Stop the selected paper for:
 
-- review, meta-analysis, perspective, commentary, protocol or low-confidence document type;
+- unsupported, mixed, protocol, methods-only or low-confidence document type;
+- primary/review route conflict or uncertain review subtype;
+- stale Review Memory that has not been reread against the current parse;
 - a possible duplicate record that cannot be matched exactly;
 - a claim whose wording exceeds its quote;
 - an unsupported Card Unit with no valid queue representation;
@@ -67,12 +69,16 @@ Use these only in the non-canonical task report:
 
 | Outcome | Meaning |
 | --- | --- |
-| `completed` | The requested M3A-1 chain newly reached read-only Guardian. |
-| `unsupported_for_now` | Required runtime capability is outside M3A-1. |
+| `completed` | The requested primary or review route newly reached read-only Guardian. |
+| `unsupported_for_now` | Required runtime capability is outside the current Skill. |
 | `config_required` | An existing valid workspace config was not supplied. |
 | `source_stale` | Exact registration exists but source bytes changed. |
 | `source_ambiguous` | More than one paper owns the exact source reference. |
 | `document_type_stop` | The source is not eligible for the primary route. |
+| `review_classification_uncertain` | A review-like source cannot be assigned a supported subtype confidently. |
+| `route_conflict` | The paper already owns records from the mutually exclusive route. |
+| `review_memory_stale` | The stored Review Memory refers to an older parse snapshot. |
+| `low_value_recorded` | A valid zero-Unit memory prevents unnecessary rereading. |
 | `provenance_unavailable` | Exact page, locator or quote support cannot be produced. |
 | `integrity_blocked` | Workspace, transaction or Guardian state is unsafe. |
 | `needs_user_approval` | The next action requires explicit user authority. |

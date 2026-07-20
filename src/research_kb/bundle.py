@@ -6,7 +6,7 @@ from typing import Any
 
 from research_kb.config.loader import load_config
 from research_kb.contracts.validator import validate_bundle
-from research_kb.errors import ResearchKBError
+from research_kb.errors import WORKSPACE_LAYOUT_CONFLICT, Diagnostic, ResearchKBError
 from research_kb.storage.json_io import read_json_document, read_jsonl
 from research_kb.workspace import WorkspaceLayout
 
@@ -38,14 +38,20 @@ def load_workspace_entries(
             return
         entries.extend((kind, record) for record in read_jsonl(path, record_kind=kind, id_field=id_field))
 
-    def add_json(path: Path, kind: str) -> None:
+    def add_json(path: Path, kind: str, *, expected_paper_id: str | None = None) -> None:
         resolved = path.resolve()
         if resolved in resolved_overrides:
-            entries.extend(resolved_overrides[resolved])
+            override_entries = resolved_overrides[resolved]
+            if expected_paper_id is not None:
+                _require_paper_filename_binding(override_entries, kind, expected_paper_id)
+            entries.extend(override_entries)
             consumed.add(resolved)
             return
         if path.is_file():
-            entries.append((kind, read_json_document(path, record_kind=kind)))
+            record = read_json_document(path, record_kind=kind)
+            if expected_paper_id is not None:
+                _require_paper_filename_binding([(kind, record)], kind, expected_paper_id)
+            entries.append((kind, record))
 
     add_jsonl(layout.registry_path, "registry-paper", "paper_id")
     if (layout.knowledge_root / "parse" / "by_paper").exists():
@@ -57,6 +63,13 @@ def load_workspace_entries(
     if (layout.knowledge_root / "evidence" / "by_paper").exists():
         for path in sorted((layout.knowledge_root / "evidence" / "by_paper").glob("*.evidence.jsonl")):
             add_jsonl(path, "evidence", "evidence_id")
+    if (layout.knowledge_root / "review_memories" / "by_paper").exists():
+        for path in sorted((layout.knowledge_root / "review_memories" / "by_paper").glob("*.review.json")):
+            add_json(
+                path,
+                "review-memory",
+                expected_paper_id=path.name[: -len(".review.json")],
+            )
     add_jsonl(layout.review_queue_path, "review-queue", "queue_id")
     add_jsonl(layout.question_mappings_path, "question-mapping", "question_id")
     add_jsonl(layout.process_events_path, "process-event", "event_id")
@@ -80,3 +93,21 @@ def validate_workspace_entries(entries: list[BundleEntry], *, actor: str = "stor
 
 def records_of_kind(entries: Iterable[BundleEntry], kind: str) -> list[dict[str, Any]]:
     return [record for entry_kind, record in entries if entry_kind == kind]
+
+
+def _require_paper_filename_binding(
+    entries: Iterable[BundleEntry],
+    kind: str,
+    expected_paper_id: str,
+) -> None:
+    for entry_kind, record in entries:
+        if entry_kind != kind or record.get("paper_id") != expected_paper_id:
+            raise ResearchKBError(
+                Diagnostic(
+                    WORKSPACE_LAYOUT_CONFLICT,
+                    kind,
+                    expected_paper_id,
+                    "/paper_id",
+                    "store filename does not match contained paper_id",
+                )
+            )

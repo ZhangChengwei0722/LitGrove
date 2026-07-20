@@ -4,7 +4,7 @@ Cross-platform, local-first contracts and deterministic CLI primitives for evide
 
 ## Current Scope
 
-Milestone 1B through the M3A-1 repository slice provide:
+Milestone 1B through the M3A-2A repository slice provide:
 
 - versioned workspace, domain, record, and candidate schemas;
 - portable source references and stable IDs;
@@ -20,7 +20,7 @@ Milestone 1B through the M3A-1 repository slice provide:
 - initialized-workspace enforcement for every runtime command.
 - generic read-only compatibility inspection through explicitly injected legacy adapters;
 - deterministic compatibility differences, protected-input snapshots, and blocking policy without migration or persistence.
-- an explicit `m2a-1 -> m2b-1` workspace layout upgrade with no canonical-record rewrite;
+- historical `m2a-1 -> m2b-1` and current exact `m2b-1 -> m3a-2a` workspace layout upgrades with no canonical-record rewrite;
 - persistent, domain-neutral Question Mapping from selected Paper Card Units;
 - CLI-owned question/link IDs and exact evidence/boundary projection;
 - read-only `question list/show` commands and Guardian mapping freshness warnings.
@@ -31,9 +31,12 @@ Milestone 1B through the M3A-1 repository slice provide:
 - bounded stdin JSON handoff into the existing Registry and mutation authority paths without temporary request files.
 - one source-stable, paper-scoped canonical context read for Card Unit, Evidence, and review queue recovery.
 - one read-only intake preflight that maps an absolute source path to its portable source reference, exact Registry state, and active Paper Card section contract.
-- one repo-owned Portable Agent Skill for existing-config, primary-research-only local PDF intake and deterministic CLI orchestration.
+- one repo-owned Portable Agent Skill for existing-config primary-research and common review PDF intake through mutually exclusive routes;
+- one common, background-only Review Memory contract for five review subtypes, with CLI-owned Memory/Unit IDs and exact page/section provenance;
+- atomic Review Memory append/replace, primary/review route exclusion, stale-parse Guardian warnings, and a separate `review context` recovery read;
+- a review-specific route in the same Portable Skill, without subtype-specific schemas or downstream Field Map/Question/Step 7 integration.
 
-The installed CLI contains no private adapter and performs no adapter discovery. The CLI never calls an LLM or makes scientific judgments. OCR, Review runtime, persisted or additional derived views, Step 7 runtime and migration remain later milestones.
+The installed CLI contains no private adapter and performs no adapter discovery. The CLI never calls an LLM or makes scientific judgments. OCR, subtype-specific review runtime, persisted or additional derived views, Field Map integration, Review Unit Question Mapping, Step 7 runtime and migration remain later milestones.
 
 ## Privacy Boundary
 
@@ -59,9 +62,9 @@ On macOS, use `.venv/bin/python` instead.
 
 ## Portable Skill
 
-The reviewed Skill source lives at `skills/research-kb/`. It orchestrates existing Core commands for one local primary-research workflow, but adds no Core service, schema, ID or workflow store.
+The reviewed Skill source lives at `skills/research-kb/`. It orchestrates existing Core commands for mutually exclusive primary-research and common Review Memory routes, but adds no Core service, schema, ID or workflow store.
 
-The Python wheel does not install the Skill. Local CC Switch installation is a separate, explicitly authorized post-merge operation. The first slice requires an existing workspace config and does not process reviews, generate workspace/domain configuration, discover literature or run Step 7.
+The Python wheel does not install the Skill. Local CC Switch installation is a separate, explicitly authorized post-merge operation. The Skill requires an existing workspace config and does not generate workspace/domain configuration, discover literature, integrate Review Units downstream or run Step 7.
 
 ## Runtime Commands
 
@@ -86,6 +89,7 @@ research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapt
 research-kb parse show --workspace <workspace.yaml> --paper-id <paper_id> [--page <positive_integer>]
 research-kb paper status --workspace <workspace.yaml> --paper-id <paper_id>
 research-kb paper context --workspace <workspace.yaml> --paper-id <paper_id>
+research-kb review context --workspace <workspace.yaml> --paper-id <paper_id>
 research-kb record promote --workspace <workspace.yaml> --request <request.json> --actor <agent|cli|user>
 research-kb record promote --workspace <workspace.yaml> --request - --actor <agent|cli|user>
 research-kb question list --workspace <workspace.yaml>
@@ -97,11 +101,13 @@ research-kb transaction recover --workspace <workspace.yaml> [--dry-run]
 
 Source assets remain read-only. Canonical writes stay under `knowledge_root` and emit a process event only after a validated atomic replacement.
 
-`capability show`, `intake inspect`, `parse show`, `paper status`, and `paper context` emit transient interface `1.0` JSON and write no workspace state. Capability output distinguishes an implemented adapter from its installed availability. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
+`capability show`, `intake inspect`, `parse show`, `paper status`, `paper context`, and `review context` emit transient interface `1.0` JSON and write no workspace state. Capability output distinguishes an implemented adapter from its installed availability. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
 
 `intake inspect` accepts one absolute source path, confines it to exactly one declared source root, and returns only portable `root_id + relative_path`, exact-path registration state, and ordered Paper Card section IDs/labels. It hashes the source before and after projection, never returns the hash or absolute path, and performs no registration. The Portable Skill uses it for sequential reruns; concurrent inspect-and-register deduplication is not guaranteed.
 
 `paper context` returns the selected paper's complete stored Paper Card or `null`, canonical Evidence records, and review queue records after complete-bundle and source-stability checks. It excludes source references, paths, parsed pages, Question Mappings, and unrelated papers. It is the public recovery surface for CLI-owned Unit, Evidence, and queue IDs, not a generic workspace export or semantic resume decision.
+
+`review context` returns one complete Review Memory or `null`, `absent/current/stale_parse` freshness, and transient exact local DOI matches for primary-paper leads. Review Memory remains `background_only`, `can_enter_canonical_evidence: false`, and `not_fact: true`; stale notes are never rebound to a newer parse automatically.
 
 Stdin accepts one UTF-8 JSON object only. Registry metadata is capped at 64 KiB and mutation requests at 4 MiB; YAML remains file-only. Invalid input never reaches a mutation service, and no temporary request file is created.
 

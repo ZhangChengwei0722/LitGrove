@@ -13,9 +13,10 @@ Core owns deterministic contracts, validation, path and ID handling, structured 
 ## Knowledge Flow
 
 ```text
-Source Intake -> Registry -> Parse -> Paper Card Core
--> Evidence Grounding -> Question Mapping
--> Step 7 Candidate Thinking -> Guardian / Feedback
+Source Intake -> Registry -> Parse
+-> Primary route: Paper Card Core -> Evidence Grounding -> Question Mapping
+-> Review route: background-only Review Memory
+-> Guardian / Feedback
 ```
 
 Canonical evidence is the provenance backbone. Paper Card Units are the semantic entry for later reasoning. Step 7 remains candidate-level and must expand back to canonical evidence.
@@ -35,7 +36,7 @@ candidate mutation request
 -> completed recovery journal with final result
 ```
 
-Registry, SyntheticText/PdfPlumber Parse, Paper Card, Evidence, review queue, and Guardian services use the same workspace resolver and transaction kernel. Source references are persisted as `root_id + relative_path`; local absolute paths are never canonical data.
+Registry, SyntheticText/PdfPlumber Parse, Paper Card, Evidence, review queue, Review Memory, and Guardian services use the same workspace resolver and transaction kernel. Source references are persisted as `root_id + relative_path`; local absolute paths are never canonical data.
 
 Guardian requires every completed journal to have exactly one matching process event. Missing or altered events and all `needs_resolution` journals fail closed instead of being inferred from target state alone.
 
@@ -88,7 +89,7 @@ The Agent supplies the semantic selection, role, and rationale. Core owns `quest
 
 `questions/mappings.jsonl` is canonical organizational state, not canonical scientific evidence. It points back to Paper Card Units and canonical evidence rather than duplicating their scientific content. Guardian warns with `RKBC-014` when linked Card, evidence, or queue records are newer than a mapping; it never refreshes the mapping automatically.
 
-New workspaces initialize at layout `m2b-1`. Exact `m2a-1` predecessors are runtime-blocked with `RKBC-027` and can be upgraded only through `workspace init`. The upgrade creates `questions/` and replaces operational marker metadata; it creates no empty JSONL, process event, journal, or scientific record.
+New workspaces initialize at layout `m3a-2a`. Exact `m2b-1` predecessors are runtime-blocked with `RKBC-027` and can be upgraded only through `workspace init`. The current upgrade creates empty `review_memories/by_paper/` directories and replaces operational marker metadata; it rewrites no canonical record and creates no empty record, process event or journal.
 
 ## M2B-2 Question Reading View Boundary
 
@@ -176,4 +177,22 @@ natural-language local primary-paper task
 
 The Skill processes sources sequentially, uses `intake inspect` before registration, reads current state through `paper status` and `paper context`, reads scientific text through `parse show`, and submits candidates through existing CLI mutation authority. It classifies document type only in task memory and stops non-primary documents before Paper Card or Evidence promotion.
 
-The Python wheel does not package or install the Skill. A reviewed repository merge and a separately authorized CC Switch installation are distinct gates. Review processing remains M3A-2; Step 7, discovery, acquisition and migration remain outside M3A-1.
+The Python wheel does not package or install the Skill. A reviewed repository merge and a separately authorized CC Switch installation are distinct gates. M3A-1 itself remains the primary route; M3A-2A additively extends the same package for reviews.
+
+## M3A-2A Common Review Memory Runtime
+
+```text
+registered review + current immutable source + active parse
+-> common seven-section Review Memory candidate
+-> Core-owned Memory/Unit IDs and evidence-boundary constants
+-> atomic review_memories/by_paper promotion
+-> review context + Guardian freshness projection
+```
+
+All five supported review subtypes share `review-memory.schema.json`. Sections may be empty; a reusable record retains at least one actionable Unit, while low-value/redundant/outdated/out-of-scope records retain zero Units and a reason. Page/section paraphrases use a null locator; quote excerpts use exact character locators over the active same-paper parse.
+
+Review Memory and Review Unit IDs are generic record references for transactions and Guardian only. They are not Evidence IDs, Paper Card Unit IDs, Question Mapping support or Step 7 support. Primary Paper Card/Evidence and Review Memory routes are mutually exclusive per paper.
+
+`review context 1.0` is separate from `paper context 1.0`. It returns the complete selected memory, bounded freshness and transient exact local DOI matches. A stale parse produces `RKBC-014` warning and never rebinds old provenance; broken provenance against the current snapshot is an error.
+
+The Portable Skill adds one review route and no second deterministic implementation. Subtype-specific schemas, Field Map integration, Review Unit Question Mapping, Step 7, discovery and acquisition remain outside M3A-2A.

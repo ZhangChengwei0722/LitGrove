@@ -78,8 +78,10 @@ def main() -> int:
             "diagnostic_code": None,
         }:
             raise SystemExit("PDF wheel capability report does not match the installed adapter")
-        if not {"intake inspect", "paper context"}.issubset(capability["read_commands"]):
+        if not {"intake inspect", "paper context", "review context"}.issubset(capability["read_commands"]):
             raise SystemExit("PDF wheel capability report lacks deterministic intake/context reads")
+        if capability["features"]["review_runtime"] is not True:
+            raise SystemExit("PDF wheel capability report lacks Review Memory runtime")
 
         workspace_root = temporary_root / "synthetic-pdf-workspace"
         sources = workspace_root / "sources"
@@ -366,6 +368,16 @@ def main() -> int:
             "--paper-id",
             paper_id,
         )
+        review_context = _run_json(
+            python,
+            temporary_root,
+            "review",
+            "context",
+            "--workspace",
+            str(config_path),
+            "--paper-id",
+            paper_id,
+        )
         unit_ids = [
             unit["unit_id"]
             for section in context["paper_card"]["sections"]
@@ -377,6 +389,8 @@ def main() -> int:
             raise SystemExit("PDF wheel paper context did not return Evidence")
         if [item["queue_id"] for item in context["review_queue"]] != [queue_id]:
             raise SystemExit("PDF wheel paper context did not return review queue")
+        if review_context["review_memory"] is not None or review_context["freshness"]["state"] != "absent":
+            raise SystemExit("PDF wheel review context did not preserve the absent Review Memory state")
         if {
             path.relative_to(workspace_root / "knowledge").as_posix(): path.read_bytes()
             for path in (workspace_root / "knowledge").rglob("*")

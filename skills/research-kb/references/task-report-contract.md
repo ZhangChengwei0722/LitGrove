@@ -39,6 +39,18 @@ paper_card:
   grounded_unit_count:
 evidence_count:
 review_queue_count:
+review_memory:
+  present:
+  review_memory_id:
+  freshness:
+  review_subtype:
+  read_status:
+  memory_value_status:
+  section_count:
+  reusable_unit_count:
+  primary_paper_lead_count:
+  non_reusable_note_count:
+  coverage_limit_summary:
 question_mapping:
   status:
 guardian:
@@ -59,7 +71,7 @@ Use `completed` when this run newly reaches Guardian, and `completed_no_change` 
 
 The active private task may repeat a path the user supplied when needed to distinguish sources. Never copy an absolute path, paper text, quote, Card content or task report into the shared repository, Skill package, test log or persistent shared artifact.
 
-Do not dump parsed pages, every Evidence quote or every queue item. Retrieve detailed provenance on demand through `paper context` and `parse show`.
+Do not dump parsed pages, every Evidence quote, every queue item or every Review Unit. Retrieve primary details through `paper context` and `parse show`; retrieve review memory through `review context`.
 
 ## Claims
 
@@ -67,7 +79,7 @@ Do not claim:
 
 - human review or verification;
 - final screening;
-- review-paper processing;
+- review-derived canonical Evidence, Field Map integration or Review Unit Question Mapping;
 - Step 7 generation;
 - migration or legacy cutover;
 - unsupported figure, table, OCR or supplement interpretation;

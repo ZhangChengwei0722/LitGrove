@@ -3,7 +3,36 @@ from copy import deepcopy
 import pytest
 
 from research_kb.contracts.validator import validate_bundle, validate_record
+from tests.contract.test_review_memory_contract import review_memory_record
 from tests.fixture_factory import invalid_bundle, make_bundle
+
+
+def _review_bundle() -> dict:
+    bundle = deepcopy(make_bundle("alpha"))
+    retained = {"workspace", "domain-profile", "registry-paper", "parsed-page", "process-event"}
+    bundle["records"] = [entry for entry in bundle["records"] if entry["kind"] in retained]
+    event = next(entry["record"] for entry in bundle["records"] if entry["kind"] == "process-event")
+    event["output_refs"] = []
+    bundle["records"].append({"kind": "review-memory", "record": _review_for_bundle(bundle)})
+    return bundle
+
+
+def _review_for_bundle(bundle: dict) -> dict:
+    memory = review_memory_record()
+    paper = next(entry["record"] for entry in bundle["records"] if entry["kind"] == "registry-paper")
+    page = next(
+        entry["record"]
+        for entry in bundle["records"]
+        if entry["kind"] == "parsed-page" and entry["record"]["paper_id"] == paper["paper_id"]
+    )
+    memory["paper_id"] = paper["paper_id"]
+    memory["source_fingerprint"] = deepcopy(paper["source_fingerprint"])
+    memory["parse_snapshot"] = {
+        "parse_run_id": page["parse_run_id"],
+        "adapter": page["parser"]["adapter"],
+        "version": page["parser"]["version"],
+    }
+    return memory
 
 
 def test_card_unit_cannot_use_another_papers_evidence() -> None:
@@ -141,3 +170,102 @@ def test_guardian_non_success_status_accepts_matching_severity(status: str, seve
         "remediation": "Correct the synthetic fixture.",
     }]
     assert validate_record("guardian-report", guardian, actor="cli") == []
+
+
+def test_review_memory_bundle_resolves_current_parse_and_source_notes() -> None:
+    assert validate_bundle(_review_bundle(), actor="stored") == []
+
+
+def test_one_review_memory_per_paper_is_enforced() -> None:
+    bundle = _review_bundle()
+    duplicate = deepcopy(bundle["records"][-1]["record"])
+    duplicate["review_memory_id"] = "reviewmem_b1111111-1111-4111-8111-111111111111"
+    duplicate["sections"][2]["units"][0]["review_unit_id"] = (
+        "reviewunit_b2222222-2222-4222-8222-222222222222"
+    )
+    bundle["records"].append({"kind": "review-memory", "record": duplicate})
+
+    diagnostics = validate_bundle(bundle, actor="stored")
+
+    assert "RKBC-031" in {item.code for item in diagnostics}
+
+
+def test_review_unit_must_match_parent_section_and_not_duplicate_content() -> None:
+    bundle = _review_bundle()
+    memory = bundle["records"][-1]["record"]
+    original = memory["sections"][2]["units"][0]
+    duplicate = deepcopy(original)
+    duplicate["review_unit_id"] = "reviewunit_b2222222-2222-4222-8222-222222222222"
+    memory["sections"][2]["units"].append(duplicate)
+    original["section_id"] = "major_synthesis"
+
+    diagnostics = validate_bundle(bundle, actor="stored")
+
+    assert "RKBC-009" in {item.code for item in diagnostics}
+    assert any("duplicate" in item.message.lower() for item in diagnostics)
+
+
+@pytest.mark.parametrize(
+    ("status", "remove_units"),
+    [("reusable", True), ("low_value", False)],
+)
+def test_review_memory_value_must_match_retained_unit_count(status: str, remove_units: bool) -> None:
+    bundle = _review_bundle()
+    memory = bundle["records"][-1]["record"]
+    memory["memory_value"] = {"status": status, "reason": "Synthetic boundary case."}
+    if remove_units:
+        memory["sections"][2]["units"] = []
+
+    diagnostics = validate_bundle(bundle, actor="stored")
+
+    assert "RKBC-009" in {item.code for item in diagnostics}
+
+
+def test_primary_and_review_routes_are_mutually_exclusive() -> None:
+    bundle = make_bundle("alpha")
+    bundle["records"].append({"kind": "review-memory", "record": _review_for_bundle(bundle)})
+
+    diagnostics = validate_bundle(bundle, actor="stored")
+
+    assert any(
+        item.code == "RKBC-009" and "route" in item.message.lower()
+        for item in diagnostics
+    )
+
+
+def test_stale_review_snapshot_does_not_validate_old_quote_against_new_parse() -> None:
+    bundle = _review_bundle()
+    memory = bundle["records"][-1]["record"]
+    memory["parse_snapshot"] = {
+        "parse_run_id": "event_b3333333-3333-4333-8333-333333333333",
+        "adapter": "synthetic-text",
+        "version": "0.9",
+    }
+    note = memory["sections"][2]["units"][0]["source_notes"][0]
+    note.update(
+        {
+            "note_type": "quote_excerpt",
+            "text": "not present in the active parse",
+            "locator": "page:1:char:0-5",
+        }
+    )
+    bundle["records"].append(
+        {
+            "kind": "process-event",
+            "record": {
+                "schema_version": "1.0",
+                "event_id": memory["parse_snapshot"]["parse_run_id"],
+                "operation": "synthetic_old_parse",
+                "actor": "cli",
+                "result": "success",
+                "input_refs": [memory["paper_id"]],
+                "output_refs": [memory["review_memory_id"]],
+                "created_at": "2025-01-01T00:00:00Z",
+                "fixture_origin": "synthetic_from_scratch",
+            },
+        }
+    )
+
+    diagnostics = validate_bundle(bundle, actor="stored")
+
+    assert not any(item.record_kind == "review-memory" for item in diagnostics)

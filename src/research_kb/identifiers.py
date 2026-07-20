@@ -12,6 +12,8 @@ class Namespace(StrEnum):
     WORKSPACE = "workspace"
     PAPER = "paper"
     UNIT = "unit"
+    REVIEW_MEMORY = "reviewmem"
+    REVIEW_UNIT = "reviewunit"
     EVIDENCE = "evidence"
     QUEUE = "queue"
     QUESTION = "question"

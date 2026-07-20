@@ -18,6 +18,7 @@ from tests.fixture_factory import make_bundle
 from tests.pdf_helpers import write_synthetic_pdf
 from tests.runtime_helpers import make_runtime_workspace
 from tests.unit.test_question_mapping_service import _append_request, _link, _prepare_paper
+from tests.unit.test_review_memory_service import prepare_review_paper, review_payload
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -76,7 +77,9 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert "intake inspect" in output["read_commands"]
     assert "paper context" in output["read_commands"]
     assert "paper status" in output["read_commands"]
-    assert output["features"]["review_runtime"] is False
+    assert "review context" in output["read_commands"]
+    assert "review-memory" in output["mutation_record_kinds"]
+    assert output["features"]["review_runtime"] is True
 
 
 def test_intake_inspect_cli_is_deterministic_bounded_and_read_only(tmp_path, capsys) -> None:
@@ -606,6 +609,64 @@ def test_paper_status_cli_unknown_paper_has_empty_stdout(tmp_path, capsys) -> No
     assert json.loads(captured.err)["diagnostic"]["code"] == "RKBC-005"
 
 
+def test_review_memory_stdin_promotion_and_context_cli_are_deterministic(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    paper, _ = prepare_review_paper(layout)
+    request = tmp_path / "review-memory-request.json"
+    request.write_text(
+        json.dumps(
+            {
+                "contract_version": "1.0",
+                "operation": "append",
+                "record_kind": "review-memory",
+                "target_record_id": None,
+                "context": {"paper_id": paper["paper_id"]},
+                "payload": review_payload(),
+                "fixture_origin": "synthetic_from_scratch",
+            }
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+
+    assert main(
+        [
+            "record",
+            "promote",
+            "--workspace",
+            str(layout.config.path),
+            "--request",
+            str(request),
+            "--actor",
+            "agent",
+        ]
+    ) == 0
+    promoted = json.loads(capsys.readouterr().out)
+    before = _tree_bytes(layout.knowledge_root)
+    argv = [
+        "review",
+        "context",
+        "--workspace",
+        str(layout.config.path),
+        "--paper-id",
+        paper["paper_id"],
+    ]
+
+    assert promoted["record_kind"] == "review-memory"
+    assert promoted["record_id"].startswith("reviewmem_")
+    assert main(argv) == 0
+    first = capsys.readouterr()
+    assert main(argv) == 0
+    second = capsys.readouterr()
+    context = json.loads(first.out)
+    assert first.err == second.err == ""
+    assert first.out == second.out
+    assert context["review_memory"]["review_memory_id"] == promoted["record_id"]
+    assert context["freshness"] == {"state": "current", "reasons": []}
+    assert str(tmp_path) not in first.out
+    assert _tree_bytes(layout.knowledge_root) == before
+
+
 def test_guardian_cli_returns_findings_exit_for_changed_source(tmp_path, capsys) -> None:
     layout = make_runtime_workspace(tmp_path)
     source = layout.source_roots["alpha-sources"] / "study.txt"
@@ -758,6 +819,7 @@ def test_question_render_missing_id_has_empty_stdout(tmp_path, capsys) -> None:
         ["guardian", "check"],
         ["paper", "status", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111"],
         ["parse", "show", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111"],
+        ["review", "context", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111"],
         [
             "question",
             "render",
@@ -769,9 +831,10 @@ def test_question_render_missing_id_has_empty_stdout(tmp_path, capsys) -> None:
 def test_runtime_cli_reports_old_layout_as_upgrade_required(tmp_path, capsys, argv) -> None:
     layout = make_runtime_workspace(tmp_path)
     marker = json.loads(layout.marker_path.read_text(encoding="utf-8"))
-    marker["layout_contract_version"] = "m2a-1"
+    marker["layout_contract_version"] = "m2b-1"
     layout.marker_path.write_bytes(serialize_json(marker))
-    (layout.knowledge_root / "questions").rmdir()
+    (layout.knowledge_root / "review_memories" / "by_paper").rmdir()
+    (layout.knowledge_root / "review_memories").rmdir()
 
     result = main([argv[0], argv[1], "--workspace", str(layout.config.path), *argv[2:]])
 
@@ -789,6 +852,7 @@ def test_runtime_cli_reports_old_layout_as_upgrade_required(tmp_path, capsys, ar
         ["parse", "run", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111", "--adapter", "synthetic-text"],
         ["parse", "show", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111"],
         ["paper", "status", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111"],
+        ["review", "context", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111"],
         ["record", "promote", "--request", "missing.json", "--actor", "agent"],
         ["compatibility", "inspect", "--adapter", "missing-adapter"],
         ["guardian", "check"],
