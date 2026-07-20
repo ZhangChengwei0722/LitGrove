@@ -71,7 +71,7 @@ Shared Core owns adapter metadata validation, source-reference confinement, diff
 
 Compatibility inspection is not migration. It allocates no replacement canonical IDs, writes no report or process event, and does not alter the legacy source of truth. If declared protected input changes, disappears, changes type, or becomes unsafe during inspection, the run fails with `RKBC-026` even when the adapter also raises.
 
-Step 7 runtime, persisted Markdown views, migration, and Agent Skill orchestration are intentionally absent.
+Step 7 runtime, persisted Markdown views and migration remain outside the compatibility layer. Portable Skill orchestration is a separate Agent layer and never enters a compatibility adapter.
 
 ## M2B-1 Question Mapping Boundary
 
@@ -123,7 +123,7 @@ public capability facts
 + validated paper-stage and safety projection
 + selected parsed-page records
 + bounded JSON stdin
--> later Skill procedure without a second workflow store
+-> Skill procedure without a second workflow store
 ```
 
 `CapabilityService` is workspace-independent and reports both implemented adapters and installed availability. `ParseReadService` and `PaperStatusService` require an initialized workspace and complete bundle validation. They build transient interface `1.0` documents in memory and never write a cache, view, report, event, journal or lock.
@@ -142,7 +142,7 @@ validated registered paper and current source fingerprint
 -> transient interface 1.0 context on stdout
 ```
 
-`PaperContextService` exists so a later Skill can recover CLI-owned Unit, Evidence and queue IDs after a partial or completed run without parsing canonical file paths. It validates the complete workspace bundle, filters exactly one paper, sorts canonical arrays by ID and rechecks source SHA-256 before returning.
+`PaperContextService` exists so the Skill can recover CLI-owned Unit, Evidence and queue IDs after a partial or completed run without parsing canonical file paths. It validates the complete workspace bundle, filters exactly one paper, sorts canonical arrays by ID and rechecks source SHA-256 before returning.
 
 The output may contain private scientific content for the explicitly selected paper, but never Registry source references, paths, parsed pages, Question Mappings or unrelated-paper records. It creates no record, cache, report, event, journal, lock or workflow state and does not infer document type, scientific completion or a next action.
 
@@ -160,4 +160,20 @@ absolute user-selected source path
 
 Registration identity is exact `root_id + relative_path`. Identical bytes at another path remain unregistered for the selected path. One exact match is `registered_current` only when its stored hash matches; a changed hash is `registered_stale`; multiple exact historical owners are `ambiguous`. The output omits absolute paths, hash values, bibliography, unrelated records and semantic next actions.
 
-Intake preflight writes nothing and does not replace `registry add`. It supports deterministic sequential reruns for a later Skill, but does not provide atomic inspect-and-register or concurrent same-source deduplication. The Portable Skill remains absent.
+Intake preflight writes nothing and does not replace `registry add`. It supports deterministic sequential reruns for the Skill, but does not provide atomic inspect-and-register or concurrent same-source deduplication.
+
+## M3A-1 Primary-Research Portable Skill
+
+```text
+natural-language local primary-paper task
+-> repo-owned procedural Skill
+-> public Core reads and bounded stdin mutations
+-> existing canonical stores and Guardian
+-> non-canonical task report
+```
+
+`skills/research-kb/` is the reviewed Agent-layer source. Its concise `SKILL.md` routes detailed command, workflow, authority and reporting rules to four one-level reference files. It contains no scripts, duplicate schemas, persistent state or scientific fixtures.
+
+The Skill processes sources sequentially, uses `intake inspect` before registration, reads current state through `paper status` and `paper context`, reads scientific text through `parse show`, and submits candidates through existing CLI mutation authority. It classifies document type only in task memory and stops non-primary documents before Paper Card or Evidence promotion.
+
+The Python wheel does not package or install the Skill. A reviewed repository merge and a separately authorized CC Switch installation are distinct gates. Review processing remains M3A-2; Step 7, discovery, acquisition and migration remain outside M3A-1.
