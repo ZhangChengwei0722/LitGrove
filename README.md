@@ -4,7 +4,7 @@ Cross-platform, local-first contracts and deterministic CLI primitives for evide
 
 ## Current Scope
 
-Milestone 1B through M3A-0D provide:
+Milestone 1B through the M3A-1 repository slice provide:
 
 - versioned workspace, domain, record, and candidate schemas;
 - portable source references and stable IDs;
@@ -31,8 +31,9 @@ Milestone 1B through M3A-0D provide:
 - bounded stdin JSON handoff into the existing Registry and mutation authority paths without temporary request files.
 - one source-stable, paper-scoped canonical context read for Card Unit, Evidence, and review queue recovery.
 - one read-only intake preflight that maps an absolute source path to its portable source reference, exact Registry state, and active Paper Card section contract.
+- one repo-owned Portable Agent Skill for existing-config, primary-research-only local PDF intake and deterministic CLI orchestration.
 
-The installed CLI contains no private adapter and performs no adapter discovery. Scientific claim generation, OCR, Review runtime, persisted or additional derived views, Step 7 runtime, migration, and the Portable Agent Skill remain later milestones. The CLI never calls an LLM or makes scientific judgments.
+The installed CLI contains no private adapter and performs no adapter discovery. The CLI never calls an LLM or makes scientific judgments. OCR, Review runtime, persisted or additional derived views, Step 7 runtime and migration remain later milestones.
 
 ## Privacy Boundary
 
@@ -55,6 +56,12 @@ For real local PDF parsing, install the bounded optional extra in the repository
 ```
 
 On macOS, use `.venv/bin/python` instead.
+
+## Portable Skill
+
+The reviewed Skill source lives at `skills/research-kb/`. It orchestrates existing Core commands for one local primary-research workflow, but adds no Core service, schema, ID or workflow store.
+
+The Python wheel does not install the Skill. Local CC Switch installation is a separate, explicitly authorized post-merge operation. The first slice requires an existing workspace config and does not process reviews, generate workspace/domain configuration, discover literature or run Step 7.
 
 ## Runtime Commands
 
@@ -92,7 +99,7 @@ Source assets remain read-only. Canonical writes stay under `knowledge_root` and
 
 `capability show`, `intake inspect`, `parse show`, `paper status`, and `paper context` emit transient interface `1.0` JSON and write no workspace state. Capability output distinguishes an implemented adapter from its installed availability. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
 
-`intake inspect` accepts one absolute source path, confines it to exactly one declared source root, and returns only portable `root_id + relative_path`, exact-path registration state, and ordered Paper Card section IDs/labels. It hashes the source before and after projection, never returns the hash or absolute path, and performs no registration. A future Skill may use it for sequential reruns; concurrent inspect-and-register deduplication is not guaranteed.
+`intake inspect` accepts one absolute source path, confines it to exactly one declared source root, and returns only portable `root_id + relative_path`, exact-path registration state, and ordered Paper Card section IDs/labels. It hashes the source before and after projection, never returns the hash or absolute path, and performs no registration. The Portable Skill uses it for sequential reruns; concurrent inspect-and-register deduplication is not guaranteed.
 
 `paper context` returns the selected paper's complete stored Paper Card or `null`, canonical Evidence records, and review queue records after complete-bundle and source-stability checks. It excludes source references, paths, parsed pages, Question Mappings, and unrelated papers. It is the public recovery surface for CLI-owned Unit, Evidence, and queue IDs, not a generic workspace export or semantic resume decision.
 

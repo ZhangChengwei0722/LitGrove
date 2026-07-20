@@ -96,3 +96,15 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 Tests must include Windows-shaped and POSIX-shaped paths independent of the host. Persisted relative paths always use `/`.
 
 Windows is the required live acceptance platform. macOS compatibility remains a design target and may be checked when available, but a live macOS run is not a release gate unless a later approved milestone says otherwise.
+
+## Portable Skill Rules
+
+- Keep the versioned Skill source under `skills/research-kb/`; do not package it in the Python wheel.
+- Keep `SKILL.md` concise and link every detailed reference directly from it.
+- Do not add Skill-local scripts, assets, schemas, state, README files or private fixtures without a later approved design.
+- Keep executable command examples aligned with `capability show` and public CLI help.
+- Run `tests/unit/test_portable_skill_contract.py` plus the active official `quick_validate.py`.
+- Regenerate `agents/openai.yaml` with official tooling and require byte-identical output.
+- Forward-test with fresh Agents, raw synthetic tasks and clean temporary workspaces; do not disclose expected routing.
+- Keep forward-test outputs outside the repository and verify source bytes, record counts, events, Guardian and privacy.
+- Treat repository merge and local CC Switch installation as separate gates. Never install directly into Codex or plugin-cache directories.

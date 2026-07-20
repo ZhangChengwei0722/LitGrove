@@ -2,7 +2,7 @@
 
 The Agent layer performs semantic reading and candidate generation, then submits structured records to the CLI boundary. It must not allocate final IDs, invent provenance, use review-queue boundaries as evidence, assign human-only states, or directly maintain both JSONL and Markdown.
 
-The Portable Agent Skill is deferred. This directory currently records only the shared responsibility boundary.
+The repo-owned Portable Agent Skill lives at `skills/research-kb/`. This directory records the shared responsibility boundary that the Skill must follow.
 
 For M2A-2 compatibility work, a private integration may construct a `LegacyReaderAdapter` and pass it explicitly to the CLI composition seam. The Agent may interpret the resulting difference report, but it must not treat that report as canonical evidence, infer that migration has occurred, or bypass blocking differences. Shared Core never discovers or imports private adapters on its own.
 
@@ -12,14 +12,16 @@ Question roles and rationales are candidate interpretation, not evidence. If a C
 
 For M3A-0A, the Agent may explicitly request `parse run --adapter pdfplumber` when the optional PDF capability is installed. It must select Evidence quotes from the stored normalized page text and submit `page:<n>:char:<start>-<end>` locators that reproduce the quote exactly. It must not calculate offsets from a separate full-text copy, invent block boundaries for real PDFs, trigger OCR fallback, or treat figure/table interpretation as page-text evidence.
 
-`RKBC-028` means the local PDF extra is unavailable; `RKBC-029` means the selected PDF is unsupported by this text-only adapter. Both are stop boundaries for the current operation, not permission to bypass Core with a private parser. Review processing, document classification, and the Portable Skill remain deferred.
+`RKBC-028` means the local PDF extra is unavailable; `RKBC-029` means the selected PDF is unsupported by this text-only adapter. Both are stop boundaries for the current operation, not permission to bypass Core with a private parser. Review processing remains deferred; document classification remains local to the active task and is not a canonical store.
 
 For M3A-0B, the Agent may inspect `capability show`, `paper status`, and `parse show`. Capability and status output are deterministic facts, not a semantic next-action instruction. The Agent may read private page text only from the explicit selected-paper parse output and must still submit exact page/locator/quote provenance through Core.
 
-The Agent may pipe one JSON object to `registry add --metadata -` or `record promote --request -`. It must not send YAML, exceed the published limits, create a parallel temporary-request convention, allocate IDs, bypass authority, or treat successful transport as scientific validation. The Portable Skill remains a later milestone.
+The Agent may pipe one JSON object to `registry add --metadata -` or `record promote --request -`. It must not send YAML, exceed the published limits, create a parallel temporary-request convention, allocate IDs, bypass authority, or treat successful transport as scientific validation.
 
 For M3A-0C, the Agent may call `paper context` for one explicitly selected paper to recover the stored Paper Card, canonical Evidence and review queue records. It may use returned Unit, Evidence and queue IDs for safe resume and approved Question Mapping, but must not treat queue records as evidence, infer a semantic next action from record presence, or read canonical workspace paths as a fallback. The output is private task context and must not be copied into shared fixtures or logs.
 
 For M3A-0D, the Agent may call `intake inspect` with one absolute user-selected source path. It must reuse the returned paper ID only for `registered_current`, call `registry add` only for `unregistered` with the returned source reference, and stop on `registered_stale` or `ambiguous`. It must construct Card sections from the returned ordered profile projection and must not parse workspace YAML, domain-profile YAML or Registry JSONL as a fallback. Sequential rerun support does not authorize concurrent processing of the same source.
+
+For M3A-1, the Skill orchestrates only an existing-config primary-research route. It processes sources sequentially, recovers current state before mutation, keeps Card drafting in Agent memory until Evidence/queue IDs exist, reuses exact records on rerun and stops on stale, ambiguous, unsafe or uncertain-duplicate states. It never reads canonical files directly, persists document classification, handles review papers, runs Step 7 or applies transaction recovery. Its task report is non-canonical.
 
 For M2B-2, the Agent may request `question render` as a disposable reading surface. It must not edit the Markdown back into JSONL, treat the generated view as canonical knowledge, or cite review queue boundaries as evidence. Corrections still go through the owning Registry, Paper Card, evidence, queue, or Question Mapping contract.

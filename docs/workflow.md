@@ -80,10 +80,18 @@ Evidence matrices, relations, gap maps, contradictions, persisted Question Layer
 
 ## Skill-Facing Read And Handoff Boundary
 
-The transient JSON read interface is version `1.0`. Core reports capability and current state; the future Skill decides the procedural resume step and the Agent remains responsible for scientific interpretation. No read command persists a status snapshot or workflow run.
+The transient JSON read interface is version `1.0`. Core reports capability and current state; the Portable Skill decides the procedural resume step and the Agent remains responsible for scientific interpretation. No read command persists a status snapshot or workflow run.
 
-`intake inspect` is the only path-facing read. The future Skill must call it before `registry add`, reuse the sole returned paper ID for `registered_current`, register only `unregistered`, and stop on `registered_stale` or `ambiguous`. It must use the returned source reference and ordered Card sections rather than parsing workspace, profile or Registry files. This is sequential routing, not an atomic concurrency guarantee.
+`intake inspect` is the only path-facing read. The Skill must call it before `registry add`, reuse the sole returned paper ID for `registered_current`, register only `unregistered`, and stop on `registered_stale` or `ambiguous`. It must use the returned source reference and ordered Card sections rather than parsing workspace, profile or Registry files. This is sequential routing, not an atomic concurrency guarantee.
 
 `paper context` is the only read in this slice that returns stored Card, Evidence and queue scientific content together. It is bounded to an explicit paper, omits paths and unrelated records, and exists to recover Core-owned IDs for resume and Question Mapping. It is not permission to read canonical files directly or treat review queue records as evidence.
 
 Stdin accepts JSON only for Registry metadata and mutation requests. Empty, invalid, non-object or oversized input fails before service dispatch. File-based JSON/YAML remains supported, but YAML is never accepted through stdin.
+
+## Portable Skill Workflow
+
+The repo-owned `research-kb` Skill accepts an existing workspace config and absolute local PDF paths. It performs capability/workspace preflight, processes one source at a time, resolves or registers the exact path, resumes from current Core state, parses with explicit `pdfplumber`, grounds a complete question-independent Card, maps only an approved question and runs Guardian read-only.
+
+The Skill maintains no checkpoint. Reruns recover state through `intake inspect`, `paper status` and `paper context`; exact existing records are reused, while stale state, ambiguous sources and uncertain near-duplicates stop. Paper-local unsupported-PDF or document-type failures may be isolated, but workspace/transaction integrity failures stop the batch.
+
+Document classification and the final report remain local to the active task. The primary route stops reviews and ambiguous document types before Paper Card or Evidence promotion. Review processing, Step 7, discovery, acquisition, OCR, migration and workspace-config generation are not implemented.

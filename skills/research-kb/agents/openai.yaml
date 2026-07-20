@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research KB"
+  short_description: "Process local papers with traceable evidence"
+  default_prompt: "Use $research-kb to ingest a local primary-research PDF and process it through Guardian."
