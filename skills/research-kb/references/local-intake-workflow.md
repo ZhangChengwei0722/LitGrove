@@ -47,7 +47,7 @@ ambiguous
 
 Do not use same-content matches at other paths as the selected paper. Do not call `registry add` twice for the same inspected path.
 
-For `acquired_candidate_intake`, call `discovery show` and `intake inspect-acquired` instead of reconstructing an absolute path. Pass the returned `source` and `registry_metadata` unchanged to the same `registry add` command only for `unregistered`. Reuse `registered_current`; stop on `registered_stale` or `ambiguous`. Run Guardian and stop after Registry in this bounded route.
+For `acquired_candidate_intake`, call `discovery show` and `intake inspect-acquired` instead of reconstructing an absolute path. Pass the returned `source` and `registry_metadata` unchanged to the same `registry add` command only for `unregistered`. Reuse `registered_current`; stop on `registered_stale` or `ambiguous`. Stop after Registry only when the active task explicitly requests `registry_only`. Otherwise continue from the returned paper ID through the same status, Parse and classification rules below.
 
 After resolving a paper ID, call `paper status` and `paper context`. Stop when source state is not current, mutation safety is false or transaction state needs resolution.
 
@@ -63,6 +63,8 @@ Use status to route parsing:
 Call `parse show` after a current parse exists. Read the complete relevant pages before scientific drafting.
 
 Classify the document in task memory as `primary_research`, `review`, `other` or `unknown`, with confidence and reason. Proceed only for high-confidence primary research or an explicit user-supplied primary type. Review, commentary, perspective, protocol, methods-only and low-confidence documents stop before Paper Card or Evidence promotion.
+
+For an acquired candidate, provider `paper_type` is metadata only. It may guide reading but cannot replace classification from the parsed document.
 
 Classification is task output only. Do not persist a classification record.
 

@@ -118,7 +118,7 @@ research-kb discovery acquire --workspace <config> --candidate-id <discovery_id>
 
 Never create `local_inbox`, choose a filename, pass a URL, use browser credentials, overwrite an existing target, delete a partial/final manually or reinterpret a Guardian finding.
 
-When a later task explicitly asks to add exact acquired candidates to the knowledge base, switch to `acquired_candidate_intake`, call `intake inspect-acquired`, and follow the local intake registration-state rules. Stop that bounded route after Registry.
+When a later task explicitly asks to add exact acquired candidates to the knowledge base, switch to `acquired_candidate_intake`, call `intake inspect-acquired`, and follow the local intake registration-state rules. Stop after Registry only for an explicit `registry_only` request; otherwise resume the existing local intake workflow from the returned paper ID. This later task does not weaken the acquisition stop above.
 
 ## Stop Boundary
 

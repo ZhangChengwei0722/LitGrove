@@ -150,7 +150,15 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Require one stored `acquired` candidate and verify its deterministic receipt target, regular-file type, size, SHA-256 and PDF signature before and after inspection.
 - Project Registry bibliography from stored candidate metadata without creating a second Registry mutation path.
 - Use the existing `registry add` command for an explicitly requested intake; exact reruns recover through `registered_current`.
-- Stop this milestone after Registry. Do not chain Parse, Paper Card, Review Memory, Evidence, Question Mapping or Step 7.
+- Keep the M3C-2C bridge itself stopped after Registry; it does not own Parse or scientific records.
+
+## Acquired Candidate Workflow Continuation Rules
+
+- Keep `discovery acquire` stopped before intake. Only a later explicit acquired-candidate task may continue.
+- Reuse the returned paper ID with existing status, Parse, primary/review and Guardian services; do not add a workflow runner or second mutation path.
+- Allow an explicit `registry_only` depth, otherwise continue ordinary knowledge-base intake through Guardian.
+- Treat provider paper type as metadata and classify from parsed document content before scientific promotion.
+- Keep Step 7 separately explicit, primary-only and scoped to an existing or approved question.
 
 ## Platform Rules
 

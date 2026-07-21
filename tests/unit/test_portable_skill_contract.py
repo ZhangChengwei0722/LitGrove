@@ -318,6 +318,37 @@ def test_discovery_workflow_separates_zero_write_search_from_explicit_handoff() 
     assert "Stop before `intake inspect-acquired`" in text
 
 
+def test_acquired_candidate_intake_resumes_existing_workflow_only_in_later_task() -> None:
+    _, skill = _skill_parts()
+    local = (SKILL_ROOT / "references" / "local-intake-workflow.md").read_text(encoding="utf-8")
+    discovery = (SKILL_ROOT / "references" / "discovery-workflow.md").read_text(encoding="utf-8")
+    authority = (
+        SKILL_ROOT / "references" / "authority-and-failure-boundaries.md"
+    ).read_text(encoding="utf-8")
+    report = (SKILL_ROOT / "references" / ("task" + "-report-contract.md")).read_text(
+        encoding="utf-8"
+    )
+
+    for required in (
+        "`registry_only`",
+        "same Parse and mutually exclusive primary/review route",
+        "Do not infer intake authority from `acquired` alone",
+    ):
+        assert required in skill
+    assert "provider `paper_type` is metadata only" in local
+    assert "otherwise resume the existing local intake workflow" in discovery
+    assert "This later task does not weaken the acquisition stop above" in discovery
+    assert "this never changes the acquisition command's stop boundary" in authority
+    for field in (
+        "requested_workflow_depth:",
+        "continuation_outcome:",
+        "completed_stage:",
+    ):
+        assert field in report
+    assert "parse_started: false" not in report
+    assert "bounded acquired-candidate route stops after Registry" not in _package_text()
+
+
 def test_review_workflow_is_actionable_and_keeps_downstream_boundaries() -> None:
     text = (SKILL_ROOT / "references" / "review-intake-workflow.md").read_text(encoding="utf-8")
 
@@ -353,3 +384,5 @@ def test_task_report_defines_new_and_no_change_completion_outcomes() -> None:
     assert "discovery_candidate_handoff:" in report
     assert "oa_acquisition:" in report
     assert "acquired_candidate_intake:" in report
+    assert "requested_workflow_depth:" in report
+    assert "continuation_outcome:" in report

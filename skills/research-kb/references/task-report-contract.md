@@ -95,16 +95,18 @@ If acquired-candidate intake was requested, add:
 ```yaml
 acquired_candidate_intake:
   - candidate_id:
+    requested_workflow_depth: registry_only | guardian | step7
     intake_state: unregistered | registered_current | registered_stale | ambiguous | stopped
     paper_id:
     registry_outcome: created | reused | stopped
+    continuation_outcome: not_requested | continued | completed_no_change | stopped
+    completed_stage:
     guardian_status:
     persistent_writes:
-    parse_started: false
 ```
 
-Do not report an absolute path or provider URL. `paper_id` is present only after Registry creation or exact current reuse. This bounded route stops before Parse.
-The route reports `persistent_writes: 1` when `registry add` creates a Registry transaction and `0` when it reuses `registered_current` or stops before mutation.
+Do not report an absolute path or provider URL. `paper_id` is present only after Registry creation or exact current reuse. The normal per-paper result reports Parse and downstream scientific stages when the requested depth continues beyond Registry.
+The acquired-candidate item includes the complete task write count, while `registry_outcome` distinguishes the Registry write from downstream writes. An explicit `registry_only` rerun may remain zero-write when it reuses `registered_current`.
 
 ## Batch Summary
 
