@@ -178,7 +178,7 @@ natural-language local primary-paper task
 
 `skills/research-kb/` is the reviewed Agent-layer source. Its concise `SKILL.md` routes detailed command, discovery, primary intake, review intake, query/Step 7, authority and reporting rules to seven one-level reference files. It contains no scripts, duplicate schemas, persistent state or scientific fixtures.
 
-The Skill processes sources sequentially, uses `intake inspect` before registration, reads current state through `paper status` and `paper context`, reads scientific text through `parse show`, and submits candidates through existing CLI mutation authority. It classifies document type only in task memory and stops non-primary documents before Paper Card or Evidence promotion.
+The Skill processes sources sequentially, uses `intake inspect` for absolute local paths or `intake inspect-acquired` for separately authorized acquired candidates before registration, reads current state through `paper status` and `paper context`, reads scientific text through `parse show`, and submits candidates through existing CLI mutation authority. It classifies document type only in task memory and stops non-primary documents before Paper Card or Evidence promotion.
 
 The Python wheel does not package or install the Skill. A reviewed repository merge and a separately authorized CC Switch installation are distinct gates. M3A-1 itself remains the primary route; M3A-2A additively extends the same package for reviews.
 
@@ -276,3 +276,9 @@ The candidate store is metadata-only organizational state. Selection creates `us
 `discovery acquire` is a separate exact-user-authority mutation. `local_inbox` must already exist under exactly one declared source root. The fixed PMCID route streams at most 64 MiB into an exclusive same-directory partial, validates PDF bytes and transient parser preflight, then publishes `<candidate_id>.pdf` create-only during the candidate-store transaction.
 
 Success changes only `acquisition_status` to `acquired` and adds a portable receipt. Existing `not_started` records need no migration. The source is still not registered, screened, parsed or evidence-bearing. Guardian verifies receipt hash/size/target and reports unreceipted finals, partials and crash journals without deleting or adopting them.
+
+## M3C-2C Acquired Candidate Intake Handoff
+
+`intake inspect-acquired` closes only the deterministic read gap between an acquisition receipt and existing intake. It accepts a candidate ID, verifies the exact receipt source before and after inspection, and returns portable source, registration state, domain sections and Registry bibliography input without exposing an absolute path or writing state.
+
+The Portable Skill may pass the returned values unchanged to the existing `registry add` only when the task explicitly requests knowledge-base intake. Registry remains the sole owner of paper IDs, fingerprints, duplicate candidates and transaction semantics. The candidate stays metadata-only and no Parse or later scientific record is created by this bridge.

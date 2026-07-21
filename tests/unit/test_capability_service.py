@@ -55,6 +55,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "discovery show",
             "guardian check",
             "intake inspect",
+            "intake inspect-acquired",
             "paper context",
             "paper status",
             "parse show",

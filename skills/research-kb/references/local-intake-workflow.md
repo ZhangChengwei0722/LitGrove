@@ -13,7 +13,7 @@
 
 ## 1. Batch Preparation
 
-Accept an existing workspace config and absolute PDF source paths. Preserve user order, remove repeated input paths and process one source at a time. Do not scan a directory unless the user explicitly supplied that bounded directory as the task input.
+Accept an existing workspace config and either absolute PDF source paths or exact acquired candidate IDs under the separately explicit `acquired_candidate_intake` route. Preserve user order, remove repeated inputs and process one source at a time. Do not scan a directory unless the user explicitly supplied that bounded directory as the task input.
 
 Keep source assets read-only. Never move, copy, rename, delete or rewrite them.
 
@@ -46,6 +46,8 @@ ambiguous
 ```
 
 Do not use same-content matches at other paths as the selected paper. Do not call `registry add` twice for the same inspected path.
+
+For `acquired_candidate_intake`, call `discovery show` and `intake inspect-acquired` instead of reconstructing an absolute path. Pass the returned `source` and `registry_metadata` unchanged to the same `registry add` command only for `unregistered`. Reuse `registered_current`; stop on `registered_stale` or `ambiguous`. Run Guardian and stop after Registry in this bounded route.
 
 After resolving a paper ID, call `paper status` and `paper context`. Stop when source state is not current, mutation safety is false or transaction state needs resolution.
 

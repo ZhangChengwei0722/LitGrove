@@ -114,9 +114,11 @@ research-kb discovery acquire --workspace <config> --candidate-id <discovery_id>
 
 4. Accept only `acquired` or `no_change`. Core re-resolves, chooses the configured destination, verifies the PDF and owns the receipt.
 5. Re-read with `discovery show`, run Guardian and report the returned portable `source_ref`, SHA-256, size and write count.
-6. Stop before `intake inspect`, Registry, Parse, Paper Card, Evidence, Question Mapping or Step 7. Those require a later invocation.
+6. Stop before `intake inspect-acquired`, Registry, Parse, Paper Card, Evidence, Question Mapping or Step 7. Those require a later, explicit invocation.
 
 Never create `local_inbox`, choose a filename, pass a URL, use browser credentials, overwrite an existing target, delete a partial/final manually or reinterpret a Guardian finding.
+
+When a later task explicitly asks to add exact acquired candidates to the knowledge base, switch to `acquired_candidate_intake`, call `intake inspect-acquired`, and follow the local intake registration-state rules. Stop that bounded route after Registry.
 
 ## Stop Boundary
 

@@ -16,6 +16,7 @@ Use only public `research-kb` commands. Build every command result completely be
 | `research-kb workspace init --workspace <config> --dry-run` | read-only preflight | result, actions, diagnostics | Apply only an existing valid config with bounded safe actions. |
 | `research-kb workspace init --workspace <config>` | operational mutation | result, diagnostics | Bind or validate the managed layout; never author config. |
 | `research-kb intake inspect --workspace <config> --source <absolute-path>` | read | portable source, registration state, Card sections | Reuse, register or stop exactly as reported. |
+| `research-kb intake inspect-acquired --workspace <config> --candidate-id <id>` | read | receipt-checked intake and Registry projection | Use only for an explicitly requested acquired-candidate intake. |
 | `research-kb registry add --workspace <config> --root-id <root> --relative-path <path> --metadata -` | mutation | paper ID, duplicate candidates | Use only source values returned by intake inspection. |
 | `research-kb paper status --workspace <config> --paper-id <id>` | read | structural stage, freshness and integrity facts | Route resume without treating status as a semantic instruction. |
 | `research-kb paper context --workspace <config> --paper-id <id>` | read | stored Card, Evidence and review queue | Recover Core-owned IDs and exact existing records. |
@@ -43,6 +44,7 @@ discovery resolve
 discovery show
 guardian check
 intake inspect
+intake inspect-acquired
 paper context
 paper status
 parse show
@@ -63,6 +65,7 @@ For query and Step 7 maintenance, use `workspace init --dry-run` only. Its succe
 ## Read Boundaries
 
 - `intake inspect` owns absolute-path confinement, portable source projection, exact Registry matching and active Card section discovery.
+- `intake inspect-acquired` owns candidate receipt verification and returns Registry metadata without network or writes.
 - `paper status` exposes deterministic stage and integrity facts, not scientific content or a next action.
 - `paper context` is the only public recovery surface for Paper Card, Evidence and queue records.
 - `review context` is the only public recovery surface for Review Memory and Review Unit IDs.

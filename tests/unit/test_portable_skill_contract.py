@@ -125,6 +125,7 @@ def test_skill_required_read_commands_match_public_capability() -> None:
         "capability show",
         "guardian check",
         "intake inspect",
+        "intake inspect-acquired",
         "paper context",
         "paper status",
         "parse show",
@@ -270,6 +271,7 @@ def test_skill_routes_modes_before_mutation_and_preserves_query_ephemerality() -
         "local_intake",
         "on_demand_discovery",
         "explicit_oa_acquisition",
+        "acquired_candidate_intake",
         "ephemeral_query",
         "explicit_step7_maintenance",
         "full_workflow_step7_refresh",
@@ -310,8 +312,10 @@ def test_discovery_workflow_separates_zero_write_search_from_explicit_handoff() 
     assert "auto_acquisition_eligible" in text
     assert "legal_oa_resolution" in text
     assert "explicit_oa_acquisition" in text
+    assert "acquired_candidate_intake" in text
+    assert "intake inspect-acquired" in text
     assert "--actor user" in text
-    assert "Stop before `intake inspect`" in text
+    assert "Stop before `intake inspect-acquired`" in text
 
 
 def test_review_workflow_is_actionable_and_keeps_downstream_boundaries() -> None:
@@ -348,3 +352,4 @@ def test_task_report_defines_new_and_no_change_completion_outcomes() -> None:
     assert "step7_maintenance:" in report
     assert "discovery_candidate_handoff:" in report
     assert "oa_acquisition:" in report
+    assert "acquired_candidate_intake:" in report

@@ -78,7 +78,7 @@ def main() -> int:
             "diagnostic_code": None,
         }:
             raise SystemExit("PDF wheel capability report does not match the installed adapter")
-        if not {"discovery search", "intake inspect", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
+        if not {"discovery search", "intake inspect", "intake inspect-acquired", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
             raise SystemExit("PDF wheel capability report lacks deterministic intake/context reads")
         if capability["discovery_connectors"] != [{"connector": "europe-pmc", "availability": "available", "network_required": True}]:
             raise SystemExit("PDF wheel capability report lacks the Europe PMC connector")

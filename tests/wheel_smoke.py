@@ -111,7 +111,7 @@ def main() -> int:
             "diagnostic_code": "RKBC-028",
         }:
             raise SystemExit("base wheel capability report did not expose the missing PDF dependency")
-        if not {"discovery search", "discovery list", "discovery show", "discovery resolve", "intake inspect", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
+        if not {"discovery search", "discovery list", "discovery show", "discovery resolve", "intake inspect", "intake inspect-acquired", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
             raise SystemExit("base wheel capability report lacks deterministic intake/context reads")
         if capability["discovery_connectors"] != [{"connector": "europe-pmc", "availability": "available", "network_required": True}]:
             raise SystemExit("base wheel capability report lacks the Europe PMC connector")
@@ -125,7 +125,7 @@ def main() -> int:
                 "from research_kb.guardian import GuardianService; "
                 "from research_kb.discovery.europe_pmc import EuropePmcConnector, EuropePmcResolver; "
                 "from research_kb.discovery.europe_pmc_pdf import EuropePmcPdfTransport; "
-                "from research_kb.services import CompatibilityAdapterRegistry, CompatibilityInspectionService, DiscoveryAcquisitionService, DiscoveryAcquisitionTransportRegistry, DiscoveryCandidateService, DiscoveryConnectorRegistry, DiscoveryResolutionService, DiscoveryResolverRegistry, DiscoveryService, IntakeInspectService, PaperContextService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService, ReviewContextService, ReviewMemoryService, Step7CandidateService, Step7ContextService, Step7ReadingViewService; "
+                "from research_kb.services import AcquiredCandidateIntakeService, CompatibilityAdapterRegistry, CompatibilityInspectionService, DiscoveryAcquisitionService, DiscoveryAcquisitionTransportRegistry, DiscoveryCandidateService, DiscoveryConnectorRegistry, DiscoveryResolutionService, DiscoveryResolverRegistry, DiscoveryService, IntakeInspectService, PaperContextService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService, ReviewContextService, ReviewMemoryService, Step7CandidateService, Step7ContextService, Step7ReadingViewService; "
                 "registry = SchemaRegistry(); "
                 "assert registry.schema('mutation-request')['$id'].endswith('mutation-request'); "
                 "assert registry.schema('compatibility-difference')['$id'].endswith('compatibility-difference'); "
@@ -137,6 +137,7 @@ def main() -> int:
                 "assert CompatibilitySourceRef.__name__ == 'CompatibilitySourceRef'; "
                 "assert CompatibilityAdapterRegistry.__name__ == 'CompatibilityAdapterRegistry'; "
                 "assert CompatibilityInspectionService.__name__ == 'CompatibilityInspectionService'; "
+                "assert AcquiredCandidateIntakeService.__name__ == 'AcquiredCandidateIntakeService'; "
                 "assert DiscoveryConnectorRegistry.__name__ == 'DiscoveryConnectorRegistry'; "
                 "assert DiscoveryCandidateService.__name__ == 'DiscoveryCandidateService'; "
                 "assert DiscoveryAcquisitionService.__name__ == 'DiscoveryAcquisitionService'; "
@@ -174,6 +175,12 @@ def main() -> int:
         )
         subprocess.run(
             [str(python), "-m", "research_kb", "discovery", "acquire", "--help"],
+            cwd=temporary,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            [str(python), "-m", "research_kb", "intake", "inspect-acquired", "--help"],
             cwd=temporary,
             check=True,
             capture_output=True,
