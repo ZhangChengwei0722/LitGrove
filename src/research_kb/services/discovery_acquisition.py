@@ -301,9 +301,12 @@ class DiscoveryAcquisitionService:
         receipt = candidate["acquisition_receipt"]
         if receipt["provider_asset_ref"] != asset_ref.to_dict():
             raise _write_conflict(candidate["candidate_id"], "live OA asset differs from receipt")
-        if receipt["source_ref"] != destination.source_ref.to_dict():
-            raise _source_mismatch(candidate["candidate_id"], "receipt source is not the deterministic inbox target")
-        _verify_receipt_source(destination.final_path, receipt, candidate["candidate_id"])
+        verified_destination = validate_acquired_candidate_source(self.layout, candidate)
+        if verified_destination != destination:
+            raise _source_mismatch(
+                candidate["candidate_id"],
+                "receipt source is not the deterministic inbox target",
+            )
         return _success_report(
             candidate["candidate_id"],
             resolution=resolution,
@@ -508,6 +511,45 @@ def _verify_receipt_source(path: Path, receipt: Mapping[str, Any], candidate_id:
     _verify_file(path, identity, candidate_id)
 
 
+def validate_acquired_candidate_source(
+    layout: WorkspaceLayout,
+    candidate: Mapping[str, Any],
+) -> AcquisitionDestination:
+    candidate_id = candidate.get("candidate_id")
+    if not isinstance(candidate_id, str):
+        raise ResearchKBError(
+            Diagnostic(
+                DISCOVERY_OUTPUT_INVALID,
+                "discovery-acquisition",
+                None,
+                "/candidate_id",
+                "acquired candidate identity is invalid",
+            )
+        )
+    if candidate.get("acquisition_status") != "acquired" or not isinstance(
+        candidate.get("acquisition_receipt"),
+        Mapping,
+    ):
+        raise ResearchKBError(
+            Diagnostic(
+                DISCOVERY_OUTPUT_INVALID,
+                "discovery-acquisition",
+                candidate_id,
+                "/acquisition_status",
+                "discovery candidate does not have a completed acquisition receipt",
+            )
+        )
+    receipt = candidate["acquisition_receipt"]
+    destination = acquisition_destination(layout, candidate_id)
+    if receipt.get("source_ref") != destination.source_ref.to_dict():
+        raise _source_mismatch(
+            candidate_id,
+            "receipt source is not the deterministic inbox target",
+        )
+    _verify_receipt_source(destination.final_path, receipt, candidate_id)
+    return destination
+
+
 def _verify_file(path: Path, identity: FileIdentity, candidate_id: str) -> None:
     try:
         current = os.lstat(path)
@@ -581,4 +623,8 @@ def _source_mismatch(candidate_id: str, message: str) -> ResearchKBError:
     )
 
 
-__all__ = ["DiscoveryAcquisitionService", "DiscoveryAcquisitionTransportRegistry"]
+__all__ = [
+    "DiscoveryAcquisitionService",
+    "DiscoveryAcquisitionTransportRegistry",
+    "validate_acquired_candidate_source",
+]

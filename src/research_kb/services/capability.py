@@ -73,6 +73,7 @@ class CapabilityService:
                     "discovery show",
                     "guardian check",
                     "intake inspect",
+                    "intake inspect-acquired",
                     "paper context",
                     "paper status",
                     "parse show",

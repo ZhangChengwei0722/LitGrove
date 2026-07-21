@@ -25,6 +25,7 @@ Classify the invocation mode before any mutation:
 - `local_intake`: one or more absolute local PDF paths, with an optional supplied or approved question.
 - `on_demand_discovery`: one explicit date range and bounded title/abstract keywords; search remains report-only unless the user explicitly selects result keys for candidate handoff.
 - `explicit_oa_acquisition`: exact already-selected candidate IDs that the user explicitly asks to acquire through the supported Europe PMC OA route.
+- `acquired_candidate_intake`: exact acquired candidate IDs that the user explicitly asks to add to the knowledge base; this bounded route stops after Registry.
 - `ephemeral_query`: one paper, selected papers or one existing question; all answers remain in the task report only.
 - `explicit_step7_maintenance`: the user explicitly requests Step 7 create, refresh, revise, reject or render work for one existing question.
 - `full_workflow_step7_refresh`: an intake request explicitly asks for the complete workflow through Step 7 and Guardian.
@@ -33,9 +34,9 @@ If persistence intent is unclear, use `ephemeral_query` or intake without Step 7
 
 ## Required Inputs
 
-Require an existing workspace config for intake, query, Step 7, approved discovery-candidate handoff and explicit OA acquisition. Discovery search is workspace-independent.
+Require an existing workspace config for intake, query, Step 7, approved discovery-candidate handoff, explicit OA acquisition and acquired-candidate intake. Discovery search is workspace-independent.
 
-For intake, require absolute PDF paths and accept bounded bibliography, a supplied document type and a supplied or explicitly approved question. For queries, require a paper ID, ordered paper IDs, an existing question ID or an equivalent selector already resolved in the active task. For Step 7 maintenance, require one existing question ID.
+For local-path intake, require absolute PDF paths and accept bounded bibliography, a supplied document type and a supplied or explicitly approved question. For acquired-candidate intake, require exact acquired candidate IDs instead of paths. For queries, require a paper ID, ordered paper IDs, an existing question ID or an equivalent selector already resolved in the active task. For Step 7 maintenance, require one existing question ID.
 
 For discovery, require explicit inclusive dates, field-bound title/abstract keywords, `any` or `all`, a preprint choice and `max_results` from 1 through 15. Resolve relative dates in the Agent before CLI invocation.
 
@@ -50,6 +51,8 @@ Show the results before any write. If and only if the user explicitly names sele
 When the active task asks only whether one selected candidate has a supported OA route, require `legal_oa_resolution: true`, call `discovery resolve --provider europe-pmc`, report the status with `persistent_writes: 0`, and stop.
 
 For `explicit_oa_acquisition`, require exact candidate IDs named by the user, `explicit_oa_acquisition: true`, an available `pdfplumber`, and a no-change workspace preflight. Re-read each candidate, call `discovery resolve`, then call `discovery acquire --provider europe-pmc --actor user`; Core re-resolves again before writing. Re-read the candidate, run Guardian, report only the portable `source_ref` and receipt facts, and stop before Registry or intake. Never infer this authority from selection or `auto_acquisition_eligible` alone.
+
+For `acquired_candidate_intake`, require exact candidate IDs and an explicit request to add them to the knowledge base. Call `discovery show`, then `intake inspect-acquired`. On `unregistered`, pass the returned `source` and `registry_metadata` unchanged to `registry add --metadata -`; on `registered_current`, reuse the sole paper ID; stop on `registered_stale` or `ambiguous`. Run Guardian and stop after Registry. Do not infer intake authority from `acquired` alone.
 
 ## Execute Intake
 
@@ -78,4 +81,4 @@ Do not parse workspace/domain-profile configuration or read canonical JSON/JSONL
 
 Review Memory is background-only and cannot support canonical Evidence, Question Mapping or persisted Step 7. Review Unit Question Mapping, Field Map integration and subtype-specific review schemas are not implemented. New question candidates remain report-only until explicit approval.
 
-Arbitrary connectors, institutional/browser acquisition, metadata refresh/deletion, OCR, figure/table interpretation, supplementary-data processing, manuscript audit and migration remain outside this Skill. Never infer discovery selection or acquisition, overwrite an existing source, or assign `human_checked`, `verified`, final screening or source-disposition authority. Review queue records are boundaries, not evidence.
+Arbitrary connectors, institutional/browser acquisition, metadata refresh/deletion, OCR, figure/table interpretation, supplementary-data processing, manuscript audit and migration remain outside this Skill. Never infer discovery selection, acquisition or acquired-candidate intake, overwrite an existing source, or assign `human_checked`, `verified`, final screening or source-disposition authority. The bounded acquired-candidate route stops after Registry. Review queue records are boundaries, not evidence.

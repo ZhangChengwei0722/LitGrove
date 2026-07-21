@@ -7,7 +7,7 @@ Return one concise private task report after the invocation. The report is not c
 Always report:
 
 ```yaml
-invocation_mode: on_demand_discovery | explicit_oa_acquisition | local_intake | ephemeral_query | explicit_step7_maintenance | full_workflow_step7_refresh
+invocation_mode: on_demand_discovery | explicit_oa_acquisition | acquired_candidate_intake | local_intake | ephemeral_query | explicit_step7_maintenance | full_workflow_step7_refresh
 persistent_writes:
 workspace_preflight:
 guardian:
@@ -89,6 +89,22 @@ oa_acquisition:
 ```
 
 Never report an absolute path, provider URL or paper ID from acquisition. A stopped item keeps `source_ref` and fingerprint null. `persistent_writes` is `2` for one newly published source plus candidate receipt and `0` for exact no-change.
+
+If acquired-candidate intake was requested, add:
+
+```yaml
+acquired_candidate_intake:
+  - candidate_id:
+    intake_state: unregistered | registered_current | registered_stale | ambiguous | stopped
+    paper_id:
+    registry_outcome: created | reused | stopped
+    guardian_status:
+    persistent_writes:
+    parse_started: false
+```
+
+Do not report an absolute path or provider URL. `paper_id` is present only after Registry creation or exact current reuse. This bounded route stops before Parse.
+The route reports `persistent_writes: 1` when `registry add` creates a Registry transaction and `0` when it reuses `registered_current` or stops before mutation.
 
 ## Batch Summary
 

@@ -39,8 +39,9 @@ from research_kb.mutation import load_mutation_request, mutation_request_from_ma
 from research_kb.parse.pdfplumber_adapter import PdfPlumberAdapter
 from research_kb.parse.synthetic_text import SyntheticTextAdapter
 from research_kb.privacy import scan_repository
-from research_kb.services.records import RecordService
+from research_kb.services.acquired_candidate_intake import AcquiredCandidateIntakeService
 from research_kb.services.capability import CapabilityService
+from research_kb.services.records import RecordService
 from research_kb.services.parse_read import ParseReadService
 from research_kb.services.paper_status import PaperStatusService
 from research_kb.services.paper_context import PaperContextService
@@ -135,6 +136,12 @@ def build_parser() -> argparse.ArgumentParser:
     intake_inspect = intake_commands.add_parser("inspect", help="project one source path for deterministic intake")
     intake_inspect.add_argument("--workspace", required=True, type=Path)
     intake_inspect.add_argument("--source", required=True, type=Path)
+    intake_inspect_acquired = intake_commands.add_parser(
+        "inspect-acquired",
+        help="project one acquired discovery candidate for deterministic intake",
+    )
+    intake_inspect_acquired.add_argument("--workspace", required=True, type=Path)
+    intake_inspect_acquired.add_argument("--candidate-id", required=True)
 
     compatibility = commands.add_parser("compatibility", help="inspect legacy data through explicit read-only adapters")
     compatibility_commands = compatibility.add_subparsers(dest="compatibility_command", required=True)
@@ -276,6 +283,8 @@ def main(
             return _workspace_init(args)
         if args.command == "intake" and args.intake_command == "inspect":
             return _intake_inspect(args)
+        if args.command == "intake" and args.intake_command == "inspect-acquired":
+            return _intake_inspect_acquired(args)
         if args.command == "compatibility" and args.compatibility_command == "inspect":
             return _compatibility_inspect(args, compatibility_adapters)
         if args.command == "contract" and args.contract_command == "validate":
@@ -373,6 +382,13 @@ def _discovery_search(
         args.provider,
         request,
     )
+    _write_json_once(report)
+    return 0
+
+
+def _intake_inspect_acquired(args: argparse.Namespace) -> int:
+    layout = WorkspaceLayout.load(args.workspace)
+    report = AcquiredCandidateIntakeService(layout).inspect(args.candidate_id)
     _write_json_once(report)
     return 0
 

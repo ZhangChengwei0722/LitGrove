@@ -144,6 +144,14 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Ordinary cleanup may unlink only the current operation's still-matching file identity. Guardian reports crash residues and receipt mismatch without deleting them.
 - Keep receipt persistence and source publication separate from Registry, Parse and scientific records.
 
+## Acquired Candidate Intake Handoff Rules
+
+- Keep `intake inspect-acquired` read-only and network-free; acquisition-only tasks still stop before intake.
+- Require one stored `acquired` candidate and verify its deterministic receipt target, regular-file type, size, SHA-256 and PDF signature before and after inspection.
+- Project Registry bibliography from stored candidate metadata without creating a second Registry mutation path.
+- Use the existing `registry add` command for an explicitly requested intake; exact reruns recover through `registered_current`.
+- Stop this milestone after Registry. Do not chain Parse, Paper Card, Review Memory, Evidence, Question Mapping or Step 7.
+
 ## Platform Rules
 
 Tests must include Windows-shaped and POSIX-shaped paths independent of the host. Persisted relative paths always use `/`.

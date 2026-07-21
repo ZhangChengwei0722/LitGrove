@@ -32,6 +32,8 @@ Candidate handoff requires the complete report and exact `actor: user` after exp
 
 `discovery acquire` may run only for exact candidate IDs explicitly requested by the user and exact `--actor user`. Core owns the fixed Europe PMC request and deterministic local-inbox target. Never create the inbox, choose a path, overwrite or delete a pre-existing source, use a browser/session, or chain success into Registry/intake.
 
+An acquired candidate enters Registry only when the user separately asks to add exact acquired candidate IDs to the knowledge base. Use `intake inspect-acquired` and the existing `registry add`; never treat `acquired` alone as intake authority or continue past Registry in this route.
+
 ## Evidence Boundary
 
 Canonical Evidence requires a current same-paper source, active parsed page, exact page/character locator and exact quote slice. Narrow every claim to what the source actually supports.

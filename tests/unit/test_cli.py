@@ -80,6 +80,7 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert output["status"] == "success"
     assert output["interface_version"] == "1.0"
     assert "intake inspect" in output["read_commands"]
+    assert "intake inspect-acquired" in output["read_commands"]
     assert "paper context" in output["read_commands"]
     assert "paper status" in output["read_commands"]
     assert "review context" in output["read_commands"]

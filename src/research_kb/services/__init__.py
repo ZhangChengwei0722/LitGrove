@@ -1,5 +1,6 @@
 """Deterministic record services."""
 
+from research_kb.services.acquired_candidate_intake import AcquiredCandidateIntakeService
 from research_kb.services.bootstrap import WorkspaceBootstrapService
 from research_kb.services.capability import CapabilityService
 from research_kb.services.compatibility import CompatibilityAdapterRegistry, CompatibilityInspectionService
@@ -25,9 +26,10 @@ from research_kb.services.records import RecordService
 from research_kb.services.registry import RegistryService
 
 __all__ = [
+    "AcquiredCandidateIntakeService",
+    "CapabilityService",
     "CompatibilityAdapterRegistry",
     "CompatibilityInspectionService",
-    "CapabilityService",
     "DiscoveryConnectorRegistry",
     "DiscoveryAcquisitionService",
     "DiscoveryAcquisitionTransportRegistry",

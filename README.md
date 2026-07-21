@@ -67,7 +67,7 @@ On macOS, use `.venv/bin/python` instead.
 
 ## Portable Skill
 
-The reviewed Skill source lives at `skills/research-kb/`. It orchestrates bounded on-demand metadata discovery, explicit user-selected candidate handoff, exact-user-authority Europe PMC OA acquisition, mutually exclusive primary-research and common Review Memory intake, read-only knowledge queries and explicitly gated Step 7 maintenance. It adds no schema, ID or workflow store of its own.
+The reviewed Skill source lives at `skills/research-kb/`. It orchestrates bounded on-demand metadata discovery, explicit user-selected candidate handoff, exact-user-authority Europe PMC OA acquisition, separately requested acquired-candidate Registry handoff, mutually exclusive primary-research and common Review Memory intake, read-only knowledge queries and explicitly gated Step 7 maintenance. It adds no schema, ID or workflow store of its own.
 
 The Python wheel does not install the Skill. Local CC Switch installation is a separate, explicitly authorized post-merge operation. Discovery search is workspace-independent; candidate handoff, resolution, acquisition and all intake/query/Step 7 modes require an existing workspace config. The Skill does not generate workspace/domain configuration or integrate Review Units downstream. It acquires a source only through the exact-user-authority `explicit_oa_acquisition` route. Discovery search and ordinary queries remain non-persistent; only candidate handoff, explicit OA acquisition, explicit Step 7 maintenance or an explicitly complete intake workflow may write through Core.
 
@@ -94,6 +94,7 @@ research-kb discovery show --workspace <workspace.yaml> --candidate-id <discover
 research-kb discovery resolve --workspace <workspace.yaml> --candidate-id <discovery_id> --provider europe-pmc
 research-kb discovery acquire --workspace <workspace.yaml> --candidate-id <discovery_id> --provider europe-pmc --actor user
 research-kb intake inspect --workspace <workspace.yaml> --source <absolute-source-path>
+research-kb intake inspect-acquired --workspace <workspace.yaml> --candidate-id <discovery_id>
 research-kb compatibility inspect --workspace <workspace.yaml> --adapter <adapter_id>
 research-kb registry add --workspace <workspace.yaml> --root-id <root> --relative-path <path> --metadata <metadata.json>
 research-kb registry add --workspace <workspace.yaml> --root-id <root> --relative-path <path> --metadata -
@@ -116,7 +117,7 @@ research-kb transaction recover --workspace <workspace.yaml> [--dry-run]
 
 Existing source assets remain immutable. The only source-write exception is exact-user-authority `discovery acquire`, which may create one previously absent PDF under the configured `local_inbox`. Canonical writes stay under `knowledge_root` and emit a process event only after a validated atomic replacement.
 
-`capability show`, `discovery search`, `discovery list`, `discovery show`, `discovery resolve`, `intake inspect`, `parse show`, `paper status`, `paper context`, `review context`, and `step7 context` emit bounded JSON and write no workspace state. Capability output distinguishes installed adapters and built-in connectors without calling the network. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
+`capability show`, `discovery search`, `discovery list`, `discovery show`, `discovery resolve`, `intake inspect`, `intake inspect-acquired`, `parse show`, `paper status`, `paper context`, `review context`, and `step7 context` emit bounded JSON and write no workspace state. Capability output distinguishes installed adapters and built-in connectors without calling the network. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
 
 `discovery search` accepts an explicit date range, field-bound keywords, preprint choice and maximum of 1-15 results. It calls only the built-in fixed Europe PMC HTTPS endpoint, reapplies filters locally, merges exact DOI identity and marks possible title duplicates without merging them. It creates no workspace, candidate, event, report file or downloaded source. Public provider state is mutable; identical requests and provider page payloads produce identical normalized bytes.
 
@@ -127,6 +128,8 @@ Existing source assets remain immutable. The only source-write exception is exac
 `discovery acquire` requires exact `actor: user`, re-runs resolution, accepts only one repository-OA PDF, and creates `<local_inbox>/<candidate_id>.pdf` without overwrite. The candidate gains a portable receipt but remains `metadata_only` and `not_evidence: true`. Exact reruns are zero-write. Missing/changed receipts, existing unreceipted targets, partials and crash states stop or become Guardian findings; acquisition never chains into Registry or Parse.
 
 `intake inspect` accepts one absolute source path, confines it to exactly one declared source root, and returns only portable `root_id + relative_path`, exact-path registration state, and ordered Paper Card section IDs/labels. It hashes the source before and after projection, never returns the hash or absolute path, and performs no registration. The Portable Skill uses it for sequential reruns; concurrent inspect-and-register deduplication is not guaranteed.
+
+`intake inspect-acquired` accepts one acquired discovery candidate ID, verifies its receipt against the exact current inbox PDF, and emits the same intake projection plus deterministic Registry bibliography input. It writes nothing and performs no provider request. A separately requested Skill route may pass that projection to the existing `registry add`; acquisition alone still stops before Registry.
 
 `paper context` returns the selected paper's complete stored Paper Card or `null`, canonical Evidence records, and review queue records after complete-bundle and source-stability checks. It excludes source references, paths, parsed pages, Question Mappings, and unrelated papers. It is the public recovery surface for CLI-owned Unit, Evidence, and queue IDs, not a generic workspace export or semantic resume decision.
 
