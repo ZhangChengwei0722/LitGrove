@@ -72,6 +72,31 @@ def candidate_record() -> dict:
     return record
 
 
+def acquired_receipt() -> dict:
+    return {
+        "provider": "europe-pmc",
+        "provider_api_version": "synthetic-6.9",
+        "provider_asset_ref": {
+            "provider": "europe-pmc",
+            "source": "MED",
+            "record_id": "SYNTH-DISCOVERY-1",
+            "pmcid": "PMC1234567",
+            "asset_kind": "pdf",
+            "route": "europe-pmc-pdf-v1",
+        },
+        "resolution_context_id": "resolution_sha256_" + "c" * 64,
+        "access_basis": "repository_open_access",
+        "source_ref": {
+            "root_id": "alpha-sources",
+            "relative_path": "inbox/discovery_f0000001-0000-4000-8000-000000000001.pdf",
+        },
+        "source_fingerprint": {"algorithm": "sha256", "value": "d" * 64},
+        "content_size_bytes": 1024,
+        "content_type": "application/pdf",
+        "acquired_at": "2026-07-21T01:00:00Z",
+    }
+
+
 def test_candidate_schema_and_discovery_namespace_are_public() -> None:
     registry = SchemaRegistry()
     record = candidate_record()
@@ -91,6 +116,44 @@ def test_candidate_fixed_boundaries_cannot_be_relaxed() -> None:
     ):
         record = candidate_record()
         record[field] = value
+        assert validate_record("discovery-candidate", record, actor="stored")
+
+
+def test_candidate_acquired_receipt_is_backward_compatible_and_status_coupled() -> None:
+    legacy = candidate_record()
+    assert validate_record("discovery-candidate", legacy, actor="stored") == []
+
+    acquired = candidate_record()
+    acquired["acquisition_status"] = "acquired"
+    acquired["acquisition_receipt"] = acquired_receipt()
+    acquired["updated_at"] = "2026-07-21T01:00:00Z"
+    assert validate_record("discovery-candidate", acquired, actor="stored") == []
+
+    missing_receipt = candidate_record()
+    missing_receipt["acquisition_status"] = "acquired"
+    assert validate_record("discovery-candidate", missing_receipt, actor="stored")
+
+    premature_receipt = candidate_record()
+    premature_receipt["acquisition_receipt"] = acquired_receipt()
+    assert validate_record("discovery-candidate", premature_receipt, actor="stored")
+
+
+def test_candidate_receipt_rejects_non_oa_or_non_pdf_values() -> None:
+    for path, value in (
+        (("provider",), "other"),
+        (("access_basis",), "institutional"),
+        (("content_type",), "text/html"),
+        (("provider_asset_ref", "route"), "arbitrary-url"),
+        (("source_fingerprint", "algorithm"), "md5"),
+    ):
+        record = candidate_record()
+        record["acquisition_status"] = "acquired"
+        receipt = acquired_receipt()
+        target = receipt
+        for key in path[:-1]:
+            target = target[key]
+        target[path[-1]] = value
+        record["acquisition_receipt"] = receipt
         assert validate_record("discovery-candidate", record, actor="stored")
 
 

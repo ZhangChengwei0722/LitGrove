@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import os
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from research_kb.acquisition_paths import acquisition_destination
 from research_kb.bundle import BundleEntry, load_workspace_entries
 from research_kb.contracts.validator import validate_bundle, validate_record
 from research_kb.errors import (
@@ -55,6 +58,7 @@ class GuardianService:
                 )
             )
             diagnostics.extend(self._source_diagnostics(entries))
+            diagnostics.extend(self._acquisition_diagnostics(entries))
             for kind, mapping in entries:
                 if kind == "question-mapping" and not validate_record(
                     "question-mapping", mapping, actor="stored"
@@ -111,6 +115,89 @@ class GuardianService:
                         paper_id,
                         "/source_fingerprint",
                         "registered source is missing or its SHA-256 fingerprint changed",
+                    )
+                )
+        return diagnostics
+
+    def _acquisition_diagnostics(self, entries: list[BundleEntry]) -> list[Diagnostic]:
+        diagnostics: list[Diagnostic] = []
+        candidates = [record for kind, record in entries if kind == "discovery-candidate"]
+        valid_inbox = False
+        signature = bytes((37, 80, 68, 70, 45))
+        for candidate in candidates:
+            candidate_id = candidate["candidate_id"]
+            try:
+                destination = acquisition_destination(self.layout, candidate_id)
+            except ResearchKBError:
+                if candidate.get("acquisition_status") == "acquired":
+                    diagnostics.append(
+                        Diagnostic(
+                            GROUNDING_MISMATCH,
+                            "discovery-candidate",
+                            candidate_id,
+                            "/acquisition_receipt/source_ref",
+                            "acquired source is not addressable through the exact local_inbox contract",
+                        )
+                    )
+                continue
+            valid_inbox = True
+            if candidate.get("acquisition_status") == "not_started":
+                if os.path.lexists(destination.final_path):
+                    diagnostics.append(
+                        Diagnostic(
+                            INCOMPLETE_TRANSACTION,
+                            "discovery-candidate",
+                            candidate_id,
+                            "/acquisition_status",
+                            "candidate-named acquisition source exists without an acquired receipt",
+                        )
+                    )
+                continue
+
+            receipt = candidate.get("acquisition_receipt")
+            mismatch = not isinstance(receipt, dict) or receipt.get(
+                "source_ref"
+            ) != destination.source_ref.to_dict()
+            if not mismatch:
+                try:
+                    current = os.lstat(destination.final_path)
+                    mismatch = (
+                        not stat.S_ISREG(current.st_mode)
+                        or destination.final_path.is_symlink()
+                        or current.st_size != receipt["content_size_bytes"]
+                        or file_sha256(destination.final_path)
+                        != receipt["source_fingerprint"]["value"]
+                    )
+                    if not mismatch:
+                        with destination.final_path.open("rb") as stream:
+                            mismatch = stream.read(len(signature)) != signature
+                except (OSError, KeyError, TypeError):
+                    mismatch = True
+            if mismatch:
+                diagnostics.append(
+                    Diagnostic(
+                        GROUNDING_MISMATCH,
+                        "discovery-candidate",
+                        candidate_id,
+                        "/acquisition_receipt/source_fingerprint",
+                        "acquired source is missing, changed or outside its exact receipt target",
+                    )
+                )
+
+        if valid_inbox:
+            for _ in sorted(
+                self.layout.local_inbox.glob(
+                    ".research-kb-acquire-event_*.part.pdf"
+                ),
+                key=lambda item: item.name,
+            ):
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "discovery-acquisition",
+                        None,
+                        "/local_inbox",
+                        "operation-pattern acquisition partial remains in local_inbox",
                     )
                 )
         return diagnostics
@@ -291,6 +378,13 @@ def _finding_from_diagnostic(diagnostic: Diagnostic, defined_ids: set[str]) -> d
         remediation = "Reread the current parse and explicitly refresh the AI-owned Review Memory; do not rebind old source notes."
     elif diagnostic.code == SNAPSHOT_MISMATCH and diagnostic.record_kind in STEP7_RECORD_KINDS:
         remediation = "Refresh the candidate from the current Question Mapping and selected grounded Card Units; do not rewrite it automatically."
+    elif diagnostic.code == GROUNDING_MISMATCH and diagnostic.record_kind == "discovery-candidate":
+        remediation = "Restore the exact acquired source or inspect its receipt; do not overwrite or silently rebind it."
+    elif diagnostic.code == INCOMPLETE_TRANSACTION and diagnostic.record_kind in {
+        "discovery-candidate",
+        "discovery-acquisition",
+    }:
+        remediation = "Inspect the acquisition journal, receipt and operation-owned files; do not delete or adopt source files automatically."
     return {
         "code": diagnostic.code,
         "severity": diagnostic.severity,

@@ -15,6 +15,7 @@ class WorkspaceLayout:
     knowledge_root: Path
     domain_profile_path: Path
     source_roots: dict[str, Path]
+    local_inbox: Path
 
     @classmethod
     def load(cls, config_path: Path) -> "WorkspaceLayout":
@@ -28,6 +29,7 @@ class WorkspaceLayout:
             context.knowledge_root,
             context.domain_profile.path,
             context.source_roots,
+            context.local_inbox,
         )
 
     @property

@@ -314,6 +314,7 @@ class DiscoveryCandidateService:
                     "first_publication_date": item["first_publication_date"],
                     "paper_type": item["paper_type"],
                     "full_text_status": item["full_text_status"],
+                    "acquisition_status": item["acquisition_status"],
                     "target_question_ids": item["target_question_ids"],
                     "selection_context_count": len(item["selection_contexts"]),
                 }

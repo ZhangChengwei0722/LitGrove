@@ -98,11 +98,29 @@ research-kb discovery resolve --workspace <config> --candidate-id <discovery_id>
 4. Preserve one of `auto_acquisition_eligible`, `manual_review_required`, `institutional_browser_required` or `no_supported_oa_route` exactly as returned.
 5. Require `persistent_writes: 0`. Do not store the report or treat its `provider_asset_ref` as a URL.
 
-The command rechecks exact DOI or stored source identity and returns current provider observations. `auto_acquisition_eligible` does not authorize a download; a later acquisition contract must re-resolve under separate user authority.
+The command rechecks exact DOI or stored source identity and returns current provider observations. `auto_acquisition_eligible` alone does not authorize a download.
+
+## Explicit OA Acquisition
+
+Run this phase only when the user explicitly names exact already-selected candidate IDs for acquisition. Selection or resolution status alone is not enough.
+
+1. Require `explicit_oa_acquisition: true`, available `pdfplumber`, an existing workspace and no-change preflight.
+2. Call `discovery show` and `discovery resolve` for each exact candidate. Stop all non-eligible candidates without fallback.
+3. Call:
+
+```text
+research-kb discovery acquire --workspace <config> --candidate-id <discovery_id> --provider europe-pmc --actor user
+```
+
+4. Accept only `acquired` or `no_change`. Core re-resolves, chooses the configured destination, verifies the PDF and owns the receipt.
+5. Re-read with `discovery show`, run Guardian and report the returned portable `source_ref`, SHA-256, size and write count.
+6. Stop before `intake inspect`, Registry, Parse, Paper Card, Evidence, Question Mapping or Step 7. Those require a later invocation.
+
+Never create `local_inbox`, choose a filename, pass a URL, use browser credentials, overwrite an existing target, delete a partial/final manually or reinterpret a Guardian finding.
 
 ## Stop Boundary
 
-Do not download full text. Do not create a Registry record, choose a source-root destination, use a logged-in browser, post a document request or start downstream intake. `user_selected` and `auto_acquisition_eligible` are not `human_checked`, `verified`, `included` or acquisition approval.
+Outside exact `explicit_oa_acquisition`, do not download full text. Never create a Registry record, choose a source-root destination, use a logged-in browser, post a document request or start downstream intake from discovery. `user_selected`, `auto_acquisition_eligible` and `acquired` are not `human_checked`, `verified` or `included`.
 
 ## Failure
 

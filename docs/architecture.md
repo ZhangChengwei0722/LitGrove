@@ -251,7 +251,7 @@ The standard-library transport rejects redirects, bounds timeout and bytes, igno
 
 Exact normalized DOI identity may merge duplicate provider rows. Different or missing DOI identities are retained; similar titles only create symmetric possible-duplicate references. `paper_type`, full-text availability and unresolved version relation are metadata projections, not scientific judgment or acquisition authority.
 
-Live provider state can change, so M3C-1 does not promise byte-identical searches across time. It guarantees that the same validated request plus the same provider page payloads produce the same normalized bytes. Any page, transport or output failure produces no partial stdout report. Source download, browser login, downstream intake and Crossref remain separate milestones.
+Live provider state can change, so M3C-1 does not promise byte-identical searches across time. It guarantees that the same validated request plus the same provider page payloads produce the same normalized bytes. Any page, transport or output failure produces no partial stdout report. Browser login, downstream intake and Crossref remain separate milestones.
 
 ## M3C-2A Approved Candidate Handoff
 
@@ -267,4 +267,12 @@ complete validated M3C-1 report
 
 Candidate identity is the M3C-1 `result_key`; Core allocates a separate `discovery_<uuid4>` record ID. A selection context hashes provider, result key, normalized query and sorted target questions. Exact intent reruns are zero-write, a new context updates the existing candidate, and any metadata change under the same result key fails the whole batch with `RKBC-034`.
 
-The candidate store is metadata-only organizational state. Fixed fields remain `user_selected`, `metadata_only`, `not_started`, `not_evidence: true` and `passed_auto_checks`. Question IDs are labels pointing to existing mappings, not paper links. Events and journals contain only candidate and question IDs. `discovery list/show` validate the complete bundle and expose no source path or canonical paper content. Acquisition, refresh, deletion and Registry/intake chaining require later contracts.
+The candidate store is metadata-only organizational state. Selection creates `user_selected`, `metadata_only`, `not_started`, `not_evidence: true` and `passed_auto_checks`. Question IDs are labels pointing to existing mappings, not paper links. Events and journals contain only candidate and question IDs. `discovery list/show` validate the complete bundle and expose no absolute source path or canonical paper content.
+
+## M3C-2B OA Resolution And Explicit Acquisition
+
+`discovery resolve` is a zero-write live check against exact DOI or stored Europe PMC identity. It returns an opaque OA asset reference and never exposes or follows a provider URL as caller authority.
+
+`discovery acquire` is a separate exact-user-authority mutation. `local_inbox` must already exist under exactly one declared source root. The fixed PMCID route streams at most 64 MiB into an exclusive same-directory partial, validates PDF bytes and transient parser preflight, then publishes `<candidate_id>.pdf` create-only during the candidate-store transaction.
+
+Success changes only `acquisition_status` to `acquired` and adds a portable receipt. Existing `not_started` records need no migration. The source is still not registered, screened, parsed or evidence-bearing. Guardian verifies receipt hash/size/target and reports unreceipted finals, partials and crash journals without deleting or adopting them.

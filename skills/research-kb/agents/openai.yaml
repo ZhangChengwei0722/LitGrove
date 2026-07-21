@@ -1,4 +1,4 @@
 interface:
   display_name: "Research KB"
-  short_description: "Discover, ingest, and query traceable research"
-  default_prompt: "Use $research-kb to discover papers on demand, persist explicitly selected metadata candidates, ingest local papers, answer traceable knowledge-base questions, or explicitly maintain Step 7 candidates."
+  short_description: "Discover, acquire, ingest, and query traceable research"
+  default_prompt: "Use $research-kb to discover papers, explicitly acquire eligible OA candidates, ingest local papers, answer traceable knowledge-base questions, or maintain Step 7 candidates."

@@ -86,9 +86,9 @@ def test_openai_metadata_is_exact_and_mentions_skill() -> None:
     assert metadata == {
         "interface": {
             "display_name": "Research KB",
-            "short_description": "Discover, ingest, and query traceable research",
+            "short_description": "Discover, acquire, ingest, and query traceable research",
             "default_prompt": (
-                "Use $research-kb to discover papers on demand, persist explicitly selected metadata candidates, ingest local papers, answer traceable knowledge-base questions, or explicitly maintain Step 7 candidates."
+                "Use $research-kb to discover papers, explicitly acquire eligible OA candidates, ingest local papers, answer traceable knowledge-base questions, or maintain Step 7 candidates."
             ),
         }
     }
@@ -146,6 +146,7 @@ def test_skill_required_read_commands_match_public_capability() -> None:
     assert capability["features"]["step7_runtime"] is True
     assert capability["features"]["on_demand_discovery"] is True
     assert capability["features"]["approved_discovery_candidate_handoff"] is True
+    assert capability["features"]["explicit_oa_acquisition"] is True
     assert capability["features"]["legal_oa_resolution"] is True
 
 
@@ -268,6 +269,7 @@ def test_skill_routes_modes_before_mutation_and_preserves_query_ephemerality() -
     for mode in (
         "local_intake",
         "on_demand_discovery",
+        "explicit_oa_acquisition",
         "ephemeral_query",
         "explicit_step7_maintenance",
         "full_workflow_step7_refresh",
@@ -295,6 +297,7 @@ def test_discovery_workflow_separates_zero_write_search_from_explicit_handoff() 
         "discovery search",
         "discovery select",
         "discovery resolve",
+        "discovery acquire",
         "--actor user",
         "complete report",
         "metadata only",
@@ -306,7 +309,9 @@ def test_discovery_workflow_separates_zero_write_search_from_explicit_handoff() 
     assert "user_selected" in text
     assert "auto_acquisition_eligible" in text
     assert "legal_oa_resolution" in text
-    assert "Do not download full text" in text
+    assert "explicit_oa_acquisition" in text
+    assert "--actor user" in text
+    assert "Stop before `intake inspect`" in text
 
 
 def test_review_workflow_is_actionable_and_keeps_downstream_boundaries() -> None:
@@ -342,3 +347,4 @@ def test_task_report_defines_new_and_no_change_completion_outcomes() -> None:
     assert "invocation_mode:" in report
     assert "step7_maintenance:" in report
     assert "discovery_candidate_handoff:" in report
+    assert "oa_acquisition:" in report
