@@ -7,6 +7,12 @@ import tempfile
 import venv
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tests.docx_helpers import write_synthetic_docx
+
 
 def _run_json(python: Path, cwd: Path, *args: str) -> dict:
     completed = subprocess.run(
@@ -92,7 +98,7 @@ def _synthetic_discovery_selection() -> dict:
 
 
 def main() -> int:
-    root = Path(__file__).resolve().parents[1]
+    root = ROOT
     wheels = sorted((root / "dist").glob("research_kb_core-*.whl"))
     if not wheels:
         raise SystemExit("build a wheel before running the smoke test")
@@ -111,11 +117,11 @@ def main() -> int:
             "diagnostic_code": "RKBC-028",
         }:
             raise SystemExit("base wheel capability report did not expose the missing PDF dependency")
-        if not {"discovery search", "discovery list", "discovery show", "discovery resolve", "intake inspect", "intake inspect-acquired", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
+        if not {"discovery search", "discovery list", "discovery show", "discovery resolve", "intake inspect", "intake inspect-acquired", "manuscript inspect", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
             raise SystemExit("base wheel capability report lacks deterministic intake/context reads")
         if capability["discovery_connectors"] != [{"connector": "europe-pmc", "availability": "available", "network_required": True}]:
             raise SystemExit("base wheel capability report lacks the Europe PMC connector")
-        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["approved_discovery_candidate_handoff"] is not True or capability["features"]["legal_oa_resolution"] is not True or capability["features"]["explicit_oa_acquisition"] is not True:
+        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["approved_discovery_candidate_handoff"] is not True or capability["features"]["legal_oa_resolution"] is not True or capability["features"]["explicit_oa_acquisition"] is not True or capability["features"]["manuscript_projection"] is not True:
             raise SystemExit("base wheel capability report lacks Review Memory, Step 7 or discovery runtime")
         subprocess.run(
             [
@@ -125,7 +131,7 @@ def main() -> int:
                 "from research_kb.guardian import GuardianService; "
                 "from research_kb.discovery.europe_pmc import EuropePmcConnector, EuropePmcResolver; "
                 "from research_kb.discovery.europe_pmc_pdf import EuropePmcPdfTransport; "
-                "from research_kb.services import AcquiredCandidateIntakeService, CompatibilityAdapterRegistry, CompatibilityInspectionService, DiscoveryAcquisitionService, DiscoveryAcquisitionTransportRegistry, DiscoveryCandidateService, DiscoveryConnectorRegistry, DiscoveryResolutionService, DiscoveryResolverRegistry, DiscoveryService, IntakeInspectService, PaperContextService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService, ReviewContextService, ReviewMemoryService, Step7CandidateService, Step7ContextService, Step7ReadingViewService; "
+                "from research_kb.services import AcquiredCandidateIntakeService, CompatibilityAdapterRegistry, CompatibilityInspectionService, DiscoveryAcquisitionService, DiscoveryAcquisitionTransportRegistry, DiscoveryCandidateService, DiscoveryConnectorRegistry, DiscoveryResolutionService, DiscoveryResolverRegistry, DiscoveryService, IntakeInspectService, ManuscriptProjectionService, PaperContextService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService, ReviewContextService, ReviewMemoryService, Step7CandidateService, Step7ContextService, Step7ReadingViewService; "
                 "registry = SchemaRegistry(); "
                 "assert registry.schema('mutation-request')['$id'].endswith('mutation-request'); "
                 "assert registry.schema('compatibility-difference')['$id'].endswith('compatibility-difference'); "
@@ -149,6 +155,7 @@ def main() -> int:
                 "assert EuropePmcResolver.resolver_id == 'europe-pmc'; "
                 "assert EuropePmcPdfTransport.transport_id == 'europe-pmc'; "
                 "assert IntakeInspectService.__name__ == 'IntakeInspectService'; "
+                "assert ManuscriptProjectionService.__name__ == 'ManuscriptProjectionService'; "
                 "assert PaperContextService.__name__ == 'PaperContextService'; "
                 "assert ReviewContextService.__name__ == 'ReviewContextService'; "
                 "assert ReviewMemoryService.__name__ == 'ReviewMemoryService'; "
@@ -181,6 +188,12 @@ def main() -> int:
         )
         subprocess.run(
             [str(python), "-m", "research_kb", "intake", "inspect-acquired", "--help"],
+            cwd=temporary,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            [str(python), "-m", "research_kb", "manuscript", "inspect", "--help"],
             cwd=temporary,
             check=True,
             capture_output=True,
@@ -264,6 +277,54 @@ def main() -> int:
             raise SystemExit("wheel workspace lacks discovery directory")
         if any((workspace_root / "knowledge" / "discovery").iterdir()):
             raise SystemExit("workspace init created an empty discovery store")
+
+        manuscript_docx = write_synthetic_docx(
+            sources / "wheel-manuscript.docx",
+            body_xml=(
+                "<w:p><w:pPr><w:pStyle w:val=\"Heading1\"/></w:pPr>"
+                "<w:r><w:t>Invented wheel manuscript heading</w:t></w:r></w:p>"
+                "<w:p><w:r><w:t>Invented wheel manuscript paragraph.</w:t></w:r></w:p>"
+            ),
+        )
+        manuscript_pdf = sources / "wheel-manuscript.pdf"
+        manuscript_pdf.write_bytes(
+            bytes((37, 80, 68, 70, 45)) + b"1.7\nsynthetic base-wheel dependency boundary\n"
+        )
+        manuscript_knowledge_before = _tree_snapshot(workspace_root / "knowledge")
+        manuscript_sources_before = _tree_snapshot(sources)
+        manuscript = _run_json(
+            python,
+            Path(temporary),
+            "manuscript",
+            "inspect",
+            "--workspace",
+            str(config_path),
+            "--source",
+            str(manuscript_docx),
+        )
+        if manuscript["document"]["parser"] != {"adapter": "ooxml-stdlib", "version": "1.0"}:
+            raise SystemExit("base wheel DOCX manuscript parser identity is incorrect")
+        if manuscript["document"]["unit_count"] != 2 or manuscript["persistent_writes"] != 0:
+            raise SystemExit("base wheel DOCX manuscript projection is incomplete")
+        unavailable_manuscript = subprocess.run(
+            [
+                str(python), "-m", "research_kb", "manuscript", "inspect",
+                "--workspace", str(config_path), "--source", str(manuscript_pdf),
+            ],
+            cwd=temporary,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if unavailable_manuscript.returncode != 2 or unavailable_manuscript.stdout:
+            raise SystemExit("base wheel manuscript PDF did not fail closed without pdfplumber")
+        if json.loads(unavailable_manuscript.stderr)["diagnostic"]["code"] != "RKBC-028":
+            raise SystemExit("base wheel manuscript PDF returned the wrong dependency diagnostic")
+        if _tree_snapshot(workspace_root / "knowledge") != manuscript_knowledge_before:
+            raise SystemExit("base wheel manuscript projection changed managed workspace files")
+        if _tree_snapshot(sources) != manuscript_sources_before:
+            raise SystemExit("base wheel manuscript projection changed source files")
 
         selection = _run_json_stdin(
             python,

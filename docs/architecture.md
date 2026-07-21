@@ -8,7 +8,7 @@ Shared Core + CLI
 -> Separate private workspaces
 ```
 
-Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, Guardian checks, real-PDF page extraction, Step 7/discovery candidate persistence, and bounded stdout read surfaces. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Persisted Markdown and additional derived views remain deferred.
+Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, Guardian checks, real-PDF page extraction, Step 7/discovery candidate persistence, and bounded stdout read surfaces including manuscript projection. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Persisted Markdown and additional derived views remain deferred.
 
 ## Knowledge Flow
 
@@ -19,6 +19,7 @@ Source Intake -> Registry -> Parse
 -> Review route: background-only Review Memory
 -> Ephemeral query route: Paper Card Units -> optional Evidence trace-back -> task report
 -> Candidate thinking route: mapped grounded Card Units -> Step 7 structured candidates
+-> Manuscript route: exact local DOCX/PDF -> transient structured projection -> stop before audit
 -> Guardian / Feedback
 ```
 
@@ -288,3 +289,17 @@ The Portable Skill may pass the returned values unchanged to the existing `regis
 M3C-2D adds no Core runtime, schema, layout or capability flag. It removes a Portable Skill stop after the existing acquired-candidate Registry handoff: a separately authorized intake task now feeds the returned paper ID into the same `paper status`, context, Parse and mutually exclusive primary/review route used for local sources.
 
 The acquisition command remains isolated and cannot chain into intake. An explicit `registry_only` intake may still stop after Registry; ordinary knowledge-base intake continues through Guardian, and Step 7 remains separately explicit and primary-question scoped. Provider paper type remains metadata rather than scientific classification.
+
+## M3D-0A Read-Only Manuscript Projection
+
+```text
+initialized workspace + exact local DOCX/PDF under one source root
+-> portable source projection + SHA-256 stability checks
+-> bounded OOXML paragraph or pdfplumber page extraction
+-> stable task units and coverage limits on stdout
+-> zero persistence
+```
+
+DOCX projection reads only `word/document.xml` and optional `word/styles.xml`, preserves body/table paragraph order, and never follows relationships or executes embedded content. PDF projection reuses the fixed text-only `pdfplumber` policy. Both enforce source, archive, unit and text bounds and return `RKBC-035` for unsupported manuscript content while preserving `RKBC-028` for a missing PDF extra.
+
+The source fingerprint identifies the exact inspected draft but does not register it. No manuscript store, schema, ID, event, journal, cache, claim extraction, evidence match, audit finding or rewrite is created in M3D-0A.

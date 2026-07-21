@@ -20,6 +20,7 @@ from research_kb.services.records import RecordService
 from research_kb.storage.json_io import file_sha256, read_jsonl, serialize_json
 from research_kb.storage.transactions import TransactionManager
 from tests.fixture_factory import make_bundle
+from tests.docx_helpers import write_synthetic_docx
 from tests.pdf_helpers import write_synthetic_pdf
 from tests.runtime_helpers import make_runtime_workspace
 from tests.unit.test_question_mapping_service import _append_request, _link, _prepare_paper
@@ -81,11 +82,13 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert output["interface_version"] == "1.0"
     assert "intake inspect" in output["read_commands"]
     assert "intake inspect-acquired" in output["read_commands"]
+    assert "manuscript inspect" in output["read_commands"]
     assert "paper context" in output["read_commands"]
     assert "paper status" in output["read_commands"]
     assert "review context" in output["read_commands"]
     assert "review-memory" in output["mutation_record_kinds"]
     assert output["features"]["review_runtime"] is True
+    assert output["features"]["manuscript_projection"] is True
     assert "discovery search" in output["read_commands"]
     assert "discovery list" in output["read_commands"]
     assert "discovery resolve" in output["read_commands"]
@@ -94,6 +97,45 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert output["features"]["approved_discovery_candidate_handoff"] is True
     assert output["features"]["explicit_oa_acquisition"] is True
     assert output["features"]["legal_oa_resolution"] is True
+
+
+def test_manuscript_inspect_cli_emits_one_read_only_docx_report(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = write_synthetic_docx(
+        layout.source_roots["alpha-sources"] / "cli-draft.docx",
+        body_xml="<w:p><w:r><w:t>Invented CLI manuscript.</w:t></w:r></w:p>",
+    )
+    before = _tree_bytes(layout.config.path.parent)
+
+    assert main([
+        "manuscript", "inspect", "--workspace", str(layout.config.path),
+        "--source", str(source),
+    ]) == 0
+
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert captured.err == ""
+    assert report["document"]["format"] == "docx"
+    assert report["units"][0]["text"] == "Invented CLI manuscript."
+    assert report["persistent_writes"] == 0
+    assert _tree_bytes(layout.config.path.parent) == before
+
+
+def test_manuscript_inspect_cli_failure_keeps_stdout_empty(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = layout.source_roots["alpha-sources"] / "broken.docx"
+    source.write_bytes(b"broken synthetic OOXML")
+    before = _tree_bytes(layout.config.path.parent)
+
+    assert main([
+        "manuscript", "inspect", "--workspace", str(layout.config.path),
+        "--source", str(source),
+    ]) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err)["diagnostic"]["code"] == "RKBC-035"
+    assert _tree_bytes(layout.config.path.parent) == before
 
 
 def test_discovery_search_cli_stdin_and_file_are_equal_and_read_only(

@@ -54,6 +54,7 @@ from research_kb.services.parse import ParseService
 from research_kb.services.bootstrap import WorkspaceBootstrapService
 from research_kb.services.compatibility import CompatibilityAdapterRegistry, CompatibilityInspectionService
 from research_kb.services.intake_inspect import IntakeInspectService
+from research_kb.services.manuscript_projection import ManuscriptProjectionService
 from research_kb.services.discovery import DiscoveryConnectorRegistry, DiscoveryService
 from research_kb.services.discovery_candidate import DiscoveryCandidateService
 from research_kb.services.discovery_acquisition import (
@@ -142,6 +143,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     intake_inspect_acquired.add_argument("--workspace", required=True, type=Path)
     intake_inspect_acquired.add_argument("--candidate-id", required=True)
+
+    manuscript = commands.add_parser("manuscript", help="project one local manuscript read-only")
+    manuscript_commands = manuscript.add_subparsers(dest="manuscript_command", required=True)
+    manuscript_inspect = manuscript_commands.add_parser(
+        "inspect",
+        help="emit bounded DOCX or PDF manuscript units",
+    )
+    manuscript_inspect.add_argument("--workspace", required=True, type=Path)
+    manuscript_inspect.add_argument("--source", required=True, type=Path)
 
     compatibility = commands.add_parser("compatibility", help="inspect legacy data through explicit read-only adapters")
     compatibility_commands = compatibility.add_subparsers(dest="compatibility_command", required=True)
@@ -285,6 +295,8 @@ def main(
             return _intake_inspect(args)
         if args.command == "intake" and args.intake_command == "inspect-acquired":
             return _intake_inspect_acquired(args)
+        if args.command == "manuscript" and args.manuscript_command == "inspect":
+            return _manuscript_inspect(args)
         if args.command == "compatibility" and args.compatibility_command == "inspect":
             return _compatibility_inspect(args, compatibility_adapters)
         if args.command == "contract" and args.contract_command == "validate":
@@ -355,6 +367,12 @@ def _workspace_init(args: argparse.Namespace) -> int:
 def _intake_inspect(args: argparse.Namespace) -> int:
     layout = WorkspaceLayout.load(args.workspace)
     _write_json_once(IntakeInspectService(layout).inspect(source=args.source))
+    return 0
+
+
+def _manuscript_inspect(args: argparse.Namespace) -> int:
+    layout = WorkspaceLayout.load(args.workspace)
+    _write_json_once(ManuscriptProjectionService(layout).inspect(source=args.source))
     return 0
 
 

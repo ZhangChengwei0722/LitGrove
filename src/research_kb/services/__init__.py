@@ -12,6 +12,7 @@ from research_kb.services.discovery_acquisition import (
 )
 from research_kb.services.discovery_resolution import DiscoveryResolutionService, DiscoveryResolverRegistry
 from research_kb.services.intake_inspect import IntakeInspectService
+from research_kb.services.manuscript_projection import ManuscriptProjectionService
 from research_kb.services.parse import ParseService
 from research_kb.services.parse_read import ParseReadService
 from research_kb.services.paper_context import PaperContextService
@@ -39,6 +40,7 @@ __all__ = [
     "DiscoveryResolverRegistry",
     "DiscoveryService",
     "IntakeInspectService",
+    "ManuscriptProjectionService",
     "ParseService",
     "ParseReadService",
     "PaperContextService",

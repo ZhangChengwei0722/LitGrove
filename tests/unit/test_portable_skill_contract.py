@@ -72,6 +72,7 @@ def test_skill_frontmatter_and_progressive_disclosure_contract() -> None:
         "trace-back",
         "step 7",
         "discovery",
+        "manuscript",
     ):
         assert trigger in description
     assert len((SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8").splitlines()) < 500
@@ -88,7 +89,7 @@ def test_openai_metadata_is_exact_and_mentions_skill() -> None:
             "display_name": "Research KB",
             "short_description": "Discover, acquire, ingest, and query traceable research",
             "default_prompt": (
-                "Use $research-kb to discover papers, explicitly acquire eligible OA candidates, ingest local papers, answer traceable knowledge-base questions, or maintain Step 7 candidates."
+                "Use $research-kb to discover papers, explicitly acquire eligible OA candidates, ingest local papers, inspect an exact local manuscript read-only, answer traceable knowledge-base questions, or maintain Step 7 candidates."
             ),
         }
     }
@@ -135,6 +136,7 @@ def test_skill_required_read_commands_match_public_capability() -> None:
         "review context",
         "step7 context",
         "step7 render",
+        "manuscript inspect",
         "discovery list",
         "discovery resolve",
         "discovery search",
@@ -149,6 +151,7 @@ def test_skill_required_read_commands_match_public_capability() -> None:
     assert capability["features"]["approved_discovery_candidate_handoff"] is True
     assert capability["features"]["explicit_oa_acquisition"] is True
     assert capability["features"]["legal_oa_resolution"] is True
+    assert capability["features"]["manuscript_projection"] is True
 
 
 def test_cli_reference_contains_minimal_stdin_promotion_envelopes() -> None:
@@ -275,12 +278,29 @@ def test_skill_routes_modes_before_mutation_and_preserves_query_ephemerality() -
         "ephemeral_query",
         "explicit_step7_maintenance",
         "full_workflow_step7_refresh",
+        "manuscript_projection",
     ):
         assert f"`{mode}`" in body
     assert "Classify the invocation mode before any mutation" in body
     assert "Ordinary knowledge queries never persist" in body
     assert "Allow only `already_present` plus the planned `acquire_workspace_lock` action" in body
     assert "Exact reruns write nothing" in body
+
+
+def test_manuscript_projection_mode_stops_before_semantic_audit() -> None:
+    _, body = _skill_parts()
+    text = _package_text()
+
+    for required in (
+        "exact user-supplied DOCX or PDF",
+        "manuscript inspect",
+        "persistent_writes: 0",
+        "coverage_limits",
+        "source_fingerprint",
+    ):
+        assert required in text
+    assert "Stop after the projection report" in body
+    assert "Do not perform or claim semantic claim extraction, criteria evaluation, evidence matching or rewriting" in text
 
 
 def test_discovery_workflow_separates_zero_write_search_from_explicit_handoff() -> None:

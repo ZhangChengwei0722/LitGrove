@@ -74,6 +74,7 @@ class CapabilityService:
                     "guardian check",
                     "intake inspect",
                     "intake inspect-acquired",
+                    "manuscript inspect",
                     "paper context",
                     "paper status",
                     "parse show",
@@ -94,6 +95,7 @@ class CapabilityService:
                 "approved_discovery_candidate_handoff": True,
                 "explicit_oa_acquisition": True,
                 "legal_oa_resolution": True,
+                "manuscript_projection": True,
             },
         }
 

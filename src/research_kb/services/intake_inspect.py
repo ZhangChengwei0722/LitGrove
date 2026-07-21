@@ -14,13 +14,9 @@ class IntakeInspectService:
         self.layout = layout
 
     def inspect(self, *, source: Path) -> dict[str, Any]:
-        if not source.is_absolute():
-            raise _path_error("source path must be absolute")
-
         entries = load_workspace_entries(self.layout)
         validate_workspace_entries(entries)
-        resolved_source = _resolve_regular_file(source)
-        root_id, relative_path = self._project_source_ref(resolved_source)
+        resolved_source, root_id, relative_path = self.project_source(source)
 
         source_hash = file_sha256(resolved_source)
         if source_hash is None:
@@ -76,6 +72,13 @@ class IntakeInspectService:
                 ],
             },
         }
+
+    def project_source(self, source: Path) -> tuple[Path, str, str]:
+        if not source.is_absolute():
+            raise _path_error("source path must be absolute")
+        resolved_source = _resolve_regular_file(source)
+        root_id, relative_path = self._project_source_ref(resolved_source)
+        return resolved_source, root_id, relative_path
 
     def _project_source_ref(self, source: Path) -> tuple[str, str]:
         containing_roots = [
