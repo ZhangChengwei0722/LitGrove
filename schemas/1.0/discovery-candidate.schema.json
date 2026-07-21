@@ -58,6 +58,47 @@
         },
         "selected_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
       }
+    },
+    "provider_asset_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "source", "record_id", "pmcid", "asset_kind", "route"],
+      "properties": {
+        "provider": {"const": "europe-pmc"},
+        "source": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$"},
+        "record_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$"},
+        "pmcid": {"type": "string", "pattern": "^PMC[0-9]+$"},
+        "asset_kind": {"const": "pdf"},
+        "route": {"const": "europe-pmc-pdf-v1"}
+      }
+    },
+    "acquisition_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "provider_api_version",
+        "provider_asset_ref",
+        "resolution_context_id",
+        "access_basis",
+        "source_ref",
+        "source_fingerprint",
+        "content_size_bytes",
+        "content_type",
+        "acquired_at"
+      ],
+      "properties": {
+        "provider": {"const": "europe-pmc"},
+        "provider_api_version": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,64}$"},
+        "provider_asset_ref": {"$ref": "#/$defs/provider_asset_ref"},
+        "resolution_context_id": {"type": "string", "pattern": "^resolution_sha256_[0-9a-f]{64}$"},
+        "access_basis": {"const": "repository_open_access"},
+        "source_ref": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_ref"},
+        "source_fingerprint": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_fingerprint"},
+        "content_size_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "content_type": {"const": "application/pdf"},
+        "acquired_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+      }
     }
   },
   "type": "object",
@@ -121,11 +162,22 @@
     "target_question_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/question_id"}},
     "selection_status": {"const": "user_selected"},
     "source_status": {"const": "metadata_only"},
-    "acquisition_status": {"const": "not_started"},
+    "acquisition_status": {"enum": ["not_started", "acquired"]},
+    "acquisition_receipt": {"$ref": "#/$defs/acquisition_receipt"},
     "not_evidence": {"const": true},
     "automation_status": {"const": "passed_auto_checks"},
     "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
     "updated_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
     "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["acquisition_status"],
+        "properties": {"acquisition_status": {"const": "acquired"}}
+      },
+      "then": {"required": ["acquisition_receipt"]},
+      "else": {"not": {"required": ["acquisition_receipt"]}}
+    }
+  ]
 }

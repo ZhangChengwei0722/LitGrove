@@ -9,7 +9,14 @@ from research_kb.workspace import WorkspaceLayout
 from tests.fixture_factory import SECTIONS
 
 
-def make_runtime_workspace(tmp_path: Path, domain: str = "alpha") -> WorkspaceLayout:
+def make_runtime_workspace(
+    tmp_path: Path,
+    domain: str = "alpha",
+    *,
+    local_inbox: str = "./inbox",
+    create_local_inbox: bool = False,
+    source_roots: list[dict[str, object]] | None = None,
+) -> WorkspaceLayout:
     root = tmp_path / domain
     root.mkdir()
     (root / "sources").mkdir()
@@ -23,8 +30,9 @@ def make_runtime_workspace(tmp_path: Path, domain: str = "alpha") -> WorkspaceLa
         "workspace": {
             "id": workspace_id,
             "knowledge_root": "./knowledge",
-            "source_roots": [{"root_id": f"{domain}-sources", "path": "./sources", "read_only_assets": True}],
-            "local_inbox": "./inbox",
+            "source_roots": source_roots
+            or [{"root_id": f"{domain}-sources", "path": "./sources", "read_only_assets": True}],
+            "local_inbox": local_inbox,
             "domain_profile": "./domain-profile.yaml",
         },
         "runtime": {"path_serialization": "workspace_relative_posix", "default_encoding": "utf-8", "line_ending": "lf"},
@@ -52,6 +60,8 @@ def make_runtime_workspace(tmp_path: Path, domain: str = "alpha") -> WorkspaceLa
         encoding="utf-8",
         newline="\n",
     )
+    if create_local_inbox:
+        (root / local_inbox).mkdir(parents=True)
     result = WorkspaceBootstrapService(config_path).run()
     if result.exit_code != 0:
         raise AssertionError(result.to_dict())

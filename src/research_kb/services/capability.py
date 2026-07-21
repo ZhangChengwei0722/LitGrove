@@ -91,6 +91,7 @@ class CapabilityService:
                 "step7_runtime": True,
                 "on_demand_discovery": True,
                 "approved_discovery_candidate_handoff": True,
+                "explicit_oa_acquisition": True,
                 "legal_oa_resolution": True,
             },
         }

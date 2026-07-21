@@ -7,7 +7,7 @@ Return one concise private task report after the invocation. The report is not c
 Always report:
 
 ```yaml
-invocation_mode: on_demand_discovery | local_intake | ephemeral_query | explicit_step7_maintenance | full_workflow_step7_refresh
+invocation_mode: on_demand_discovery | explicit_oa_acquisition | local_intake | ephemeral_query | explicit_step7_maintenance | full_workflow_step7_refresh
 persistent_writes:
 workspace_preflight:
 guardian:
@@ -66,6 +66,29 @@ discovery_candidate_handoff:
 ```
 
 Do not report handoff for results the user did not name. `persistent_writes` is `0` for an exact no-change rerun and `1` for one atomic candidate-store replacement, regardless of candidate count.
+
+If exact OA acquisition was requested, add one item per candidate:
+
+```yaml
+oa_acquisition:
+  - candidate_id:
+    provider: europe-pmc
+    resolution_status:
+    outcome: acquired | no_change | stopped
+    source_ref:
+      root_id:
+      relative_path:
+    source_fingerprint:
+      algorithm: sha256
+      value:
+    content_size_bytes:
+    guardian_status:
+    persistent_writes:
+    registry_records_created: false
+    downstream_intake_started: false
+```
+
+Never report an absolute path, provider URL or paper ID from acquisition. A stopped item keeps `source_ref` and fingerprint null. `persistent_writes` is `2` for one newly published source plus candidate receipt and `0` for exact no-change.
 
 ## Batch Summary
 

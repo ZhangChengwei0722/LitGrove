@@ -12,6 +12,7 @@ Use only public `research-kb` commands. Build every command result completely be
 | `research-kb discovery list --workspace <config>` | read | bounded candidate summaries | Reconcile selected metadata candidates without reading JSONL. |
 | `research-kb discovery show --workspace <config> --candidate-id <id>` | read | one complete metadata candidate | Confirm context and fixed non-evidence states. |
 | `research-kb discovery resolve --workspace <config> --candidate-id <id> --provider europe-pmc` | external read | current OA routing report | Check one selected candidate; never infer acquisition authority. |
+| `research-kb discovery acquire --workspace <config> --candidate-id <id> --provider europe-pmc --actor user` | source plus candidate mutation | portable receipt and write count | Use only for exact user-requested OA acquisition; stop before intake. |
 | `research-kb workspace init --workspace <config> --dry-run` | read-only preflight | result, actions, diagnostics | Apply only an existing valid config with bounded safe actions. |
 | `research-kb workspace init --workspace <config>` | operational mutation | result, diagnostics | Bind or validate the managed layout; never author config. |
 | `research-kb intake inspect --workspace <config> --source <absolute-path>` | read | portable source, registration state, Card sections | Reuse, register or stop exactly as reported. |
@@ -53,7 +54,7 @@ step7 context
 step7 render
 ```
 
-For discovery search, require `on_demand_discovery: true` and an available `europe-pmc` connector. Do not require a workspace or `pdfplumber`. For explicit candidate handoff, also require `approved_discovery_candidate_handoff: true`, an existing workspace and the `discovery list/show` reads. For one selected candidate's OA check, additionally require `legal_oa_resolution: true`; resolution remains zero-write and does not authorize acquisition.
+For discovery search, require `on_demand_discovery: true` and an available `europe-pmc` connector. Do not require a workspace or `pdfplumber`. For explicit candidate handoff, also require `approved_discovery_candidate_handoff: true`, an existing workspace and the `discovery list/show` reads. For one selected candidate's OA check, additionally require `legal_oa_resolution: true`. For exact user-requested acquisition, require `explicit_oa_acquisition: true`, available `pdfplumber`, `discovery show/resolve` and no-change workspace preflight.
 
 For local intake, query and Step 7 modes, require `real_pdf_parse: true`, plus `pdfplumber` with `availability: available` and a non-empty version. A declared feature with a missing optional dependency is not executable.
 
@@ -73,6 +74,7 @@ For query and Step 7 maintenance, use `workspace init --dry-run` only. Its succe
 - `discovery search` reads one fixed public metadata provider and writes no local state. Its live results are mutable external input.
 - `discovery list/show` validate the complete workspace and expose only persisted metadata candidates; they do not resolve live-provider staleness.
 - `discovery resolve` rechecks one selected candidate through exact stored identity, returns no URL and writes no state.
+- `discovery acquire` is the only source-write route; Core owns the exact inbox target, PDF validation, create-only publication and receipt.
 
 Do not parse workspace or domain-profile configuration. Do not read canonical JSON or JSONL files directly. Do not infer IDs or canonical paths.
 
@@ -80,7 +82,7 @@ Do not parse workspace or domain-profile configuration. Do not read canonical JS
 
 Send one UTF-8 JSON object through stdin for discovery search/selection, Registry metadata or mutation requests. Do not send YAML, exceed published limits or create temporary request files. Ordinary record mutations still use `record promote`; discovery candidate handoff uses its dedicated user-authority command.
 
-Use `actor: agent` for ordinary record mutation. Use exact `--actor user` only to transcribe the user's explicit discovery result-key selection. Never infer user authority or request user-only review or screening states.
+Use `actor: agent` for ordinary record mutation. Use exact `--actor user` only to transcribe explicit discovery result-key selection or exact candidate acquisition requested by the user. Never infer user authority or request user-only review or screening states.
 
 ### Discovery request
 

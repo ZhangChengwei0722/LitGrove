@@ -20,26 +20,27 @@ Milestone 1B implements this deterministic storage lifecycle. M3A-0A adds explic
 2. `discovery search` sends one bounded request to the fixed Europe PMC endpoint, locally refilters normalized metadata and emits a transient zero-write report.
 3. After the user explicitly chooses result keys, `discovery select --actor user` validates the complete report and atomically persists only those metadata candidates; `discovery list/show` are read-only.
 4. `discovery resolve` rechecks one selected candidate through a fixed Europe PMC identity and emits a transient OA-policy report without download or persistence.
-5. `workspace init --dry-run` validates an existing config and reports planned managed actions without deliberate filesystem mutation.
-6. `workspace init` binds the managed root with a deterministic marker. Repeating it with the same config returns `no_change`.
-7. `intake inspect` maps one absolute source path to a portable source reference, exact Registry state and active Card sections without writing or registering it.
-8. `compatibility inspect` uses only adapters explicitly injected by a private in-process caller. It emits a read-only report to stdout and never persists compatibility state.
-9. `registry add` resolves a declared source root, hashes the source read-only, and preserves exact duplicates as reciprocal candidates. `--metadata -` accepts one bounded JSON object through stdin.
-10. `parse run` uses the explicitly requested `synthetic-text` or optional `pdfplumber` adapter and writes validated page records without creating a full-text copy. It reports exact adapter/version identity and never falls back to OCR or another adapter.
-11. `parse show` emits all validated active pages or one positive PDF page after source-fingerprint checks, without creating a full-text copy or read artifact.
-12. `record promote` loads a file request or bounded stdin JSON object, injects IDs/timestamps/fingerprints, enforces actor authority, and promotes one canonical store.
-13. `paper context` returns the selected primary paper's stored Card, Evidence and review queue context after source-stability checks, without exposing canonical paths or creating a read artifact.
-14. `review context` separately returns one Review Memory, freshness and transient exact DOI matches without changing `paper context 1.0`.
-15. A `question-mapping` request selects Card Units for a user-supplied or explicitly approved question. Core derives evidence and required boundaries before atomic promotion.
-16. `paper status` projects deterministic stage, freshness, Guardian and transaction safety facts without scientific content or a resume decision.
-17. `question list/show` retrieves deterministic structured mappings without writing a reading view, report, event, or journal.
-18. `question render` validates one mapping and emits its complete Markdown reading view to stdout without persisting the view or changing structured state.
-19. A Step 7 `record promote` request selects grounded/revised Card Units already admitted by one current Question Mapping. Core derives exact Evidence and Unit-boundary closure before atomic promotion.
-20. `step7 context` returns only one question's complete candidates plus deterministic current/stale projections; `step7 render` emits the corresponding non-canonical Markdown reading view to stdout.
-21. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
-22. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
+5. `discovery acquire --actor user` re-runs resolution and may create one new PDF in an exact configured `local_inbox`, then atomically receipts the candidate without Registry chaining.
+6. `workspace init --dry-run` validates an existing config and reports planned managed actions without deliberate filesystem mutation.
+7. `workspace init` binds the managed root with a deterministic marker. Repeating it with the same config returns `no_change`.
+8. `intake inspect` maps one absolute source path to a portable source reference, exact Registry state and active Card sections without writing or registering it.
+9. `compatibility inspect` uses only adapters explicitly injected by a private in-process caller. It emits a read-only report to stdout and never persists compatibility state.
+10. `registry add` resolves a declared source root, hashes the source read-only, and preserves exact duplicates as reciprocal candidates. `--metadata -` accepts one bounded JSON object through stdin.
+11. `parse run` uses the explicitly requested `synthetic-text` or optional `pdfplumber` adapter and writes validated page records without creating a full-text copy. It reports exact adapter/version identity and never falls back to OCR or another adapter.
+12. `parse show` emits all validated active pages or one positive PDF page after source-fingerprint checks, without creating a full-text copy or read artifact.
+13. `record promote` loads a file request or bounded stdin JSON object, injects IDs/timestamps/fingerprints, enforces actor authority, and promotes one canonical store.
+14. `paper context` returns the selected primary paper's stored Card, Evidence and review queue context after source-stability checks, without exposing canonical paths or creating a read artifact.
+15. `review context` separately returns one Review Memory, freshness and transient exact DOI matches without changing `paper context 1.0`.
+16. A `question-mapping` request selects Card Units for a user-supplied or explicitly approved question. Core derives evidence and required boundaries before atomic promotion.
+17. `paper status` projects deterministic stage, freshness, Guardian and transaction safety facts without scientific content or a resume decision.
+18. `question list/show` retrieves deterministic structured mappings without writing a reading view, report, event, or journal.
+19. `question render` validates one mapping and emits its complete Markdown reading view to stdout without persisting the view or changing structured state.
+20. A Step 7 `record promote` request selects grounded/revised Card Units already admitted by one current Question Mapping. Core derives exact Evidence and Unit-boundary closure before atomic promotion.
+21. `step7 context` returns only one question's complete candidates plus deterministic current/stale projections; `step7 render` emits the corresponding non-canonical Markdown reading view to stdout.
+22. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
+23. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
 
-Every workspace-bound runtime command uses the same semantic validator and requires a matching workspace marker. `capability show` and `discovery search` are workspace-independent. No command accepts a raw `knowledge_root` override or a source-write operation. `discovery resolve` is an external read against one persisted candidate and does not write the workspace. `local_inbox` remains user-owned and is never created or scanned by bootstrap.
+Every workspace-bound runtime command uses the same semantic validator and requires a matching workspace marker. `capability show` and `discovery search` are workspace-independent. No command accepts a raw `knowledge_root` or output-path override. `discovery resolve` is an external read against one persisted candidate. `local_inbox` remains user-owned and is never created by bootstrap; only explicit acquisition scans exact operation names and creates one absent candidate PDF.
 
 Compatibility reports classify what can be read directly, projected through an adapter, left unsupported, or retained as a legacy reading view. They do not select a migration target or change authority. Core rechecks all declared protected files and trees in a `finally` path; source change takes precedence over an ordinary adapter failure.
 
@@ -60,7 +61,7 @@ Question origins are explicit mutation context:
 - `existing_question`: refresh an already persisted mapping;
 - an unapproved Agent-generated question stays in the task report and is not persisted.
 
-Discovery candidate authority is separate: only exact `actor: user` may select report results. The resulting fixed states record follow-up intent only. They do not grant `human_checked`, `verified`, screening, acquisition or Registry authority.
+Discovery candidate authority is separate: only exact `actor: user` may select report results. Selection records follow-up intent only and does not grant acquisition. A later exact `discovery acquire --actor user` is a separate authority event and still grants no `human_checked`, `verified`, screening or Registry authority.
 
 ## Failure Boundary
 
@@ -98,11 +99,11 @@ Stdin accepts JSON only for discovery search/selection requests, Registry metada
 
 ## Portable Skill Workflow
 
-The repo-owned `research-kb` Skill routes workspace-independent on-demand discovery, optional explicit candidate handoff, local PDF intake or an existing-workspace knowledge query. Discovery resolves explicit dates and field-bound keywords, calls the built-in connector and reports 0-15 metadata results with zero writes. Only after the user names selected result keys may the Skill require an existing workspace and call `discovery select --actor user`; it stops before acquisition or intake. Intake processes one source at a time, resolves or registers the exact path, resumes from current Core state, parses with explicit `pdfplumber`, then selects one mutually exclusive route: ground a complete question-independent primary Card or build one background-only Review Memory. Only the primary route maps approved questions.
+The repo-owned `research-kb` Skill routes workspace-independent on-demand discovery, optional explicit candidate handoff, separately requested OA acquisition, local PDF intake or an existing-workspace knowledge query. Discovery resolves explicit dates and field-bound keywords and reports 0-15 metadata results with zero writes. Candidate selection and acquisition each require separate exact user authority. Acquisition stops after reporting its portable source reference. Intake remains a later invocation that processes one source at a time, parses with explicit `pdfplumber`, then selects one mutually exclusive primary or review route.
 
 The Skill maintains no checkpoint. Reruns recover state through `intake inspect`, `paper status` and `paper context`; exact existing records are reused, while stale state, ambiguous sources and uncertain near-duplicates stop. Paper-local unsupported-PDF or document-type failures may be isolated, but workspace/transaction integrity failures stop the batch.
 
-Document classification and the final report remain local to the active task. Supported high-confidence reviews use the common Review Memory route; ambiguous, mixed and unsupported types stop before mutation. Knowledge queries start from grounded/revised Paper Card Units and expand to canonical Evidence for trace-back. Discovery search and ordinary queries write nothing; explicit user selection may write only metadata candidates. Explicit Step 7 maintenance and an explicitly complete intake workflow may use the deterministic Core runtime. Subtype-specific review schemas, Field Map integration, Review Unit Question Mapping, acquisition, OCR, migration and workspace-config generation are not implemented.
+Document classification and the final report remain local to the active task. Supported high-confidence reviews use the common Review Memory route; ambiguous, mixed and unsupported types stop before mutation. Knowledge queries start from grounded/revised Paper Card Units and expand to canonical Evidence for trace-back. Discovery search and ordinary queries write nothing; explicit selection writes metadata candidates and explicit OA acquisition may add a source receipt. Explicit Step 7 maintenance and an explicitly complete intake workflow may use the deterministic Core runtime. Subtype-specific review schemas, Field Map integration, Review Unit Question Mapping, institutional/browser acquisition, OCR, migration and workspace-config generation are not implemented.
 
 ## Step 7 Candidate Flow
 

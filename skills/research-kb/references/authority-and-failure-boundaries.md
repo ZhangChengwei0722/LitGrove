@@ -14,7 +14,7 @@ The Agent may create or check candidates only where the public contract permits.
 
 A generated Research Question remains report-only until the user approves it.
 
-Discovery search results remain report-only until the user explicitly names result keys. That selection may create metadata-only candidates through M3C-2A, but it does not authorize a download, choose a destination path, register a paper or assign review/screening status.
+Discovery search results remain report-only until the user explicitly names result keys. Selection may create metadata-only candidates, but it does not authorize acquisition. Exact acquisition is a separate user-authority action and still does not register a paper or assign review/screening status.
 
 Ordinary knowledge queries are read-only. If persistence intent is ambiguous, use `ephemeral_query` and report `persistent_writes: 0`.
 
@@ -29,6 +29,8 @@ Do not pad zero results, accept an arbitrary endpoint, follow a provider full-te
 Candidate handoff requires the complete report and exact `actor: user` after explicit result-key selection. Do not infer selection, drop unselected rows from the submitted report, create a question, or interpret `user_selected` as `human_checked`, `verified`, `included` or acquisition approval. `RKBC-034` blocks the complete batch; never refresh changed metadata silently.
 
 `discovery resolve` may check exactly one selected candidate through the fixed Europe PMC route. It returns transient access-policy observations only. Never persist the report, expose or follow a provider URL, or treat `auto_acquisition_eligible` as download authority.
+
+`discovery acquire` may run only for exact candidate IDs explicitly requested by the user and exact `--actor user`. Core owns the fixed Europe PMC request and deterministic local-inbox target. Never create the inbox, choose a path, overwrite or delete a pre-existing source, use a browser/session, or chain success into Registry/intake.
 
 ## Evidence Boundary
 
@@ -61,7 +63,7 @@ Stop for:
 - stale or inconsistent parse identity;
 - claims requiring OCR, geometry, figures, tables, supplements or non-contiguous excerpts.
 
-Never move, copy, rename, delete or edit a source asset.
+Never move, copy, rename, delete or edit an existing source asset. The only exception is Core's create-only `discovery acquire`; do not reproduce its source-write or cleanup behavior manually.
 
 ## Integrity Stops
 

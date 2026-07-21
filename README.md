@@ -4,7 +4,7 @@ Cross-platform, local-first contracts and deterministic CLI primitives for evide
 
 ## Current Scope
 
-Milestone 1B through the M3C-2A repository slice provide:
+Milestone 1B through the M3C-2B2 repository slice provide:
 
 - versioned workspace, domain, record, and candidate schemas;
 - portable source references and stable IDs;
@@ -38,10 +38,10 @@ Milestone 1B through the M3C-2A repository slice provide:
 - four deterministic Step 7 candidate stores with CLI-owned IDs, evidence/boundary closure and atomic append/replace;
 - Question Mapping admission, stale-upstream projection, `step7 context`, stdout-only `step7 render`, and Guardian `RKBC-014` warnings.
 - Portable Skill routes for read-only paper/question queries, canonical claim trace-back and explicitly gated Step 7 maintenance.
-- one workspace-independent Europe PMC metadata connector that reports only in the active task, with bounded local filtering, DOI deduplication and no acquisition or persistence.
-- explicit user-only handoff of selected discovery results into an idempotent `metadata_only` candidate store, with complete-report validation and no acquisition or intake chaining.
+- one workspace-independent Europe PMC metadata connector that reports only in the active task, with bounded local filtering and DOI deduplication.
+- explicit user-only handoff of selected discovery results into an idempotent `metadata_only` candidate store, plus separate zero-write OA resolution and create-only Europe PMC acquisition contracts.
 
-The installed CLI contains no private adapter and performs no adapter or connector discovery. The CLI never calls an LLM or makes scientific judgments. OCR, subtype-specific review runtime, persisted Markdown or additional derived views, Field Map integration, Review Unit Question Mapping, acquisition and migration remain later milestones.
+The installed CLI contains no private adapter and performs no adapter or connector discovery. The CLI never calls an LLM or makes scientific judgments. OCR, subtype-specific review runtime, persisted Markdown or additional derived views, Field Map integration, Review Unit Question Mapping, institutional/browser acquisition and migration remain later milestones.
 
 ## Privacy Boundary
 
@@ -67,9 +67,9 @@ On macOS, use `.venv/bin/python` instead.
 
 ## Portable Skill
 
-The reviewed Skill source lives at `skills/research-kb/`. It orchestrates bounded on-demand metadata discovery, explicit user-selected candidate handoff, mutually exclusive primary-research and common Review Memory intake, read-only knowledge queries and explicitly gated Step 7 maintenance. It adds no schema, ID or workflow store of its own.
+The reviewed Skill source lives at `skills/research-kb/`. It orchestrates bounded on-demand metadata discovery, explicit user-selected candidate handoff, exact-user-authority Europe PMC OA acquisition, mutually exclusive primary-research and common Review Memory intake, read-only knowledge queries and explicitly gated Step 7 maintenance. It adds no schema, ID or workflow store of its own.
 
-The Python wheel does not install the Skill. Local CC Switch installation is a separate, explicitly authorized post-merge operation. Discovery is workspace-independent; all intake/query/Step 7 modes require an existing workspace config. The Skill does not generate workspace/domain configuration, acquire sources or integrate Review Units downstream. Discovery and ordinary queries remain non-persistent; only explicit Step 7 maintenance or an explicitly complete intake workflow may promote candidates through Core.
+The Python wheel does not install the Skill. Local CC Switch installation is a separate, explicitly authorized post-merge operation. Discovery search is workspace-independent; candidate handoff, resolution, acquisition and all intake/query/Step 7 modes require an existing workspace config. The Skill does not generate workspace/domain configuration or integrate Review Units downstream. It acquires a source only through the exact-user-authority `explicit_oa_acquisition` route. Discovery search and ordinary queries remain non-persistent; only candidate handoff, explicit OA acquisition, explicit Step 7 maintenance or an explicitly complete intake workflow may write through Core.
 
 ## Runtime Commands
 
@@ -92,6 +92,7 @@ research-kb discovery select --workspace <workspace.yaml> --request - --actor us
 research-kb discovery list --workspace <workspace.yaml>
 research-kb discovery show --workspace <workspace.yaml> --candidate-id <discovery_id>
 research-kb discovery resolve --workspace <workspace.yaml> --candidate-id <discovery_id> --provider europe-pmc
+research-kb discovery acquire --workspace <workspace.yaml> --candidate-id <discovery_id> --provider europe-pmc --actor user
 research-kb intake inspect --workspace <workspace.yaml> --source <absolute-source-path>
 research-kb compatibility inspect --workspace <workspace.yaml> --adapter <adapter_id>
 research-kb registry add --workspace <workspace.yaml> --root-id <root> --relative-path <path> --metadata <metadata.json>
@@ -113,7 +114,7 @@ research-kb guardian check --workspace <workspace.yaml> [--write-report]
 research-kb transaction recover --workspace <workspace.yaml> [--dry-run]
 ```
 
-Source assets remain read-only. Canonical writes stay under `knowledge_root` and emit a process event only after a validated atomic replacement.
+Existing source assets remain immutable. The only source-write exception is exact-user-authority `discovery acquire`, which may create one previously absent PDF under the configured `local_inbox`. Canonical writes stay under `knowledge_root` and emit a process event only after a validated atomic replacement.
 
 `capability show`, `discovery search`, `discovery list`, `discovery show`, `discovery resolve`, `intake inspect`, `parse show`, `paper status`, `paper context`, `review context`, and `step7 context` emit bounded JSON and write no workspace state. Capability output distinguishes installed adapters and built-in connectors without calling the network. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
 
@@ -122,6 +123,8 @@ Source assets remain read-only. Canonical writes stay under `knowledge_root` and
 `discovery select` accepts the complete validated transient report plus 1-15 result keys chosen explicitly by the user. It persists only those results to `discovery/candidates.jsonl`, allocates `discovery_<uuid4>` IDs, records deterministic selection contexts and optionally links existing Question Mapping IDs for organization. Exact intent reruns write nothing; new contexts update the same candidate; changed metadata for the same result key fails the complete batch with `RKBC-034`. Selection assigns only `user_selected`, `metadata_only`, `not_started` and `not_evidence: true`; it does not register, include, verify, acquire or download a paper. `discovery list/show` validate the complete workspace and expose no paths or paper content.
 
 `discovery resolve` rechecks one selected candidate against the fixed Europe PMC search endpoint. Exact DOI or stored source identity is used; the report returns an opaque OA asset reference and `persistent_writes: 0`, never a provider URL. `auto_acquisition_eligible` is a routing fact only and does not authorize download, Registry intake or screening.
+
+`discovery acquire` requires exact `actor: user`, re-runs resolution, accepts only one repository-OA PDF, and creates `<local_inbox>/<candidate_id>.pdf` without overwrite. The candidate gains a portable receipt but remains `metadata_only` and `not_evidence: true`. Exact reruns are zero-write. Missing/changed receipts, existing unreceipted targets, partials and crash states stop or become Guardian findings; acquisition never chains into Registry or Parse.
 
 `intake inspect` accepts one absolute source path, confines it to exactly one declared source root, and returns only portable `root_id + relative_path`, exact-path registration state, and ordered Paper Card section IDs/labels. It hashes the source before and after projection, never returns the hash or absolute path, and performs no registration. The Portable Skill uses it for sequential reruns; concurrent inspect-and-register deduplication is not guaranteed.
 

@@ -13,6 +13,11 @@ from research_kb.services.registry import RegistryService
 from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl, serialize_json, serialize_jsonl
 from research_kb.storage.transactions import TransactionManager
 from tests.runtime_helpers import make_runtime_workspace
+from tests.unit.test_discovery_acquisition_service import (
+    CANDIDATE_ID as ACQUISITION_CANDIDATE_ID,
+    PDF_BYTES as ACQUISITION_PDF_BYTES,
+    prepared_service as prepared_acquisition_service,
+)
 from tests.unit.test_question_mapping_service import _append_request, _link, _prepare_paper
 from tests.unit.test_review_memory_service import prepare_review_paper, review_request
 
@@ -72,6 +77,74 @@ def test_guardian_detects_stored_evidence_provenance_failure_without_payload_lea
     finding = next(item for item in result.report["findings"] if item["record_ref"] == evidence["evidence_id"])
     assert finding["code"] == "RKBC-009"
     assert "SENSITIVE" not in finding["message"]
+
+
+def test_guardian_accepts_current_acquisition_receipt(tmp_path: Path) -> None:
+    layout, _, _, service = prepared_acquisition_service(tmp_path)
+    service.acquire(
+        ACQUISITION_CANDIDATE_ID,
+        provider="europe-pmc",
+        actor="user",
+    )
+
+    result = GuardianService(layout).check()
+
+    assert result.report["status"] == "success"
+    assert result.report["findings"] == []
+
+
+@pytest.mark.parametrize("mutation", ["changed", "missing"])
+def test_guardian_detects_changed_or_missing_acquired_source(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    layout, _, _, service = prepared_acquisition_service(tmp_path)
+    service.acquire(
+        ACQUISITION_CANDIDATE_ID,
+        provider="europe-pmc",
+        actor="user",
+    )
+    source = layout.local_inbox / f"{ACQUISITION_CANDIDATE_ID}.pdf"
+    if mutation == "changed":
+        source.write_bytes(ACQUISITION_PDF_BYTES + b"changed")
+    else:
+        source.unlink()
+
+    result = GuardianService(layout).check()
+
+    finding = next(
+        item
+        for item in result.report["findings"]
+        if item["record_ref"] == ACQUISITION_CANDIDATE_ID
+    )
+    assert finding["code"] == "RKBC-009"
+
+
+def test_guardian_reports_unreceipted_candidate_named_source(tmp_path: Path) -> None:
+    layout, _, _, _ = prepared_acquisition_service(tmp_path)
+    source = layout.local_inbox / f"{ACQUISITION_CANDIDATE_ID}.pdf"
+    source.write_bytes(ACQUISITION_PDF_BYTES)
+
+    result = GuardianService(layout).check()
+
+    finding = next(
+        item
+        for item in result.report["findings"]
+        if item["record_ref"] == ACQUISITION_CANDIDATE_ID
+    )
+    assert finding["code"] == "RKBC-018"
+    assert source.exists()
+
+
+def test_guardian_reports_operation_pattern_partial_without_deleting_it(tmp_path: Path) -> None:
+    layout, _, _, _ = prepared_acquisition_service(tmp_path)
+    partial = layout.local_inbox / ".research-kb-acquire-event_a.part.pdf"
+    partial.write_bytes(ACQUISITION_PDF_BYTES)
+
+    result = GuardianService(layout).check()
+
+    assert "RKBC-018" in {item["code"] for item in result.report["findings"]}
+    assert partial.exists()
 
 
 def test_guardian_detects_incomplete_transaction(tmp_path: Path) -> None:

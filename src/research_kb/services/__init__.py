@@ -5,6 +5,10 @@ from research_kb.services.capability import CapabilityService
 from research_kb.services.compatibility import CompatibilityAdapterRegistry, CompatibilityInspectionService
 from research_kb.services.discovery import DiscoveryConnectorRegistry, DiscoveryService
 from research_kb.services.discovery_candidate import DiscoveryCandidateService, DiscoverySelectionResult
+from research_kb.services.discovery_acquisition import (
+    DiscoveryAcquisitionService,
+    DiscoveryAcquisitionTransportRegistry,
+)
 from research_kb.services.discovery_resolution import DiscoveryResolutionService, DiscoveryResolverRegistry
 from research_kb.services.intake_inspect import IntakeInspectService
 from research_kb.services.parse import ParseService
@@ -25,6 +29,8 @@ __all__ = [
     "CompatibilityInspectionService",
     "CapabilityService",
     "DiscoveryConnectorRegistry",
+    "DiscoveryAcquisitionService",
+    "DiscoveryAcquisitionTransportRegistry",
     "DiscoveryCandidateService",
     "DiscoverySelectionResult",
     "DiscoveryResolutionService",

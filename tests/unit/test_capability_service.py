@@ -67,6 +67,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
         ],
         "features": {
             "approved_discovery_candidate_handoff": True,
+            "explicit_oa_acquisition": True,
             "legal_oa_resolution": True,
             "real_pdf_parse": True,
             "stdin_json_handoff": True,

@@ -43,7 +43,7 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Resolve all targets through `WorkspaceLayout`; do not accept a direct `knowledge_root` override.
 - Read current canonical state before composing a replacement and pass its digest to the transaction manager.
 - Validate the temporary target before `os.replace`.
-- Keep source assets outside the writable boundary.
+- Keep every existing source asset outside the writable boundary. The only exception is the approved create-only `local_inbox` acquisition contract.
 - Emit no process event payload containing candidate scientific text.
 - Add a failure, conflict, and source-immutability test for each new mutating service.
 - For Evidence, test exact character-slice resolution, synthetic block containment, same-paper ownership, active parser/run consistency, and preservation of previous target bytes on pre-replacement failure.
@@ -130,10 +130,19 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Persist only selected result keys. Keep the report and unselected results out of the workspace.
 - Use `discovery_<uuid4>` record IDs and deterministic selection-context hashes; preserve candidate identity across new query or Question Mapping contexts.
 - Treat same-key metadata drift as `RKBC-034` and roll back the complete batch. Do not refresh silently.
-- Keep candidate states fixed at `user_selected`, `metadata_only`, `not_started`, `not_evidence: true` and `passed_auto_checks`.
+- Selection fixes `user_selected`, `metadata_only`, `not_started`, `not_evidence: true` and `passed_auto_checks`; only explicit acquisition may change `not_started` to `acquired` and add its receipt.
 - Keep titles, abstracts, queries and report digests out of process events and transaction journals.
 - Cover layout upgrade, idempotence, context append, conflict rollback, complete-bundle validation, deterministic list/show, Guardian, stdin and installed-wheel behavior with `synthetic_from_scratch` data.
-- Do not add acquisition, source-root writes, Registry/intake chaining, deletion or provider refresh to this contract.
+- Candidate selection never implies acquisition, Registry/intake chaining, deletion or provider refresh.
+
+## Discovery Acquisition Rules
+
+- Require exact `actor: user`, one selected candidate, live eligible resolution and available `pdfplumber` preflight.
+- Write only a previously absent `<candidate_id>.pdf` under an existing `local_inbox` owned by exactly one source root.
+- Use the fixed Europe PMC PMCID GET, reject redirects and credentials, and enforce status, media type, 64 MiB, signature, SHA-256 and parser bounds.
+- Publish with same-directory operation-owned partials and exclusive creation; never overwrite or adopt an unreceipted target.
+- Ordinary cleanup may unlink only the current operation's still-matching file identity. Guardian reports crash residues and receipt mismatch without deleting them.
+- Keep receipt persistence and source publication separate from Registry, Parse and scientific records.
 
 ## Platform Rules
 

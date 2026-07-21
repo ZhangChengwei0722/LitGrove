@@ -91,6 +91,7 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert "discovery show" in output["read_commands"]
     assert output["features"]["on_demand_discovery"] is True
     assert output["features"]["approved_discovery_candidate_handoff"] is True
+    assert output["features"]["explicit_oa_acquisition"] is True
     assert output["features"]["legal_oa_resolution"] is True
 
 

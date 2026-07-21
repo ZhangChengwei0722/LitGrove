@@ -11,8 +11,13 @@ import yaml
 
 from research_kb import __version__
 from research_kb.cli_input import read_bounded_json_object
-from research_kb.discovery import DiscoveryConnector, DiscoveryResolver
+from research_kb.discovery import (
+    DiscoveryAcquisitionTransport,
+    DiscoveryConnector,
+    DiscoveryResolver,
+)
 from research_kb.discovery.europe_pmc import EuropePmcConnector, EuropePmcResolver
+from research_kb.discovery.europe_pmc_pdf import EuropePmcPdfTransport
 from research_kb.contracts.registry import SchemaRegistry
 from research_kb.bundle import load_workspace_entries, records_of_kind, validate_workspace_entries
 from research_kb.contracts.validator import validate_bundle, validate_record
@@ -50,6 +55,10 @@ from research_kb.services.compatibility import CompatibilityAdapterRegistry, Com
 from research_kb.services.intake_inspect import IntakeInspectService
 from research_kb.services.discovery import DiscoveryConnectorRegistry, DiscoveryService
 from research_kb.services.discovery_candidate import DiscoveryCandidateService
+from research_kb.services.discovery_acquisition import (
+    DiscoveryAcquisitionService,
+    DiscoveryAcquisitionTransportRegistry,
+)
 from research_kb.services.discovery_resolution import DiscoveryResolutionService, DiscoveryResolverRegistry
 from research_kb.compatibility import LegacyReaderAdapter
 from research_kb.storage.json_io import read_jsonl, serialize_json
@@ -102,6 +111,18 @@ def build_parser() -> argparse.ArgumentParser:
     discovery_resolve.add_argument("--workspace", required=True, type=Path)
     discovery_resolve.add_argument("--candidate-id", required=True)
     discovery_resolve.add_argument("--provider", required=True)
+    discovery_acquire = discovery_commands.add_parser(
+        "acquire",
+        help="create one explicitly authorized OA PDF in local_inbox",
+    )
+    discovery_acquire.add_argument("--workspace", required=True, type=Path)
+    discovery_acquire.add_argument("--candidate-id", required=True)
+    discovery_acquire.add_argument("--provider", required=True)
+    discovery_acquire.add_argument(
+        "--actor",
+        choices=("agent", "cli", "user"),
+        required=True,
+    )
 
     workspace = commands.add_parser("workspace", help="initialize deterministic workspace layout")
     workspace_commands = workspace.add_subparsers(dest="workspace_command", required=True)
@@ -223,6 +244,7 @@ def main(
     compatibility_adapters: Iterable[LegacyReaderAdapter] = (),
     discovery_connectors: Iterable[DiscoveryConnector] | None = None,
     discovery_resolvers: Iterable[DiscoveryResolver] | None = None,
+    discovery_acquisition_transports: Iterable[DiscoveryAcquisitionTransport] | None = None,
 ) -> int:
     _configure_standard_streams()
     parser = build_parser()
@@ -242,6 +264,14 @@ def main(
         if args.command == "discovery" and args.discovery_command == "resolve":
             resolvers = (EuropePmcResolver(),) if discovery_resolvers is None else discovery_resolvers
             return _discovery_resolve(args, resolvers)
+        if args.command == "discovery" and args.discovery_command == "acquire":
+            resolvers = (EuropePmcResolver(),) if discovery_resolvers is None else discovery_resolvers
+            transports = (
+                (EuropePmcPdfTransport(),)
+                if discovery_acquisition_transports is None
+                else discovery_acquisition_transports
+            )
+            return _discovery_acquire(args, resolvers, transports)
         if args.command == "workspace" and args.workspace_command == "init":
             return _workspace_init(args)
         if args.command == "intake" and args.intake_command == "inspect":
@@ -385,6 +415,25 @@ def _discovery_resolve(
         layout,
         DiscoveryResolverRegistry(resolvers),
     ).resolve(args.candidate_id, provider=args.provider)
+    _write_json_once(report)
+    return 0
+
+
+def _discovery_acquire(
+    args: argparse.Namespace,
+    resolvers: Iterable[DiscoveryResolver],
+    transports: Iterable[DiscoveryAcquisitionTransport],
+) -> int:
+    layout = WorkspaceLayout.load(args.workspace)
+    report = DiscoveryAcquisitionService(
+        layout,
+        resolver_registry=DiscoveryResolverRegistry(resolvers),
+        transport_registry=DiscoveryAcquisitionTransportRegistry(transports),
+    ).acquire(
+        args.candidate_id,
+        provider=args.provider,
+        actor=args.actor,
+    )
     _write_json_once(report)
     return 0
 
