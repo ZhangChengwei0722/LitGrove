@@ -43,6 +43,13 @@ class CapabilityService:
                 "layout_versions": [CURRENT_LAYOUT_CONTRACT_VERSION],
             },
             "parse_adapters": adapters,
+            "discovery_connectors": [
+                {
+                    "connector": "europe-pmc",
+                    "availability": "available",
+                    "network_required": True,
+                }
+            ],
             "mutation_record_kinds": sorted(
                 (
                     "registry-paper",
@@ -60,6 +67,7 @@ class CapabilityService:
             "read_commands": sorted(
                 (
                     "capability show",
+                    "discovery search",
                     "guardian check",
                     "intake inspect",
                     "paper context",
@@ -78,6 +86,7 @@ class CapabilityService:
                 "stdin_json_handoff": True,
                 "review_runtime": True,
                 "step7_runtime": True,
+                "on_demand_discovery": True,
             },
         }
 

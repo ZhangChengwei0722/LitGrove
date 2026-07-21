@@ -7,7 +7,7 @@ Return one concise private task report after the invocation. The report is not c
 Always report:
 
 ```yaml
-invocation_mode: local_intake | ephemeral_query | explicit_step7_maintenance | full_workflow_step7_refresh
+invocation_mode: on_demand_discovery | local_intake | ephemeral_query | explicit_step7_maintenance | full_workflow_step7_refresh
 persistent_writes:
 workspace_preflight:
 guardian:
@@ -15,7 +15,40 @@ capabilities_deliberately_skipped:
 recommended_next_action:
 ```
 
-For `ephemeral_query`, require `persistent_writes: 0`.
+For `on_demand_discovery` and `ephemeral_query`, require `persistent_writes: 0`.
+
+## Discovery Result
+
+```yaml
+discovery:
+  provider: europe-pmc
+  date_from:
+  date_until:
+  title_keywords: []
+  abstract_keywords: []
+  keyword_mode: any | all
+  include_preprints:
+  requested_max_results:
+  provider_hit_count:
+  scanned_result_count:
+  returned_result_count:
+  truncated:
+  results:
+    - result_key:
+      title:
+      doi:
+      first_publication_date:
+      paper_type:
+      matched_keywords: []
+      match_location:
+      full_text_status:
+      version_relationship:
+      possible_duplicate_result_keys: []
+  unresolved_items: []
+  persistent_writes: 0
+```
+
+Do not imply that a result entered Registry or a candidate store. Do not report a download, local path or paper ID. A legitimate zero-result report keeps `results: []`.
 
 ## Batch Summary
 
@@ -138,6 +171,7 @@ Do not claim:
 - review-derived canonical Evidence, Field Map integration or Review Unit Question Mapping;
 - Step 7 generation during an ordinary `ephemeral_query`;
 - Step 7 persistence during `ephemeral_query`;
+- discovery candidate persistence, acquisition or downstream intake during `on_demand_discovery`;
 - migration or legacy cutover;
 - unsupported figure, table, OCR or supplement interpretation;
 - success for a stage that Core did not validate.

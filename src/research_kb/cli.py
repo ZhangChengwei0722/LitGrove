@@ -11,6 +11,8 @@ import yaml
 
 from research_kb import __version__
 from research_kb.cli_input import read_bounded_json_object
+from research_kb.discovery import DiscoveryConnector
+from research_kb.discovery.europe_pmc import EuropePmcConnector
 from research_kb.contracts.registry import SchemaRegistry
 from research_kb.bundle import load_workspace_entries, records_of_kind, validate_workspace_entries
 from research_kb.contracts.validator import validate_bundle, validate_record
@@ -46,6 +48,7 @@ from research_kb.services.parse import ParseService
 from research_kb.services.bootstrap import WorkspaceBootstrapService
 from research_kb.services.compatibility import CompatibilityAdapterRegistry, CompatibilityInspectionService
 from research_kb.services.intake_inspect import IntakeInspectService
+from research_kb.services.discovery import DiscoveryConnectorRegistry, DiscoveryService
 from research_kb.compatibility import LegacyReaderAdapter
 from research_kb.storage.json_io import read_jsonl, serialize_json
 from research_kb.storage.transactions import MANUAL_RESOLUTION_ACTIONS, TransactionManager
@@ -66,6 +69,7 @@ ID_FIELDS = {
 }
 REGISTRY_METADATA_STDIN_LIMIT = 64 * 1024
 MUTATION_REQUEST_STDIN_LIMIT = 4 * 1024 * 1024
+DISCOVERY_REQUEST_INPUT_LIMIT = 64 * 1024
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -76,6 +80,12 @@ def build_parser() -> argparse.ArgumentParser:
     capability = commands.add_parser("capability", help="inspect installed deterministic capabilities")
     capability_commands = capability.add_subparsers(dest="capability_command", required=True)
     capability_commands.add_parser("show", help="emit the public capability report")
+
+    discovery = commands.add_parser("discovery", help="search public metadata through bounded connectors")
+    discovery_commands = discovery.add_subparsers(dest="discovery_command", required=True)
+    discovery_search = discovery_commands.add_parser("search", help="emit one transient discovery report")
+    discovery_search.add_argument("--provider", required=True)
+    discovery_search.add_argument("--request", required=True, type=Path)
 
     workspace = commands.add_parser("workspace", help="initialize deterministic workspace layout")
     workspace_commands = workspace.add_subparsers(dest="workspace_command", required=True)
@@ -195,6 +205,7 @@ def main(
     argv: Sequence[str] | None = None,
     *,
     compatibility_adapters: Iterable[LegacyReaderAdapter] = (),
+    discovery_connectors: Iterable[DiscoveryConnector] | None = None,
 ) -> int:
     _configure_standard_streams()
     parser = build_parser()
@@ -202,6 +213,9 @@ def main(
     try:
         if args.command == "capability" and args.capability_command == "show":
             return _capability_show(args)
+        if args.command == "discovery" and args.discovery_command == "search":
+            connectors = (EuropePmcConnector(),) if discovery_connectors is None else discovery_connectors
+            return _discovery_search(args, connectors)
         if args.command == "workspace" and args.workspace_command == "init":
             return _workspace_init(args)
         if args.command == "intake" and args.intake_command == "inspect":
@@ -281,6 +295,28 @@ def _intake_inspect(args: argparse.Namespace) -> int:
 def _capability_show(args: argparse.Namespace) -> int:
     del args
     _write_json_once(CapabilityService().show())
+    return 0
+
+
+def _discovery_search(
+    args: argparse.Namespace,
+    connectors: Iterable[DiscoveryConnector],
+) -> int:
+    stream = sys.stdin.buffer if args.request == Path("-") else args.request.open("rb")
+    try:
+        request = read_bounded_json_object(
+            stream,
+            limit=DISCOVERY_REQUEST_INPUT_LIMIT,
+            record_kind="discovery-request",
+        )
+    finally:
+        if args.request != Path("-"):
+            stream.close()
+    report = DiscoveryService(DiscoveryConnectorRegistry(connectors)).search(
+        args.provider,
+        request,
+    )
+    _write_json_once(report)
     return 0
 
 

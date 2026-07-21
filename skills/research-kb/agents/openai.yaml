@@ -1,4 +1,4 @@
 interface:
   display_name: "Research KB"
-  short_description: "Ingest and query a traceable research knowledge base"
-  default_prompt: "Use $research-kb to ingest local papers, answer traceable knowledge-base questions, or explicitly maintain Step 7 candidates."
+  short_description: "Discover, ingest, and query traceable research"
+  default_prompt: "Use $research-kb to discover papers on demand, ingest local papers, answer traceable knowledge-base questions, or explicitly maintain Step 7 candidates."
