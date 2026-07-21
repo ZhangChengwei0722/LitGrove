@@ -22,6 +22,7 @@ class Namespace(StrEnum):
     REVIEW_ANGLE = "angle"
     INSIGHT = "insight"
     CROSS_VIEW = "crossview"
+    DISCOVERY = "discovery"
     PROCESS_EVENT = "event"
     GUARDIAN_REPORT = "guardian"
 

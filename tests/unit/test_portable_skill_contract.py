@@ -88,7 +88,7 @@ def test_openai_metadata_is_exact_and_mentions_skill() -> None:
             "display_name": "Research KB",
             "short_description": "Discover, ingest, and query traceable research",
             "default_prompt": (
-                "Use $research-kb to discover papers on demand, ingest local papers, answer traceable knowledge-base questions, or explicitly maintain Step 7 candidates."
+                "Use $research-kb to discover papers on demand, persist explicitly selected metadata candidates, ingest local papers, answer traceable knowledge-base questions, or explicitly maintain Step 7 candidates."
             ),
         }
     }
@@ -134,7 +134,9 @@ def test_skill_required_read_commands_match_public_capability() -> None:
         "review context",
         "step7 context",
         "step7 render",
+        "discovery list",
         "discovery search",
+        "discovery show",
     }
 
     assert required_reads <= set(capability["read_commands"])
@@ -142,6 +144,7 @@ def test_skill_required_read_commands_match_public_capability() -> None:
     assert capability["features"]["review_runtime"] is True
     assert capability["features"]["step7_runtime"] is True
     assert capability["features"]["on_demand_discovery"] is True
+    assert capability["features"]["approved_discovery_candidate_handoff"] is True
 
 
 def test_cli_reference_contains_minimal_stdin_promotion_envelopes() -> None:
@@ -274,7 +277,7 @@ def test_skill_routes_modes_before_mutation_and_preserves_query_ephemerality() -
     assert "Exact reruns write nothing" in body
 
 
-def test_discovery_workflow_is_task_report_only_and_acquisition_free() -> None:
+def test_discovery_workflow_separates_zero_write_search_from_explicit_handoff() -> None:
     text = (SKILL_ROOT / "references" / "discovery-workflow.md").read_text(encoding="utf-8")
 
     for required in (
@@ -288,12 +291,16 @@ def test_discovery_workflow_is_task_report_only_and_acquisition_free() -> None:
         "0-15",
         "persistent_writes: 0",
         "discovery search",
+        "discovery select",
+        "--actor user",
+        "complete report",
         "metadata only",
         "report-only",
     ):
         assert required in text
     assert "Do not pad a zero-result search" in text
-    assert "Do not persist a discovery candidate" in text
+    assert "Do not infer approval" in text
+    assert "user_selected" in text
     assert "Do not download full text" in text
 
 
@@ -329,3 +336,4 @@ def test_task_report_defines_new_and_no_change_completion_outcomes() -> None:
     assert "persistent_writes: 0" in report
     assert "invocation_mode:" in report
     assert "step7_maintenance:" in report
+    assert "discovery_candidate_handoff:" in report

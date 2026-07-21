@@ -86,7 +86,10 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert "review-memory" in output["mutation_record_kinds"]
     assert output["features"]["review_runtime"] is True
     assert "discovery search" in output["read_commands"]
+    assert "discovery list" in output["read_commands"]
+    assert "discovery show" in output["read_commands"]
     assert output["features"]["on_demand_discovery"] is True
+    assert output["features"]["approved_discovery_candidate_handoff"] is True
 
 
 def test_discovery_search_cli_stdin_and_file_are_equal_and_read_only(
@@ -946,6 +949,9 @@ def test_step7_read_missing_id_has_empty_stdout(tmp_path, capsys, command) -> No
 @pytest.mark.parametrize(
     "argv",
     [
+        ["discovery", "list"],
+        ["discovery", "show", "--candidate-id", "discovery_a1111111-1111-4111-8111-111111111111"],
+        ["discovery", "select", "--request", "missing.json", "--actor", "user"],
         ["guardian", "check"],
         ["paper", "status", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111"],
         ["parse", "show", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111"],
@@ -973,9 +979,9 @@ def test_step7_read_missing_id_has_empty_stdout(tmp_path, capsys, command) -> No
 def test_runtime_cli_reports_old_layout_as_upgrade_required(tmp_path, capsys, argv) -> None:
     layout = make_runtime_workspace(tmp_path)
     marker = json.loads(layout.marker_path.read_text(encoding="utf-8"))
-    marker["layout_contract_version"] = "m3a-2a"
+    marker["layout_contract_version"] = "m3b-1"
     layout.marker_path.write_bytes(serialize_json(marker))
-    (layout.knowledge_root / "step7").rmdir()
+    (layout.knowledge_root / "discovery").rmdir()
 
     result = main([argv[0], argv[1], "--workspace", str(layout.config.path), *argv[2:]])
 
@@ -989,6 +995,9 @@ def test_runtime_cli_reports_old_layout_as_upgrade_required(tmp_path, capsys, ar
 @pytest.mark.parametrize(
     "argv",
     [
+        ["discovery", "list"],
+        ["discovery", "show", "--candidate-id", "discovery_a1111111-1111-4111-8111-111111111111"],
+        ["discovery", "select", "--request", "missing.json", "--actor", "user"],
         ["registry", "add", "--root-id", "alpha-sources", "--relative-path", "x.txt", "--metadata", "missing.json"],
         ["parse", "run", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111", "--adapter", "synthetic-text"],
         ["parse", "show", "--paper-id", "paper_a1111111-1111-4111-8111-111111111111"],

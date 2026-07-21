@@ -109,7 +109,7 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Match intake registration only by exact `root_id + relative_path`; test unregistered, current, stale, ambiguous and same-bytes-at-another-path states.
 - Hash intake sources before and after projection, keep failure stdout empty, and prove source plus managed trees remain byte-identical.
 - Read stdin as raw bytes with a command-specific limit plus one byte; never echo invalid payloads.
-- Accept stdin only for discovery requests, Registry metadata and mutation requests, and route successful objects through existing services.
+- Accept stdin only for discovery search/selection requests, Registry metadata and mutation requests, and route successful objects through existing services.
 - Exercise base and `[pdf]` installed wheels so intake inspection, availability, stdin, parse reads, status and paper context do not depend on the editable tree.
 
 ## Discovery Connector Rules
@@ -123,6 +123,17 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Treat later-page failure as whole-request failure and leave stdout empty.
 - Write fake transport tests from scratch. Automated tests must not call a live provider or contain copied real metadata.
 - State the reproducibility boundary: identical request and provider payloads normalize identically, while live provider state may change.
+
+## Discovery Candidate Rules
+
+- Require the complete validated M3C-1 report and exact `actor: user`; never infer selection from rank, relevance, paper type or full-text status.
+- Persist only selected result keys. Keep the report and unselected results out of the workspace.
+- Use `discovery_<uuid4>` record IDs and deterministic selection-context hashes; preserve candidate identity across new query or Question Mapping contexts.
+- Treat same-key metadata drift as `RKBC-034` and roll back the complete batch. Do not refresh silently.
+- Keep candidate states fixed at `user_selected`, `metadata_only`, `not_started`, `not_evidence: true` and `passed_auto_checks`.
+- Keep titles, abstracts, queries and report digests out of process events and transaction journals.
+- Cover layout upgrade, idempotence, context append, conflict rollback, complete-bundle validation, deterministic list/show, Guardian, stdin and installed-wheel behavior with `synthetic_from_scratch` data.
+- Do not add acquisition, source-root writes, Registry/intake chaining, deletion or provider refresh to this contract.
 
 ## Platform Rules
 

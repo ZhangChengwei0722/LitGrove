@@ -14,7 +14,7 @@ The Agent may create or check candidates only where the public contract permits.
 
 A generated Research Question remains report-only until the user approves it.
 
-Discovery results remain report-only in M3C-1 even when the user approves a subset. Approval does not create a candidate store, authorize a download or choose a destination path.
+Discovery search results remain report-only until the user explicitly names result keys. That selection may create metadata-only candidates through M3C-2A, but it does not authorize a download, choose a destination path, register a paper or assign review/screening status.
 
 Ordinary knowledge queries are read-only. If persistence intent is ambiguous, use `ephemeral_query` and report `persistent_writes: 0`.
 
@@ -24,7 +24,9 @@ Query and Step 7 maintenance preflight is dry-run-only. A workspace action must 
 
 Use only `discovery search` with the built-in `europe-pmc` connector. The Agent resolves exact dates and field-bound keywords; Core validates, searches, normalizes and locally refilters.
 
-Do not pad zero results, accept an arbitrary endpoint, follow a provider full-text link, persist candidates, download a source, initialize a workspace or chain into intake. `full_text_status` is metadata only. A connector or later-page failure invalidates the complete discovery response.
+Do not pad zero results, accept an arbitrary endpoint, follow a provider full-text link, download a source or chain into intake. `full_text_status` is metadata only. A connector or later-page failure invalidates the complete discovery response.
+
+Candidate handoff requires the complete report and exact `actor: user` after explicit result-key selection. Do not infer selection, drop unselected rows from the submitted report, create a question, or interpret `user_selected` as `human_checked`, `verified`, `included` or acquisition approval. `RKBC-034` blocks the complete batch; never refresh changed metadata silently.
 
 ## Evidence Boundary
 
@@ -111,6 +113,9 @@ Use these only in the non-canonical task report:
 | `completed_no_change` | The current chain is already complete and current. |
 | `query_completed_no_write` | An ephemeral query returned a bounded answer with zero persistent writes. |
 | `discovery_completed_no_write` | Public metadata discovery returned 0-15 results with zero persistent writes. |
+| `discovery_candidates_recorded` | Explicitly selected metadata candidates were created or gained a new selection context. |
+| `discovery_candidates_no_change` | Every explicit selection intent already existed and no write occurred. |
+| `discovery_candidate_conflict` | Same-result metadata changed and the complete handoff batch was rejected. |
 | `discovery_failed` | The bounded request, connector or provider output failed before a complete report. |
 | `step7_no_change` | An exact existing candidate satisfied the requested maintenance without a write. |
 | `step7_near_duplicate_stop` | Semantic overlap could not be resolved safely before append/replace. |

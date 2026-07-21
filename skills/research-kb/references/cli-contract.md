@@ -8,6 +8,9 @@ Use only public `research-kb` commands. Build every command result completely be
 | --- | --- | --- | --- |
 | `research-kb capability show` | read | `read_commands`, adapters, feature flags | Require the approved reads and an available `pdfplumber` adapter. |
 | `research-kb discovery search --provider europe-pmc --request -` | external read | normalized public metadata report | Use only for discovery reported in the active task; never infer persistence or acquisition. |
+| `research-kb discovery select --workspace <config> --request - --actor user` | mutation | created, updated and no-change candidate IDs | Use only after explicit result-key selection; submit the complete report and stop before acquisition. |
+| `research-kb discovery list --workspace <config>` | read | bounded candidate summaries | Reconcile selected metadata candidates without reading JSONL. |
+| `research-kb discovery show --workspace <config> --candidate-id <id>` | read | one complete metadata candidate | Confirm context and fixed non-evidence states. |
 | `research-kb workspace init --workspace <config> --dry-run` | read-only preflight | result, actions, diagnostics | Apply only an existing valid config with bounded safe actions. |
 | `research-kb workspace init --workspace <config>` | operational mutation | result, diagnostics | Bind or validate the managed layout; never author config. |
 | `research-kb intake inspect --workspace <config> --source <absolute-path>` | read | portable source, registration state, Card sections | Reuse, register or stop exactly as reported. |
@@ -33,6 +36,8 @@ Require these read commands:
 ```text
 capability show
 discovery search
+discovery list
+discovery show
 guardian check
 intake inspect
 paper context
@@ -46,7 +51,7 @@ step7 context
 step7 render
 ```
 
-For `on_demand_discovery`, require `on_demand_discovery: true` and an available `europe-pmc` connector. Do not require a workspace or `pdfplumber`.
+For discovery search, require `on_demand_discovery: true` and an available `europe-pmc` connector. Do not require a workspace or `pdfplumber`. For explicit candidate handoff, also require `approved_discovery_candidate_handoff: true`, an existing workspace and the `discovery list/show` reads.
 
 For local intake, query and Step 7 modes, require `real_pdf_parse: true`, plus `pdfplumber` with `availability: available` and a non-empty version. A declared feature with a missing optional dependency is not executable.
 
@@ -64,14 +69,15 @@ For query and Step 7 maintenance, use `workspace init --dry-run` only. Its succe
 - `parse show` is the only public parsed-text read surface.
 - `guardian check` is read-only unless an explicit future task authorizes report persistence.
 - `discovery search` reads one fixed public metadata provider and writes no local state. Its live results are mutable external input.
+- `discovery list/show` validate the complete workspace and expose only persisted metadata candidates; they do not resolve live-provider staleness.
 
 Do not parse workspace or domain-profile configuration. Do not read canonical JSON or JSONL files directly. Do not infer IDs or canonical paths.
 
 ## Stdin Handoff
 
-Send one UTF-8 JSON object through stdin for discovery, Registry metadata or mutation requests. Do not send YAML, exceed published limits or create temporary request files. Mutations must still use `record promote`.
+Send one UTF-8 JSON object through stdin for discovery search/selection, Registry metadata or mutation requests. Do not send YAML, exceed published limits or create temporary request files. Ordinary record mutations still use `record promote`; discovery candidate handoff uses its dedicated user-authority command.
 
-Use `actor: agent`. Never request user-only review or screening states.
+Use `actor: agent` for ordinary record mutation. Use exact `--actor user` only to transcribe the user's explicit discovery result-key selection. Never infer user authority or request user-only review or screening states.
 
 ### Discovery request
 
@@ -89,6 +95,25 @@ Use `actor: agent`. Never request user-only review or screening states.
 ```
 
 Use dates resolved for the active task rather than copying the example. The request limit is 64 KiB. A successful report has `persistent_writes: 0`; it is not a candidate store or download receipt.
+
+### Discovery selection request
+
+Submit the complete successful report returned in the same task, not a reconstructed or selected-only subset:
+
+```json
+{
+  "request_version": "1.0",
+  "report": {"<complete_M3C-1_report>": "..."},
+  "selections": [
+    {
+      "result_key": "<explicitly_selected_result_key>",
+      "target_question_ids": []
+    }
+  ]
+}
+```
+
+The selection request limit is 4 MiB. Omit `fixture_origin` in real tasks. Target questions must already exist. Selection persists only metadata candidates and never authorizes acquisition, Registry, intake, screening or scientific evidence use.
 
 ### Registry metadata
 
@@ -473,4 +498,4 @@ Allowed `candidate_status` values are `keep`, `revise`, `rejected` and `needs_re
 
 Expect successful JSON on stdout. Structured command failures write an error diagnostic and leave stdout empty. Preserve the diagnostic code and bounded message in the private task report; never replace it with a guessed cause or expose private paths in shared artifacts.
 
-`RKBC-032` is a discovery connector/transport stop. `RKBC-033` is invalid provider output. Neither permits a partial report or direct browser/API fallback.
+`RKBC-032` is a discovery connector/transport stop. `RKBC-033` is invalid provider/report output. `RKBC-034` is same-result metadata conflict. None permits a partial report, partial candidate batch or direct browser/API fallback.

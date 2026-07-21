@@ -123,6 +123,7 @@ class GuardianService:
             self.layout.process_events_path,
             self.layout.guardian_reports_path,
             self.layout.question_mappings_path,
+            self.layout.discovery_candidates_path,
             *(self.layout.step7_store_path(kind) for kind in STEP7_RECORD_KINDS),
         ]
         for directory, pattern in (
@@ -309,6 +310,7 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
         "process-event": "event_id",
         "guardian-report": "guardian_report_id",
         "question-mapping": "question_id",
+        "discovery-candidate": "candidate_id",
         "step7-synthesis": "candidate_id",
         "step7-review-angle": "candidate_id",
         "step7-insight": "candidate_id",

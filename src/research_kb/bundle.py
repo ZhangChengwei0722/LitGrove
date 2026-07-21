@@ -72,6 +72,7 @@ def load_workspace_entries(
             )
     add_jsonl(layout.review_queue_path, "review-queue", "queue_id")
     add_jsonl(layout.question_mappings_path, "question-mapping", "question_id")
+    add_jsonl(layout.discovery_candidates_path, "discovery-candidate", "candidate_id")
     for kind in (
         "step7-synthesis",
         "step7-review-angle",

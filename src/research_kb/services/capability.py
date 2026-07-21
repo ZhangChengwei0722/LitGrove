@@ -68,6 +68,8 @@ class CapabilityService:
                 (
                     "capability show",
                     "discovery search",
+                    "discovery list",
+                    "discovery show",
                     "guardian check",
                     "intake inspect",
                     "paper context",
@@ -87,6 +89,7 @@ class CapabilityService:
                 "review_runtime": True,
                 "step7_runtime": True,
                 "on_demand_discovery": True,
+                "approved_discovery_candidate_handoff": True,
             },
         }
 
