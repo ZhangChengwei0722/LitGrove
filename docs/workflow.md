@@ -19,26 +19,27 @@ Milestone 1B implements this deterministic storage lifecycle. M3A-0A adds explic
 1. `capability show` reports public Core contracts, Review runtime, adapter availability and built-in discovery connectors without loading a workspace or calling the network.
 2. `discovery search` sends one bounded request to the fixed Europe PMC endpoint, locally refilters normalized metadata and emits a transient zero-write report.
 3. After the user explicitly chooses result keys, `discovery select --actor user` validates the complete report and atomically persists only those metadata candidates; `discovery list/show` are read-only.
-4. `workspace init --dry-run` validates an existing config and reports planned managed actions without deliberate filesystem mutation.
-5. `workspace init` binds the managed root with a deterministic marker. Repeating it with the same config returns `no_change`.
-6. `intake inspect` maps one absolute source path to a portable source reference, exact Registry state and active Card sections without writing or registering it.
-7. `compatibility inspect` uses only adapters explicitly injected by a private in-process caller. It emits a read-only report to stdout and never persists compatibility state.
-8. `registry add` resolves a declared source root, hashes the source read-only, and preserves exact duplicates as reciprocal candidates. `--metadata -` accepts one bounded JSON object through stdin.
-9. `parse run` uses the explicitly requested `synthetic-text` or optional `pdfplumber` adapter and writes validated page records without creating a full-text copy. It reports exact adapter/version identity and never falls back to OCR or another adapter.
-10. `parse show` emits all validated active pages or one positive PDF page after source-fingerprint checks, without creating a full-text copy or read artifact.
-11. `record promote` loads a file request or bounded stdin JSON object, injects IDs/timestamps/fingerprints, enforces actor authority, and promotes one canonical store.
-12. `paper context` returns the selected primary paper's stored Card, Evidence and review queue context after source-stability checks, without exposing canonical paths or creating a read artifact.
-13. `review context` separately returns one Review Memory, freshness and transient exact DOI matches without changing `paper context 1.0`.
-14. A `question-mapping` request selects Card Units for a user-supplied or explicitly approved question. Core derives evidence and required boundaries before atomic promotion.
-15. `paper status` projects deterministic stage, freshness, Guardian and transaction safety facts without scientific content or a resume decision.
-16. `question list/show` retrieves deterministic structured mappings without writing a reading view, report, event, or journal.
-17. `question render` validates one mapping and emits its complete Markdown reading view to stdout without persisting the view or changing structured state.
-18. A Step 7 `record promote` request selects grounded/revised Card Units already admitted by one current Question Mapping. Core derives exact Evidence and Unit-boundary closure before atomic promotion.
-19. `step7 context` returns only one question's complete candidates plus deterministic current/stale projections; `step7 render` emits the corresponding non-canonical Markdown reading view to stdout.
-20. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
-21. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
+4. `discovery resolve` rechecks one selected candidate through a fixed Europe PMC identity and emits a transient OA-policy report without download or persistence.
+5. `workspace init --dry-run` validates an existing config and reports planned managed actions without deliberate filesystem mutation.
+6. `workspace init` binds the managed root with a deterministic marker. Repeating it with the same config returns `no_change`.
+7. `intake inspect` maps one absolute source path to a portable source reference, exact Registry state and active Card sections without writing or registering it.
+8. `compatibility inspect` uses only adapters explicitly injected by a private in-process caller. It emits a read-only report to stdout and never persists compatibility state.
+9. `registry add` resolves a declared source root, hashes the source read-only, and preserves exact duplicates as reciprocal candidates. `--metadata -` accepts one bounded JSON object through stdin.
+10. `parse run` uses the explicitly requested `synthetic-text` or optional `pdfplumber` adapter and writes validated page records without creating a full-text copy. It reports exact adapter/version identity and never falls back to OCR or another adapter.
+11. `parse show` emits all validated active pages or one positive PDF page after source-fingerprint checks, without creating a full-text copy or read artifact.
+12. `record promote` loads a file request or bounded stdin JSON object, injects IDs/timestamps/fingerprints, enforces actor authority, and promotes one canonical store.
+13. `paper context` returns the selected primary paper's stored Card, Evidence and review queue context after source-stability checks, without exposing canonical paths or creating a read artifact.
+14. `review context` separately returns one Review Memory, freshness and transient exact DOI matches without changing `paper context 1.0`.
+15. A `question-mapping` request selects Card Units for a user-supplied or explicitly approved question. Core derives evidence and required boundaries before atomic promotion.
+16. `paper status` projects deterministic stage, freshness, Guardian and transaction safety facts without scientific content or a resume decision.
+17. `question list/show` retrieves deterministic structured mappings without writing a reading view, report, event, or journal.
+18. `question render` validates one mapping and emits its complete Markdown reading view to stdout without persisting the view or changing structured state.
+19. A Step 7 `record promote` request selects grounded/revised Card Units already admitted by one current Question Mapping. Core derives exact Evidence and Unit-boundary closure before atomic promotion.
+20. `step7 context` returns only one question's complete candidates plus deterministic current/stale projections; `step7 render` emits the corresponding non-canonical Markdown reading view to stdout.
+21. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
+22. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
 
-Every workspace-bound runtime command uses the same semantic validator and requires a matching workspace marker. `capability show` and `discovery search` are workspace-independent. No command accepts a raw `knowledge_root` override or a source-write operation. `local_inbox` remains user-owned and is never created or scanned by bootstrap.
+Every workspace-bound runtime command uses the same semantic validator and requires a matching workspace marker. `capability show` and `discovery search` are workspace-independent. No command accepts a raw `knowledge_root` override or a source-write operation. `discovery resolve` is an external read against one persisted candidate and does not write the workspace. `local_inbox` remains user-owned and is never created or scanned by bootstrap.
 
 Compatibility reports classify what can be read directly, projected through an adapter, left unsupported, or retained as a legacy reading view. They do not select a migration target or change authority. Core rechecks all declared protected files and trees in a `finally` path; source change takes precedence over an ordinary adapter failure.
 

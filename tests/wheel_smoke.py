@@ -111,11 +111,11 @@ def main() -> int:
             "diagnostic_code": "RKBC-028",
         }:
             raise SystemExit("base wheel capability report did not expose the missing PDF dependency")
-        if not {"discovery search", "discovery list", "discovery show", "intake inspect", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
+        if not {"discovery search", "discovery list", "discovery show", "discovery resolve", "intake inspect", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
             raise SystemExit("base wheel capability report lacks deterministic intake/context reads")
         if capability["discovery_connectors"] != [{"connector": "europe-pmc", "availability": "available", "network_required": True}]:
             raise SystemExit("base wheel capability report lacks the Europe PMC connector")
-        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["approved_discovery_candidate_handoff"] is not True:
+        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["approved_discovery_candidate_handoff"] is not True or capability["features"]["legal_oa_resolution"] is not True:
             raise SystemExit("base wheel capability report lacks Review Memory, Step 7 or discovery runtime")
         subprocess.run(
             [
@@ -123,8 +123,8 @@ def main() -> int:
                 "from research_kb.compatibility import CompatibilitySourceRef, LegacyReaderAdapter; "
                 "from research_kb.contracts.registry import SchemaRegistry; "
                 "from research_kb.guardian import GuardianService; "
-                "from research_kb.discovery.europe_pmc import EuropePmcConnector; "
-                "from research_kb.services import CompatibilityAdapterRegistry, CompatibilityInspectionService, DiscoveryCandidateService, DiscoveryConnectorRegistry, DiscoveryService, IntakeInspectService, PaperContextService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService, ReviewContextService, ReviewMemoryService, Step7CandidateService, Step7ContextService, Step7ReadingViewService; "
+                "from research_kb.discovery.europe_pmc import EuropePmcConnector, EuropePmcResolver; "
+                "from research_kb.services import CompatibilityAdapterRegistry, CompatibilityInspectionService, DiscoveryCandidateService, DiscoveryConnectorRegistry, DiscoveryResolutionService, DiscoveryResolverRegistry, DiscoveryService, IntakeInspectService, PaperContextService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService, ReviewContextService, ReviewMemoryService, Step7CandidateService, Step7ContextService, Step7ReadingViewService; "
                 "registry = SchemaRegistry(); "
                 "assert registry.schema('mutation-request')['$id'].endswith('mutation-request'); "
                 "assert registry.schema('compatibility-difference')['$id'].endswith('compatibility-difference'); "
@@ -138,8 +138,11 @@ def main() -> int:
                 "assert CompatibilityInspectionService.__name__ == 'CompatibilityInspectionService'; "
                 "assert DiscoveryConnectorRegistry.__name__ == 'DiscoveryConnectorRegistry'; "
                 "assert DiscoveryCandidateService.__name__ == 'DiscoveryCandidateService'; "
+                "assert DiscoveryResolutionService.__name__ == 'DiscoveryResolutionService'; "
+                "assert DiscoveryResolverRegistry.__name__ == 'DiscoveryResolverRegistry'; "
                 "assert DiscoveryService.__name__ == 'DiscoveryService'; "
                 "assert EuropePmcConnector.connector_id == 'europe-pmc'; "
+                "assert EuropePmcResolver.resolver_id == 'europe-pmc'; "
                 "assert IntakeInspectService.__name__ == 'IntakeInspectService'; "
                 "assert PaperContextService.__name__ == 'PaperContextService'; "
                 "assert ReviewContextService.__name__ == 'ReviewContextService'; "
@@ -155,6 +158,12 @@ def main() -> int:
         )
         subprocess.run(
             [str(python), "-m", "research_kb", "discovery", "search", "--help"],
+            cwd=temporary,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            [str(python), "-m", "research_kb", "discovery", "resolve", "--help"],
             cwd=temporary,
             check=True,
             capture_output=True,

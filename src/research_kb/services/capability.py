@@ -69,6 +69,7 @@ class CapabilityService:
                     "capability show",
                     "discovery search",
                     "discovery list",
+                    "discovery resolve",
                     "discovery show",
                     "guardian check",
                     "intake inspect",
@@ -90,6 +91,7 @@ class CapabilityService:
                 "step7_runtime": True,
                 "on_demand_discovery": True,
                 "approved_discovery_candidate_handoff": True,
+                "legal_oa_resolution": True,
             },
         }
 

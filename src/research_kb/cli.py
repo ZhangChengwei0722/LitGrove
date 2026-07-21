@@ -11,8 +11,8 @@ import yaml
 
 from research_kb import __version__
 from research_kb.cli_input import read_bounded_json_object
-from research_kb.discovery import DiscoveryConnector
-from research_kb.discovery.europe_pmc import EuropePmcConnector
+from research_kb.discovery import DiscoveryConnector, DiscoveryResolver
+from research_kb.discovery.europe_pmc import EuropePmcConnector, EuropePmcResolver
 from research_kb.contracts.registry import SchemaRegistry
 from research_kb.bundle import load_workspace_entries, records_of_kind, validate_workspace_entries
 from research_kb.contracts.validator import validate_bundle, validate_record
@@ -50,6 +50,7 @@ from research_kb.services.compatibility import CompatibilityAdapterRegistry, Com
 from research_kb.services.intake_inspect import IntakeInspectService
 from research_kb.services.discovery import DiscoveryConnectorRegistry, DiscoveryService
 from research_kb.services.discovery_candidate import DiscoveryCandidateService
+from research_kb.services.discovery_resolution import DiscoveryResolutionService, DiscoveryResolverRegistry
 from research_kb.compatibility import LegacyReaderAdapter
 from research_kb.storage.json_io import read_jsonl, serialize_json
 from research_kb.storage.transactions import MANUAL_RESOLUTION_ACTIONS, TransactionManager
@@ -97,6 +98,10 @@ def build_parser() -> argparse.ArgumentParser:
     discovery_show = discovery_commands.add_parser("show", help="show one persisted discovery candidate")
     discovery_show.add_argument("--workspace", required=True, type=Path)
     discovery_show.add_argument("--candidate-id", required=True)
+    discovery_resolve = discovery_commands.add_parser("resolve", help="resolve one candidate's supported OA route")
+    discovery_resolve.add_argument("--workspace", required=True, type=Path)
+    discovery_resolve.add_argument("--candidate-id", required=True)
+    discovery_resolve.add_argument("--provider", required=True)
 
     workspace = commands.add_parser("workspace", help="initialize deterministic workspace layout")
     workspace_commands = workspace.add_subparsers(dest="workspace_command", required=True)
@@ -217,6 +222,7 @@ def main(
     *,
     compatibility_adapters: Iterable[LegacyReaderAdapter] = (),
     discovery_connectors: Iterable[DiscoveryConnector] | None = None,
+    discovery_resolvers: Iterable[DiscoveryResolver] | None = None,
 ) -> int:
     _configure_standard_streams()
     parser = build_parser()
@@ -233,6 +239,9 @@ def main(
             return _discovery_list(args)
         if args.command == "discovery" and args.discovery_command == "show":
             return _discovery_show(args)
+        if args.command == "discovery" and args.discovery_command == "resolve":
+            resolvers = (EuropePmcResolver(),) if discovery_resolvers is None else discovery_resolvers
+            return _discovery_resolve(args, resolvers)
         if args.command == "workspace" and args.workspace_command == "init":
             return _workspace_init(args)
         if args.command == "intake" and args.intake_command == "inspect":
@@ -364,6 +373,19 @@ def _discovery_list(args: argparse.Namespace) -> int:
 def _discovery_show(args: argparse.Namespace) -> int:
     layout = WorkspaceLayout.load(args.workspace)
     _write_json_once(DiscoveryCandidateService(layout).show(args.candidate_id))
+    return 0
+
+
+def _discovery_resolve(
+    args: argparse.Namespace,
+    resolvers: Iterable[DiscoveryResolver],
+) -> int:
+    layout = WorkspaceLayout.load(args.workspace)
+    report = DiscoveryResolutionService(
+        layout,
+        DiscoveryResolverRegistry(resolvers),
+    ).resolve(args.candidate_id, provider=args.provider)
+    _write_json_once(report)
     return 0
 
 

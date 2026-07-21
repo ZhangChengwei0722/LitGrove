@@ -87,9 +87,11 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert output["features"]["review_runtime"] is True
     assert "discovery search" in output["read_commands"]
     assert "discovery list" in output["read_commands"]
+    assert "discovery resolve" in output["read_commands"]
     assert "discovery show" in output["read_commands"]
     assert output["features"]["on_demand_discovery"] is True
     assert output["features"]["approved_discovery_candidate_handoff"] is True
+    assert output["features"]["legal_oa_resolution"] is True
 
 
 def test_discovery_search_cli_stdin_and_file_are_equal_and_read_only(

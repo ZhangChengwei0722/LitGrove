@@ -91,6 +91,7 @@ research-kb discovery select --workspace <workspace.yaml> --request <selection.j
 research-kb discovery select --workspace <workspace.yaml> --request - --actor user
 research-kb discovery list --workspace <workspace.yaml>
 research-kb discovery show --workspace <workspace.yaml> --candidate-id <discovery_id>
+research-kb discovery resolve --workspace <workspace.yaml> --candidate-id <discovery_id> --provider europe-pmc
 research-kb intake inspect --workspace <workspace.yaml> --source <absolute-source-path>
 research-kb compatibility inspect --workspace <workspace.yaml> --adapter <adapter_id>
 research-kb registry add --workspace <workspace.yaml> --root-id <root> --relative-path <path> --metadata <metadata.json>
@@ -114,11 +115,13 @@ research-kb transaction recover --workspace <workspace.yaml> [--dry-run]
 
 Source assets remain read-only. Canonical writes stay under `knowledge_root` and emit a process event only after a validated atomic replacement.
 
-`capability show`, `discovery search`, `discovery list`, `discovery show`, `intake inspect`, `parse show`, `paper status`, `paper context`, `review context`, and `step7 context` emit bounded JSON and write no workspace state. Capability output distinguishes installed adapters and built-in connectors without calling the network. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
+`capability show`, `discovery search`, `discovery list`, `discovery show`, `discovery resolve`, `intake inspect`, `parse show`, `paper status`, `paper context`, `review context`, and `step7 context` emit bounded JSON and write no workspace state. Capability output distinguishes installed adapters and built-in connectors without calling the network. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
 
 `discovery search` accepts an explicit date range, field-bound keywords, preprint choice and maximum of 1-15 results. It calls only the built-in fixed Europe PMC HTTPS endpoint, reapplies filters locally, merges exact DOI identity and marks possible title duplicates without merging them. It creates no workspace, candidate, event, report file or downloaded source. Public provider state is mutable; identical requests and provider page payloads produce identical normalized bytes.
 
 `discovery select` accepts the complete validated transient report plus 1-15 result keys chosen explicitly by the user. It persists only those results to `discovery/candidates.jsonl`, allocates `discovery_<uuid4>` IDs, records deterministic selection contexts and optionally links existing Question Mapping IDs for organization. Exact intent reruns write nothing; new contexts update the same candidate; changed metadata for the same result key fails the complete batch with `RKBC-034`. Selection assigns only `user_selected`, `metadata_only`, `not_started` and `not_evidence: true`; it does not register, include, verify, acquire or download a paper. `discovery list/show` validate the complete workspace and expose no paths or paper content.
+
+`discovery resolve` rechecks one selected candidate against the fixed Europe PMC search endpoint. Exact DOI or stored source identity is used; the report returns an opaque OA asset reference and `persistent_writes: 0`, never a provider URL. `auto_acquisition_eligible` is a routing fact only and does not authorize download, Registry intake or screening.
 
 `intake inspect` accepts one absolute source path, confines it to exactly one declared source root, and returns only portable `root_id + relative_path`, exact-path registration state, and ordered Paper Card section IDs/labels. It hashes the source before and after projection, never returns the hash or absolute path, and performs no registration. The Portable Skill uses it for sequential reruns; concurrent inspect-and-register deduplication is not guaranteed.
 

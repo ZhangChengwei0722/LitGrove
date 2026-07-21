@@ -11,6 +11,7 @@ Use only public `research-kb` commands. Build every command result completely be
 | `research-kb discovery select --workspace <config> --request - --actor user` | mutation | created, updated and no-change candidate IDs | Use only after explicit result-key selection; submit the complete report and stop before acquisition. |
 | `research-kb discovery list --workspace <config>` | read | bounded candidate summaries | Reconcile selected metadata candidates without reading JSONL. |
 | `research-kb discovery show --workspace <config> --candidate-id <id>` | read | one complete metadata candidate | Confirm context and fixed non-evidence states. |
+| `research-kb discovery resolve --workspace <config> --candidate-id <id> --provider europe-pmc` | external read | current OA routing report | Check one selected candidate; never infer acquisition authority. |
 | `research-kb workspace init --workspace <config> --dry-run` | read-only preflight | result, actions, diagnostics | Apply only an existing valid config with bounded safe actions. |
 | `research-kb workspace init --workspace <config>` | operational mutation | result, diagnostics | Bind or validate the managed layout; never author config. |
 | `research-kb intake inspect --workspace <config> --source <absolute-path>` | read | portable source, registration state, Card sections | Reuse, register or stop exactly as reported. |
@@ -37,6 +38,7 @@ Require these read commands:
 capability show
 discovery search
 discovery list
+discovery resolve
 discovery show
 guardian check
 intake inspect
@@ -51,7 +53,7 @@ step7 context
 step7 render
 ```
 
-For discovery search, require `on_demand_discovery: true` and an available `europe-pmc` connector. Do not require a workspace or `pdfplumber`. For explicit candidate handoff, also require `approved_discovery_candidate_handoff: true`, an existing workspace and the `discovery list/show` reads.
+For discovery search, require `on_demand_discovery: true` and an available `europe-pmc` connector. Do not require a workspace or `pdfplumber`. For explicit candidate handoff, also require `approved_discovery_candidate_handoff: true`, an existing workspace and the `discovery list/show` reads. For one selected candidate's OA check, additionally require `legal_oa_resolution: true`; resolution remains zero-write and does not authorize acquisition.
 
 For local intake, query and Step 7 modes, require `real_pdf_parse: true`, plus `pdfplumber` with `availability: available` and a non-empty version. A declared feature with a missing optional dependency is not executable.
 
@@ -70,6 +72,7 @@ For query and Step 7 maintenance, use `workspace init --dry-run` only. Its succe
 - `guardian check` is read-only unless an explicit future task authorizes report persistence.
 - `discovery search` reads one fixed public metadata provider and writes no local state. Its live results are mutable external input.
 - `discovery list/show` validate the complete workspace and expose only persisted metadata candidates; they do not resolve live-provider staleness.
+- `discovery resolve` rechecks one selected candidate through exact stored identity, returns no URL and writes no state.
 
 Do not parse workspace or domain-profile configuration. Do not read canonical JSON or JSONL files directly. Do not infer IDs or canonical paths.
 

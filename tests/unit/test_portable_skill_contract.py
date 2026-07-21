@@ -135,6 +135,7 @@ def test_skill_required_read_commands_match_public_capability() -> None:
         "step7 context",
         "step7 render",
         "discovery list",
+        "discovery resolve",
         "discovery search",
         "discovery show",
     }
@@ -145,6 +146,7 @@ def test_skill_required_read_commands_match_public_capability() -> None:
     assert capability["features"]["step7_runtime"] is True
     assert capability["features"]["on_demand_discovery"] is True
     assert capability["features"]["approved_discovery_candidate_handoff"] is True
+    assert capability["features"]["legal_oa_resolution"] is True
 
 
 def test_cli_reference_contains_minimal_stdin_promotion_envelopes() -> None:
@@ -292,6 +294,7 @@ def test_discovery_workflow_separates_zero_write_search_from_explicit_handoff() 
         "persistent_writes: 0",
         "discovery search",
         "discovery select",
+        "discovery resolve",
         "--actor user",
         "complete report",
         "metadata only",
@@ -301,6 +304,8 @@ def test_discovery_workflow_separates_zero_write_search_from_explicit_handoff() 
     assert "Do not pad a zero-result search" in text
     assert "Do not infer approval" in text
     assert "user_selected" in text
+    assert "auto_acquisition_eligible" in text
+    assert "legal_oa_resolution" in text
     assert "Do not download full text" in text
 
 

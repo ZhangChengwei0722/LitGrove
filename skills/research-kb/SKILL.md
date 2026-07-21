@@ -44,7 +44,9 @@ Initialize only the managed layout described by an existing config. Do not creat
 
 Call `capability show`, require the built-in `europe-pmc` connector, then send one bounded JSON request to `discovery search --provider europe-pmc --request -`. Return 0-15 normalized metadata results exactly as filtered, including a true zero-result outcome. Search keeps `persistent_writes: 0`.
 
-Show the results before any write. If and only if the user explicitly names selected `result_key` values, preserve the complete report, require an existing workspace, resolve optional question labels through `question list/show`, and call `discovery select --request - --actor user`. Re-read through `discovery list/show`. Stop before acquisition, source-root writes, Registry, intake or browser handoff. Full-text availability is metadata only.
+Show the results before any write. If and only if the user explicitly names selected `result_key` values, preserve the complete report, require an existing workspace, resolve optional question labels through `question list/show`, and call `discovery select --request - --actor user`. Re-read through `discovery list/show`.
+
+When the active task explicitly asks whether one selected candidate has a supported OA route, require `legal_oa_resolution: true` and call `discovery resolve --provider europe-pmc`. Report the resolver status and keep `persistent_writes: 0`. Stop before acquisition, source-root writes, Registry, intake or browser handoff. Full-text metadata and `auto_acquisition_eligible` are routing facts, not download authority.
 
 ## Execute Intake
 

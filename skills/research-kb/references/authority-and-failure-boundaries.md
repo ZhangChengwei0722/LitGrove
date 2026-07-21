@@ -28,6 +28,8 @@ Do not pad zero results, accept an arbitrary endpoint, follow a provider full-te
 
 Candidate handoff requires the complete report and exact `actor: user` after explicit result-key selection. Do not infer selection, drop unselected rows from the submitted report, create a question, or interpret `user_selected` as `human_checked`, `verified`, `included` or acquisition approval. `RKBC-034` blocks the complete batch; never refresh changed metadata silently.
 
+`discovery resolve` may check exactly one selected candidate through the fixed Europe PMC route. It returns transient access-policy observations only. Never persist the report, expose or follow a provider URL, or treat `auto_acquisition_eligible` as download authority.
+
 ## Evidence Boundary
 
 Canonical Evidence requires a current same-paper source, active parsed page, exact page/character locator and exact quote slice. Narrow every claim to what the source actually supports.
