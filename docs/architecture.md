@@ -282,3 +282,9 @@ Success changes only `acquisition_status` to `acquired` and adds a portable rece
 `intake inspect-acquired` closes only the deterministic read gap between an acquisition receipt and existing intake. It accepts a candidate ID, verifies the exact receipt source before and after inspection, and returns portable source, registration state, domain sections and Registry bibliography input without exposing an absolute path or writing state.
 
 The Portable Skill may pass the returned values unchanged to the existing `registry add` only when the task explicitly requests knowledge-base intake. Registry remains the sole owner of paper IDs, fingerprints, duplicate candidates and transaction semantics. The candidate stays metadata-only and no Parse or later scientific record is created by this bridge.
+
+## M3C-2D Acquired Candidate Workflow Continuation
+
+M3C-2D adds no Core runtime, schema, layout or capability flag. It removes a Portable Skill stop after the existing acquired-candidate Registry handoff: a separately authorized intake task now feeds the returned paper ID into the same `paper status`, context, Parse and mutually exclusive primary/review route used for local sources.
+
+The acquisition command remains isolated and cannot chain into intake. An explicit `registry_only` intake may still stop after Registry; ordinary knowledge-base intake continues through Guardian, and Step 7 remains separately explicit and primary-question scoped. Provider paper type remains metadata rather than scientific classification.

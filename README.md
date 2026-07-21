@@ -4,7 +4,7 @@ Cross-platform, local-first contracts and deterministic CLI primitives for evide
 
 ## Current Scope
 
-Milestone 1B through the M3C-2B2 repository slice provide:
+Milestone 1B through the M3C-2D repository slice provide:
 
 - versioned workspace, domain, record, and candidate schemas;
 - portable source references and stable IDs;
@@ -40,6 +40,7 @@ Milestone 1B through the M3C-2B2 repository slice provide:
 - Portable Skill routes for read-only paper/question queries, canonical claim trace-back and explicitly gated Step 7 maintenance.
 - one workspace-independent Europe PMC metadata connector that reports only in the active task, with bounded local filtering and DOI deduplication.
 - explicit user-only handoff of selected discovery results into an idempotent `metadata_only` candidate store, plus separate zero-write OA resolution and create-only Europe PMC acquisition contracts.
+- a read-only acquired-candidate intake projection and Portable Skill continuation into the existing primary/review workflow through Guardian.
 
 The installed CLI contains no private adapter and performs no adapter or connector discovery. The CLI never calls an LLM or makes scientific judgments. OCR, subtype-specific review runtime, persisted Markdown or additional derived views, Field Map integration, Review Unit Question Mapping, institutional/browser acquisition and migration remain later milestones.
 
@@ -67,7 +68,7 @@ On macOS, use `.venv/bin/python` instead.
 
 ## Portable Skill
 
-The reviewed Skill source lives at `skills/research-kb/`. It orchestrates bounded on-demand metadata discovery, explicit user-selected candidate handoff, exact-user-authority Europe PMC OA acquisition, separately requested acquired-candidate Registry handoff, mutually exclusive primary-research and common Review Memory intake, read-only knowledge queries and explicitly gated Step 7 maintenance. It adds no schema, ID or workflow store of its own.
+The reviewed Skill source lives at `skills/research-kb/`. It orchestrates bounded on-demand metadata discovery, explicit user-selected candidate handoff, exact-user-authority Europe PMC OA acquisition, separately requested acquired-candidate intake through the existing primary/review workflow, read-only knowledge queries and explicitly gated Step 7 maintenance. It adds no schema, ID or workflow store of its own.
 
 The Python wheel does not install the Skill. Local CC Switch installation is a separate, explicitly authorized post-merge operation. Discovery search is workspace-independent; candidate handoff, resolution, acquisition and all intake/query/Step 7 modes require an existing workspace config. The Skill does not generate workspace/domain configuration or integrate Review Units downstream. It acquires a source only through the exact-user-authority `explicit_oa_acquisition` route. Discovery search and ordinary queries remain non-persistent; only candidate handoff, explicit OA acquisition, explicit Step 7 maintenance or an explicitly complete intake workflow may write through Core.
 
@@ -129,7 +130,7 @@ Existing source assets remain immutable. The only source-write exception is exac
 
 `intake inspect` accepts one absolute source path, confines it to exactly one declared source root, and returns only portable `root_id + relative_path`, exact-path registration state, and ordered Paper Card section IDs/labels. It hashes the source before and after projection, never returns the hash or absolute path, and performs no registration. The Portable Skill uses it for sequential reruns; concurrent inspect-and-register deduplication is not guaranteed.
 
-`intake inspect-acquired` accepts one acquired discovery candidate ID, verifies its receipt against the exact current inbox PDF, and emits the same intake projection plus deterministic Registry bibliography input. It writes nothing and performs no provider request. A separately requested Skill route may pass that projection to the existing `registry add`; acquisition alone still stops before Registry.
+`intake inspect-acquired` accepts one acquired discovery candidate ID, verifies its receipt against the exact current inbox PDF, and emits the same intake projection plus deterministic Registry bibliography input. It writes nothing and performs no provider request. A separately requested Skill route may pass that projection to the existing `registry add`; acquisition alone still stops before Registry. Unless that later task explicitly requests `registry_only`, the returned paper ID resumes the same status, Parse and mutually exclusive primary/review workflow used by local-path intake.
 
 `paper context` returns the selected paper's complete stored Paper Card or `null`, canonical Evidence records, and review queue records after complete-bundle and source-stability checks. It excludes source references, paths, parsed pages, Question Mappings, and unrelated papers. It is the public recovery surface for CLI-owned Unit, Evidence, and queue IDs, not a generic workspace export or semantic resume decision.
 

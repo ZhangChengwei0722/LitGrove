@@ -92,7 +92,7 @@ Evidence matrices, relations, gap maps, contradictions, persisted Question Layer
 
 The transient JSON read interface is version `1.0`. Core reports capability and current state; the Portable Skill decides the procedural resume step and the Agent remains responsible for scientific interpretation. No read command persists a status snapshot or workflow run.
 
-`intake inspect` is the only path-facing read. The Skill must call it before `registry add`, reuse the sole returned paper ID for `registered_current`, register only `unregistered`, and stop on `registered_stale` or `ambiguous`. It must use the returned source reference and ordered Card sections rather than parsing workspace, profile or Registry files. This is sequential routing, not an atomic concurrency guarantee.
+`intake inspect` is the only absolute-path-facing read. `intake inspect-acquired` is the candidate-ID bridge for a separately authorized acquired-source task. The Skill must inspect before `registry add`, reuse the sole returned paper ID for `registered_current`, register only `unregistered`, and stop on `registered_stale` or `ambiguous`. It must use returned source and domain values rather than parsing workspace, profile or Registry files. This is sequential routing, not an atomic concurrency guarantee.
 
 `paper context` is the primary-route read that returns stored Card, Evidence and queue scientific content together. `review context` is the separate review-route read and returns a complete background-only Review Memory. Both are bounded to an explicit paper, omit paths and unrelated records, and exist to recover Core-owned IDs without direct store access.
 
@@ -100,7 +100,7 @@ Stdin accepts JSON only for discovery search/selection requests, Registry metada
 
 ## Portable Skill Workflow
 
-The repo-owned `research-kb` Skill routes workspace-independent on-demand discovery, optional explicit candidate handoff, separately requested OA acquisition, local PDF intake or an existing-workspace knowledge query. Discovery resolves explicit dates and field-bound keywords and reports 0-15 metadata results with zero writes. Candidate selection and acquisition each require separate exact user authority. Acquisition stops after reporting its portable source reference. Intake remains a later invocation that processes one source at a time, parses with explicit `pdfplumber`, then selects one mutually exclusive primary or review route.
+The repo-owned `research-kb` Skill routes workspace-independent on-demand discovery, optional explicit candidate handoff, separately requested OA acquisition, local or already-acquired PDF intake, or an existing-workspace knowledge query. Discovery resolves explicit dates and field-bound keywords and reports 0-15 metadata results with zero writes. Candidate selection and acquisition each require separate exact user authority. Acquisition stops after reporting its portable source reference. A later explicit acquired-candidate intake resolves Registry state and, unless `registry_only` was requested, resumes the same explicit-`pdfplumber`, mutually exclusive primary/review route as local-path intake.
 
 The Skill maintains no checkpoint. Reruns recover state through `intake inspect` or `intake inspect-acquired`, then `paper status` and `paper context`; exact existing records are reused, while stale state, ambiguous sources and uncertain near-duplicates stop. Paper-local unsupported-PDF or document-type failures may be isolated, but workspace/transaction integrity failures stop the batch.
 
