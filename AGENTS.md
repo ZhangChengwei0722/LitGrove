@@ -11,6 +11,7 @@ This repository contains cross-platform Core/CLI code, public contracts, synthet
 - Source assets are read-only. Core code must never move, delete, rename, overwrite, or copy a source asset without an explicit future contract and user authorization.
 - The CLI performs deterministic I/O, validation, IDs, status gates, logging, rendering, and Guardian checks. It does not make scientific judgments or call an LLM.
 - Agent-produced records are candidates. Agents cannot assign `human_checked`, `verified`, final screening decisions, or high-risk source operations.
+- Discovery selection requires explicit user authority and creates metadata-only, non-evidence candidates; it never authorizes acquisition, Registry intake, screening, or verification.
 - Structured records are canonical inputs. Markdown is a rendered reading view and must not overwrite structured state.
 
 ## Engineering Rules

@@ -43,6 +43,54 @@ def _tree_snapshot(root: Path) -> dict[str, bytes]:
     }
 
 
+def _synthetic_discovery_selection() -> dict:
+    result = {
+        "result_key": "doi:10.0000/synthetic.wheel.discovery",
+        "title": "Targeted degradation delivery in an invented wheel system",
+        "authors": ["Alpha Researcher"],
+        "first_publication_date": "2026-07-20",
+        "journal_or_server": "Invented Journal",
+        "doi": "10.0000/synthetic.wheel.discovery",
+        "paper_type": "article",
+        "publication_types": ["Journal Article"],
+        "abstract": "Delivery was measured in the fabricated wheel study.",
+        "matched_keywords": ["targeted degradation", "delivery"],
+        "match_location": "both",
+        "discovery_sources": [
+            {"provider": "europe-pmc", "source": "MED", "record_id": "SYNTH-WHEEL-1"}
+        ],
+        "full_text_status": "unknown",
+        "version_relationship": {"status": "unresolved", "related_doi": None},
+        "possible_duplicate_result_keys": [],
+    }
+    return {
+        "request_version": "1.0",
+        "report": {
+            "status": "success",
+            "interface_version": "1.0",
+            "provider": "europe-pmc",
+            "provider_api_version": "synthetic-6.9",
+            "query": {
+                "date_from": "2026-07-14",
+                "date_until": "2026-07-21",
+                "title_keywords": ["targeted degradation"],
+                "abstract_keywords": ["delivery"],
+                "keyword_mode": "any",
+                "include_preprints": True,
+                "max_results": 15,
+            },
+            "provider_hit_count": 1,
+            "scanned_result_count": 1,
+            "returned_result_count": 1,
+            "truncated": False,
+            "persistent_writes": 0,
+            "results": [result],
+        },
+        "selections": [{"result_key": result["result_key"], "target_question_ids": []}],
+        "fixture_origin": "synthetic_from_scratch",
+    }
+
+
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
     wheels = sorted((root / "dist").glob("research_kb_core-*.whl"))
@@ -63,11 +111,11 @@ def main() -> int:
             "diagnostic_code": "RKBC-028",
         }:
             raise SystemExit("base wheel capability report did not expose the missing PDF dependency")
-        if not {"discovery search", "intake inspect", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
+        if not {"discovery search", "discovery list", "discovery show", "intake inspect", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
             raise SystemExit("base wheel capability report lacks deterministic intake/context reads")
         if capability["discovery_connectors"] != [{"connector": "europe-pmc", "availability": "available", "network_required": True}]:
             raise SystemExit("base wheel capability report lacks the Europe PMC connector")
-        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True:
+        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["approved_discovery_candidate_handoff"] is not True:
             raise SystemExit("base wheel capability report lacks Review Memory, Step 7 or discovery runtime")
         subprocess.run(
             [
@@ -76,18 +124,20 @@ def main() -> int:
                 "from research_kb.contracts.registry import SchemaRegistry; "
                 "from research_kb.guardian import GuardianService; "
                 "from research_kb.discovery.europe_pmc import EuropePmcConnector; "
-                "from research_kb.services import CompatibilityAdapterRegistry, CompatibilityInspectionService, DiscoveryConnectorRegistry, DiscoveryService, IntakeInspectService, PaperContextService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService, ReviewContextService, ReviewMemoryService, Step7CandidateService, Step7ContextService, Step7ReadingViewService; "
+                "from research_kb.services import CompatibilityAdapterRegistry, CompatibilityInspectionService, DiscoveryCandidateService, DiscoveryConnectorRegistry, DiscoveryService, IntakeInspectService, PaperContextService, ParseService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService, ReviewContextService, ReviewMemoryService, Step7CandidateService, Step7ContextService, Step7ReadingViewService; "
                 "registry = SchemaRegistry(); "
                 "assert registry.schema('mutation-request')['$id'].endswith('mutation-request'); "
                 "assert registry.schema('compatibility-difference')['$id'].endswith('compatibility-difference'); "
                 "assert registry.schema('compatibility-report')['$id'].endswith('compatibility-report'); "
                 "assert registry.schema('question-mapping')['$id'].endswith('question-mapping'); "
                 "assert registry.schema('review-memory')['$id'].endswith('review-memory'); "
+                "assert registry.schema('discovery-candidate')['$id'].endswith('discovery-candidate'); "
                 "assert LegacyReaderAdapter.__name__ == 'LegacyReaderAdapter'; "
                 "assert CompatibilitySourceRef.__name__ == 'CompatibilitySourceRef'; "
                 "assert CompatibilityAdapterRegistry.__name__ == 'CompatibilityAdapterRegistry'; "
                 "assert CompatibilityInspectionService.__name__ == 'CompatibilityInspectionService'; "
                 "assert DiscoveryConnectorRegistry.__name__ == 'DiscoveryConnectorRegistry'; "
+                "assert DiscoveryCandidateService.__name__ == 'DiscoveryCandidateService'; "
                 "assert DiscoveryService.__name__ == 'DiscoveryService'; "
                 "assert EuropePmcConnector.connector_id == 'europe-pmc'; "
                 "assert IntakeInspectService.__name__ == 'IntakeInspectService'; "
@@ -170,8 +220,8 @@ def main() -> int:
         if outputs != ["planned", "initialized", "no_change"]:
             raise SystemExit(f"unexpected workspace init results: {outputs}")
         marker = json.loads((workspace_root / "knowledge" / ".research-kb" / "workspace.json").read_text(encoding="utf-8"))
-        if marker["layout_contract_version"] != "m3b-1":
-            raise SystemExit("wheel workspace did not initialize at m3b-1")
+        if marker["layout_contract_version"] != "m3c-2a":
+            raise SystemExit("wheel workspace did not initialize at m3c-2a")
         if not (workspace_root / "knowledge" / "questions").is_dir():
             raise SystemExit("wheel workspace lacks questions directory")
         if (workspace_root / "knowledge" / "questions" / "mappings.jsonl").exists():
@@ -184,6 +234,45 @@ def main() -> int:
             raise SystemExit("wheel workspace lacks Step 7 directory")
         if any((workspace_root / "knowledge" / "step7").iterdir()):
             raise SystemExit("workspace init created an empty Step 7 store")
+        if not (workspace_root / "knowledge" / "discovery").is_dir():
+            raise SystemExit("wheel workspace lacks discovery directory")
+        if any((workspace_root / "knowledge" / "discovery").iterdir()):
+            raise SystemExit("workspace init created an empty discovery store")
+
+        selection = _run_json_stdin(
+            python,
+            Path(temporary),
+            _synthetic_discovery_selection(),
+            "discovery",
+            "select",
+            "--workspace",
+            str(config_path),
+            "--request",
+            "-",
+            "--actor",
+            "user",
+        )
+        candidate_id = selection["selected_candidate_ids"][0]
+        listed_candidates = _run_json(
+            python,
+            Path(temporary),
+            "discovery",
+            "list",
+            "--workspace",
+            str(config_path),
+        )
+        shown_candidate = _run_json(
+            python,
+            Path(temporary),
+            "discovery",
+            "show",
+            "--workspace",
+            str(config_path),
+            "--candidate-id",
+            candidate_id,
+        )
+        if listed_candidates["candidate_count"] != 1 or shown_candidate["candidate"]["candidate_id"] != candidate_id:
+            raise SystemExit("base wheel discovery candidate handoff failed")
 
         source = sources / "wheel-study.txt"
         source.write_text("The invented wheel response increased.\n", encoding="utf-8", newline="\n")

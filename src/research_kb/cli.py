@@ -49,6 +49,7 @@ from research_kb.services.bootstrap import WorkspaceBootstrapService
 from research_kb.services.compatibility import CompatibilityAdapterRegistry, CompatibilityInspectionService
 from research_kb.services.intake_inspect import IntakeInspectService
 from research_kb.services.discovery import DiscoveryConnectorRegistry, DiscoveryService
+from research_kb.services.discovery_candidate import DiscoveryCandidateService
 from research_kb.compatibility import LegacyReaderAdapter
 from research_kb.storage.json_io import read_jsonl, serialize_json
 from research_kb.storage.transactions import MANUAL_RESOLUTION_ACTIONS, TransactionManager
@@ -66,6 +67,7 @@ ID_FIELDS = {
     "step7-review-angle": "candidate_id",
     "step7-insight": "candidate_id",
     "step7-cross-view": "candidate_id",
+    "discovery-candidate": "candidate_id",
 }
 REGISTRY_METADATA_STDIN_LIMIT = 64 * 1024
 MUTATION_REQUEST_STDIN_LIMIT = 4 * 1024 * 1024
@@ -86,6 +88,15 @@ def build_parser() -> argparse.ArgumentParser:
     discovery_search = discovery_commands.add_parser("search", help="emit one transient discovery report")
     discovery_search.add_argument("--provider", required=True)
     discovery_search.add_argument("--request", required=True, type=Path)
+    discovery_select = discovery_commands.add_parser("select", help="persist explicitly user-selected discovery results")
+    discovery_select.add_argument("--workspace", required=True, type=Path)
+    discovery_select.add_argument("--request", required=True, type=Path)
+    discovery_select.add_argument("--actor", choices=("agent", "cli", "user"), required=True)
+    discovery_list = discovery_commands.add_parser("list", help="list persisted discovery candidates")
+    discovery_list.add_argument("--workspace", required=True, type=Path)
+    discovery_show = discovery_commands.add_parser("show", help="show one persisted discovery candidate")
+    discovery_show.add_argument("--workspace", required=True, type=Path)
+    discovery_show.add_argument("--candidate-id", required=True)
 
     workspace = commands.add_parser("workspace", help="initialize deterministic workspace layout")
     workspace_commands = workspace.add_subparsers(dest="workspace_command", required=True)
@@ -216,6 +227,12 @@ def main(
         if args.command == "discovery" and args.discovery_command == "search":
             connectors = (EuropePmcConnector(),) if discovery_connectors is None else discovery_connectors
             return _discovery_search(args, connectors)
+        if args.command == "discovery" and args.discovery_command == "select":
+            return _discovery_select(args)
+        if args.command == "discovery" and args.discovery_command == "list":
+            return _discovery_list(args)
+        if args.command == "discovery" and args.discovery_command == "show":
+            return _discovery_show(args)
         if args.command == "workspace" and args.workspace_command == "init":
             return _workspace_init(args)
         if args.command == "intake" and args.intake_command == "inspect":
@@ -264,6 +281,7 @@ def main(
             "RKBC-016",
             "RKBC-017",
             "RKBC-018",
+            "RKBC-034",
             WORKSPACE_NOT_INITIALIZED,
             WORKSPACE_IDENTITY_CONFLICT,
             WORKSPACE_LAYOUT_CONFLICT,
@@ -317,6 +335,35 @@ def _discovery_search(
         request,
     )
     _write_json_once(report)
+    return 0
+
+
+def _discovery_select(args: argparse.Namespace) -> int:
+    layout = WorkspaceLayout.load(args.workspace)
+    stream = sys.stdin.buffer if args.request == Path("-") else args.request.open("rb")
+    try:
+        request = read_bounded_json_object(
+            stream,
+            limit=MUTATION_REQUEST_STDIN_LIMIT,
+            record_kind="discovery-selection-request",
+        )
+    finally:
+        if args.request != Path("-"):
+            stream.close()
+    result = DiscoveryCandidateService(layout).select(request, actor=args.actor)
+    _write_json_once(result.to_dict(layout))
+    return 0
+
+
+def _discovery_list(args: argparse.Namespace) -> int:
+    layout = WorkspaceLayout.load(args.workspace)
+    _write_json_once(DiscoveryCandidateService(layout).list())
+    return 0
+
+
+def _discovery_show(args: argparse.Namespace) -> int:
+    layout = WorkspaceLayout.load(args.workspace)
+    _write_json_once(DiscoveryCandidateService(layout).show(args.candidate_id))
     return 0
 
 

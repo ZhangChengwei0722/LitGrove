@@ -22,3 +22,5 @@ Public provider state is mutable. The guarantee is that the same validated reque
 - Capability probing advertises the connector without network access.
 - Automated tests use fake transports and invented metadata only.
 - Crossref, candidate persistence, user-approval records, OA resolution, downloads, browser login, version replacement, scheduled discovery and downstream intake remain separate work.
+
+Candidate persistence was subsequently accepted as the separate user-authority handoff in ADR 0020; the M3C-1 search command itself remains unchanged and zero-write.

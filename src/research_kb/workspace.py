@@ -55,6 +55,10 @@ class WorkspaceLayout:
         return self.knowledge_root / "questions" / "mappings.jsonl"
 
     @property
+    def discovery_candidates_path(self) -> Path:
+        return self.knowledge_root / "discovery" / "candidates.jsonl"
+
+    @property
     def lock_path(self) -> Path:
         return self.knowledge_root / ".research-kb" / "locks" / "workspace.lock"
 

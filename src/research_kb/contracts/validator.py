@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import defaultdict
 from collections.abc import Iterable
@@ -279,6 +280,72 @@ def _local_semantic_diagnostics(kind: str, record: dict[str, Any]) -> list[Diagn
                     "Review Memory with reusable Units must use reusable memory value status",
                 )
             )
+    elif kind == "discovery-candidate" and isinstance(record.get("selection_contexts"), list):
+        record_id = _record_id(kind, record)
+        ordered_fields = (
+            ("/publication_types", record.get("publication_types", [])),
+            ("/possible_duplicate_result_keys", record.get("possible_duplicate_result_keys", [])),
+            ("/target_question_ids", record.get("target_question_ids", [])),
+        )
+        for path, values in ordered_fields:
+            if isinstance(values, list) and values != sorted(values):
+                diagnostics.append(
+                    Diagnostic(SNAPSHOT_MISMATCH, kind, record_id, path, "discovery candidate array is not deterministically ordered")
+                )
+        sources = record.get("discovery_sources", [])
+        if isinstance(sources, list) and all(isinstance(item, dict) for item in sources):
+            ordered_sources = sorted(
+                sources,
+                key=lambda item: (
+                    str(item.get("provider", "")),
+                    str(item.get("source", "")),
+                    str(item.get("record_id", "")),
+                ),
+            )
+            if sources != ordered_sources:
+                diagnostics.append(
+                    Diagnostic(SNAPSHOT_MISMATCH, kind, record_id, "/discovery_sources", "discovery sources are not deterministically ordered")
+                )
+        contexts = record["selection_contexts"]
+        if all(isinstance(item, dict) for item in contexts):
+            context_ids = [item.get("selection_context_id", "") for item in contexts]
+            if context_ids != sorted(context_ids):
+                diagnostics.append(
+                    Diagnostic(SNAPSHOT_MISMATCH, kind, record_id, "/selection_contexts", "selection contexts are not deterministically ordered")
+                )
+            for index, context in enumerate(contexts):
+                questions = context.get("target_question_ids", [])
+                if isinstance(questions, list) and questions != sorted(questions):
+                    diagnostics.append(
+                        Diagnostic(
+                            SNAPSHOT_MISMATCH,
+                            kind,
+                            record_id,
+                            f"/selection_contexts/{index}/target_question_ids",
+                            "selection-context question IDs are not deterministically ordered",
+                        )
+                    )
+                if isinstance(context.get("query"), dict) and isinstance(questions, list):
+                    identity = {
+                        "provider": context.get("provider"),
+                        "result_key": record.get("result_key"),
+                        "query": context["query"],
+                        "target_question_ids": questions,
+                    }
+                    canonical = (
+                        json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+                    ).encode("utf-8")
+                    expected = "selection_sha256_" + hashlib.sha256(canonical).hexdigest()
+                    if context.get("selection_context_id") != expected:
+                        diagnostics.append(
+                            Diagnostic(
+                                SNAPSHOT_MISMATCH,
+                                kind,
+                                record_id,
+                                f"/selection_contexts/{index}/selection_context_id",
+                                "selection context ID does not match its canonical intent",
+                            )
+                        )
     if kind.startswith("step7-") and isinstance(record.get("evidence_base"), list):
         for value in record["evidence_base"]:
             if isinstance(value, str) and value.startswith("queue_"):
@@ -321,6 +388,8 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
     profile_sections: dict[str, list[str]] = {}
     question_records: dict[str, dict[str, Any]] = {}
     candidate_records: dict[str, dict[str, Any]] = {}
+    discovery_result_keys: dict[str, str] = {}
+    discovery_context_ids: dict[str, str] = {}
     defined: dict[str, list[str]] = defaultdict(list)
     paper_cards: dict[str, int] = defaultdict(int)
     review_memories: dict[str, int] = defaultdict(int)
@@ -449,6 +518,36 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                 candidates.add(candidate_id)
                 candidate_records[candidate_id] = record
                 defined[namespace].append(candidate_id)
+        elif kind == "discovery-candidate":
+            candidate_id = record.get("candidate_id", "")
+            defined["discovery"].append(candidate_id)
+            result_key = record.get("result_key", "")
+            if result_key in discovery_result_keys:
+                diagnostics.append(
+                    Diagnostic(
+                        DUPLICATE_ID,
+                        kind,
+                        candidate_id,
+                        "/result_key",
+                        "discovery result key is already represented by another candidate",
+                    )
+                )
+            elif result_key:
+                discovery_result_keys[result_key] = candidate_id
+            for context in record.get("selection_contexts", []):
+                context_id = context.get("selection_context_id", "")
+                if context_id in discovery_context_ids:
+                    diagnostics.append(
+                        Diagnostic(
+                            DUPLICATE_ID,
+                            kind,
+                            candidate_id,
+                            "/selection_contexts",
+                            "selection context ID is already represented",
+                        )
+                    )
+                elif context_id:
+                    discovery_context_ids[context_id] = candidate_id
         elif kind == "process-event":
             event_id = record.get("event_id", "")
             events.add(event_id)
@@ -649,6 +748,59 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                             "a selected needs-resolution Card Unit requires needs_resolution mapping status",
                         )
                     )
+        elif kind == "discovery-candidate":
+            _require_ref(
+                diagnostics,
+                kind,
+                record_id,
+                "/workspace_id",
+                record.get("workspace_id"),
+                workspaces,
+                "workspace",
+            )
+            _require_ref(
+                diagnostics,
+                kind,
+                record_id,
+                "/domain_profile_id",
+                record.get("domain_profile_id"),
+                profiles,
+                "domain profile",
+            )
+            context_question_ids: set[str] = set()
+            for context_index, context in enumerate(record.get("selection_contexts", [])):
+                for value in context.get("target_question_ids", []):
+                    context_question_ids.add(value)
+                    _require_ref(
+                        diagnostics,
+                        kind,
+                        record_id,
+                        f"/selection_contexts/{context_index}/target_question_ids",
+                        value,
+                        questions,
+                        "question",
+                    )
+            target_question_ids = set(record.get("target_question_ids", []))
+            for value in target_question_ids:
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    "/target_question_ids",
+                    value,
+                    questions,
+                    "question",
+                )
+            if context_question_ids != target_question_ids:
+                diagnostics.append(
+                    Diagnostic(
+                        SNAPSHOT_MISMATCH,
+                        kind,
+                        record_id,
+                        "/target_question_ids",
+                        "target question IDs do not equal the union of selection contexts",
+                    )
+                )
         elif kind.startswith("step7-"):
             _require_ref(diagnostics, kind, record_id, "/question_id", record.get("question_id"), questions, "question")
             base_units: list[str] = []
@@ -791,6 +943,7 @@ def _record_id(kind: str, record: dict[str, Any]) -> str | None:
         "step7-review-angle": "candidate_id",
         "step7-insight": "candidate_id",
         "step7-cross-view": "candidate_id",
+        "discovery-candidate": "candidate_id",
         "process-event": "event_id",
         "guardian-report": "guardian_report_id",
     }

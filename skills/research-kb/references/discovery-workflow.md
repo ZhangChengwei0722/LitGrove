@@ -1,6 +1,6 @@
 # On-Demand Discovery Workflow
 
-Use this workflow only for `on_demand_discovery`. It searches public metadata through the Core connector and returns a private task report. It does not require or initialize a workspace.
+Use this workflow only for `on_demand_discovery`. Search returns a private task report and does not require a workspace. Candidate handoff is a separate, explicit user-selection phase that requires an existing workspace.
 
 ## Resolve The Request
 
@@ -35,9 +35,9 @@ research-kb discovery search --provider europe-pmc --request -
 ```
 
 3. Accept only a successful transient interface `1.0` report.
-4. Keep the report in the active task only and return `persistent_writes: 0`.
+4. Keep the complete report in the active task and return `persistent_writes: 0` for search.
 
-Do not create a temporary request file. Do not call `workspace init`, Registry, Parse, Paper Card, Evidence, Question Mapping, Step 7 or Guardian from this route.
+Do not create a temporary request file. Do not call Registry, Parse, Paper Card, Evidence, Question Mapping or Step 7 from search.
 
 ## Interpret The Results
 
@@ -50,18 +50,48 @@ Do not create a temporary request file. Do not call `workspace init`, Registry, 
 - Show possible duplicate result keys as candidates; never silently merge different DOI identities.
 - State that results may change when the public provider updates its index.
 
+## Explicit Candidate Handoff
+
+Show search results first. Do not infer approval from relevance, order, `paper_type`, DOI, possible-duplicate state or full-text availability.
+
+Only after the user explicitly names 1-15 `result_key` values:
+
+1. Require an existing workspace config and `approved_discovery_candidate_handoff: true`. Run `workspace init --dry-run`; if initialization or `m3b-1 -> m3c-2a` upgrade is required, stop and handle that as a separate explicit workspace task before handoff.
+2. Preserve the complete successful report exactly; do not submit a partial report or only selected rows.
+3. If the user supplied existing question labels, resolve them through `question list/show`. New question ideas remain report-only.
+4. Build one JSON selection request and pipe it through stdin:
+
+```json
+{
+  "request_version": "1.0",
+  "report": {"<complete_transient_report>": "..."},
+  "selections": [
+    {
+      "result_key": "<explicitly_selected_result_key>",
+      "target_question_ids": []
+    }
+  ]
+}
+```
+
+```text
+research-kb discovery select --workspace <config> --request - --actor user
+```
+
+5. Call `discovery list`, then `discovery show` for every returned candidate ID.
+6. Run read-only Guardian and report created, updated and no-change candidate IDs.
+
+Exact selection-intent reruns write nothing. A new query/question context may update the same candidate. `RKBC-034` means the same result key carries changed metadata; stop the complete batch instead of refreshing it.
+
 ## Stop Boundary
 
-Every result is report-only in M3C-1.
-
-Do not persist a discovery candidate. Do not download full text. Do not create a Registry record, choose a source-root destination, use a logged-in browser, post a document request or start downstream intake.
-
-When the user approves results, report that approved-candidate persistence and legal acquisition require the separately implemented next route. A new Research Question idea also remains report-only.
+Do not download full text. Do not create a Registry record, choose a source-root destination, use a logged-in browser, post a document request or start downstream intake. `user_selected` means follow-up interest only; it is not `human_checked`, `verified`, `included` or acquisition approval.
 
 ## Failure
 
 - `RKBC-002`: correct the bounded request; do not relax scientific criteria.
 - `RKBC-032`: connector or network failure; report no partial success.
 - `RKBC-033`: invalid provider output; report no partial success.
+- `RKBC-034`: stored/result metadata conflict; report no partial handoff.
 
 Never bypass the connector with an arbitrary URL, browser scrape, private API token or hidden script.

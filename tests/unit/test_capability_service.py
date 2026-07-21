@@ -12,7 +12,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
         "core": {
             "version": "0.1.0",
             "contract_versions": ["1.0"],
-            "layout_versions": ["m3b-1"],
+            "layout_versions": ["m3c-2a"],
         },
         "parse_adapters": [
             {
@@ -49,7 +49,9 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
         ],
         "read_commands": [
             "capability show",
+            "discovery list",
             "discovery search",
+            "discovery show",
             "guardian check",
             "intake inspect",
             "paper context",
@@ -63,6 +65,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "step7 render",
         ],
         "features": {
+            "approved_discovery_candidate_handoff": True,
             "real_pdf_parse": True,
             "stdin_json_handoff": True,
             "review_runtime": True,

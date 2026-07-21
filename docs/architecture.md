@@ -8,13 +8,13 @@ Shared Core + CLI
 -> Separate private workspaces
 ```
 
-Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, Guardian checks, real-PDF page extraction, Step 7 candidate persistence, and bounded stdout read surfaces. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Persisted Markdown and additional derived views remain deferred.
+Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, Guardian checks, real-PDF page extraction, Step 7/discovery candidate persistence, and bounded stdout read surfaces. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Persisted Markdown and additional derived views remain deferred.
 
 ## Knowledge Flow
 
 ```text
 Source Intake -> Registry -> Parse
--> On-demand discovery: fixed public connector -> transient metadata report
+-> On-demand discovery: fixed public connector -> transient metadata report -> optional user-selected metadata candidate
 -> Primary route: Paper Card Core -> Evidence Grounding -> Question Mapping
 -> Review route: background-only Review Memory
 -> Ephemeral query route: Paper Card Units -> optional Evidence trace-back -> task report
@@ -22,7 +22,7 @@ Source Intake -> Registry -> Parse
 -> Guardian / Feedback
 ```
 
-Canonical evidence is the provenance backbone. Paper Card Units are the semantic entry for later reasoning. Step 7 remains candidate-level and must expand back to canonical evidence.
+Canonical evidence is the provenance backbone. Paper Card Units are the semantic entry for later reasoning. Step 7 remains candidate-level and must expand back to canonical evidence. Discovery candidates are a separate metadata-only follow-up queue and never enter this evidence chain by selection alone.
 
 ## Milestone 1B Runtime
 
@@ -92,7 +92,7 @@ The Agent supplies the semantic selection, role, and rationale. Core owns `quest
 
 `questions/mappings.jsonl` is canonical organizational state, not canonical scientific evidence. It points back to Paper Card Units and canonical evidence rather than duplicating their scientific content. Guardian warns with `RKBC-014` when linked Card, evidence, or queue records are newer than a mapping; it never refreshes the mapping automatically.
 
-New workspaces initialize at layout `m3b-1`. Exact `m3a-2a` predecessors are runtime-blocked with `RKBC-027` and can be upgraded only through `workspace init`. The current upgrade creates an empty `step7/` directory and replaces operational marker metadata; it rewrites no canonical record and creates no empty JSONL store, process event or journal.
+New workspaces initialize at layout `m3c-2a`. Exact `m3b-1` predecessors are runtime-blocked with `RKBC-027` and can be upgraded only through `workspace init`. The current upgrade creates an empty `discovery/` directory and replaces operational marker metadata; it rewrites no canonical record and creates no empty JSONL store, process event or journal.
 
 ## M2B-2 Question Reading View Boundary
 
@@ -251,4 +251,20 @@ The standard-library transport rejects redirects, bounds timeout and bytes, igno
 
 Exact normalized DOI identity may merge duplicate provider rows. Different or missing DOI identities are retained; similar titles only create symmetric possible-duplicate references. `paper_type`, full-text availability and unresolved version relation are metadata projections, not scientific judgment or acquisition authority.
 
-Live provider state can change, so M3C-1 does not promise byte-identical searches across time. It guarantees that the same validated request plus the same provider page payloads produce the same normalized bytes. Any page, transport or output failure produces no partial stdout report. Candidate persistence, source download, browser login, downstream intake and Crossref remain separate milestones.
+Live provider state can change, so M3C-1 does not promise byte-identical searches across time. It guarantees that the same validated request plus the same provider page payloads produce the same normalized bytes. Any page, transport or output failure produces no partial stdout report. Source download, browser login, downstream intake and Crossref remain separate milestones.
+
+## M3C-2A Approved Candidate Handoff
+
+```text
+complete validated M3C-1 report
++ explicit user-selected result keys
++ optional existing Question Mapping IDs
+-> deterministic selection contexts
+-> discovery/candidates.jsonl
+```
+
+`DiscoveryCandidateService` validates the complete transient report without calling the provider again. Selection requires exact `actor: user`; relevance, rank, paper type and full-text status never imply approval. Only selected results persist. The report itself and all unselected metadata remain outside the workspace.
+
+Candidate identity is the M3C-1 `result_key`; Core allocates a separate `discovery_<uuid4>` record ID. A selection context hashes provider, result key, normalized query and sorted target questions. Exact intent reruns are zero-write, a new context updates the existing candidate, and any metadata change under the same result key fails the whole batch with `RKBC-034`.
+
+The candidate store is metadata-only organizational state. Fixed fields remain `user_selected`, `metadata_only`, `not_started`, `not_evidence: true` and `passed_auto_checks`. Question IDs are labels pointing to existing mappings, not paper links. Events and journals contain only candidate and question IDs. `discovery list/show` validate the complete bundle and expose no source path or canonical paper content. Acquisition, refresh, deletion and Registry/intake chaining require later contracts.

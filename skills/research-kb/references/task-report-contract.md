@@ -15,7 +15,7 @@ capabilities_deliberately_skipped:
 recommended_next_action:
 ```
 
-For `on_demand_discovery` and `ephemeral_query`, require `persistent_writes: 0`.
+For discovery search and `ephemeral_query`, require `persistent_writes: 0`. An explicit user-selected discovery handoff reports its actual Core write count separately.
 
 ## Discovery Result
 
@@ -49,6 +49,23 @@ discovery:
 ```
 
 Do not imply that a result entered Registry or a candidate store. Do not report a download, local path or paper ID. A legitimate zero-result report keeps `results: []`.
+
+If the user explicitly selected results and candidate handoff ran, add:
+
+```yaml
+discovery_candidate_handoff:
+  selected_result_keys: []
+  created_candidate_ids: []
+  updated_candidate_ids: []
+  no_change_candidate_ids: []
+  target_question_ids: []
+  guardian_status:
+  persistent_writes:
+  acquisition_started: false
+  registry_records_created: false
+```
+
+Do not report handoff for results the user did not name. `persistent_writes` is `0` for an exact no-change rerun and `1` for one atomic candidate-store replacement, regardless of candidate count.
 
 ## Batch Summary
 
@@ -171,7 +188,7 @@ Do not claim:
 - review-derived canonical Evidence, Field Map integration or Review Unit Question Mapping;
 - Step 7 generation during an ordinary `ephemeral_query`;
 - Step 7 persistence during `ephemeral_query`;
-- discovery candidate persistence, acquisition or downstream intake during `on_demand_discovery`;
+- acquisition, Registry promotion or downstream intake caused merely by discovery candidate selection;
 - migration or legacy cutover;
 - unsupported figure, table, OCR or supplement interpretation;
 - success for a stage that Core did not validate.

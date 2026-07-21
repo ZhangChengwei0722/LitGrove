@@ -21,6 +21,7 @@ from research_kb.errors import (
     Diagnostic,
     ResearchKBError,
 )
+from research_kb.storage.json_io import serialize_json, sha256_bytes
 
 
 CONNECTOR_ID = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
@@ -36,6 +37,36 @@ FULL_TEXT_STATUSES = {
     "unknown",
 }
 POSSIBLE_DUPLICATE_RATIO = 0.92
+REPORT_FIELDS = {
+    "status",
+    "interface_version",
+    "provider",
+    "provider_api_version",
+    "query",
+    "provider_hit_count",
+    "scanned_result_count",
+    "returned_result_count",
+    "truncated",
+    "persistent_writes",
+    "results",
+}
+RESULT_FIELDS = {
+    "result_key",
+    "title",
+    "authors",
+    "first_publication_date",
+    "journal_or_server",
+    "doi",
+    "paper_type",
+    "publication_types",
+    "abstract",
+    "matched_keywords",
+    "match_location",
+    "discovery_sources",
+    "full_text_status",
+    "version_relationship",
+    "possible_duplicate_result_keys",
+}
 
 
 class DiscoveryConnectorRegistry:
@@ -99,6 +130,194 @@ class DiscoveryService:
             "persistent_writes": 0,
             "results": limited,
         }
+
+
+def validate_discovery_report(value: Mapping[str, Any]) -> dict[str, Any]:
+    if not isinstance(value, Mapping) or set(value) != REPORT_FIELDS:
+        raise _output_error("discovery report fields do not match the interface contract")
+    report = dict(value)
+    if report["status"] != "success" or report["interface_version"] != "1.0":
+        raise _output_error("discovery report status or interface version is invalid")
+    provider = report["provider"]
+    if provider != "europe-pmc":
+        raise _output_error("discovery report provider is not supported for candidate handoff")
+    if (
+        not isinstance(report["provider_api_version"], str)
+        or not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", report["provider_api_version"])
+    ):
+        raise _output_error("discovery report provider API version is invalid")
+    query_value = report["query"]
+    if not isinstance(query_value, Mapping):
+        raise _output_error("discovery report query is invalid")
+    try:
+        request = DiscoveryRequest.from_mapping({"request_version": "1.0", **dict(query_value)})
+    except ResearchKBError as error:
+        raise _output_error("discovery report query is invalid") from error
+    if request.to_dict() != dict(query_value):
+        raise _output_error("discovery report query is not normalized")
+
+    hit_count = _non_negative_integer(report["provider_hit_count"], "provider_hit_count", maximum=None)
+    scanned_count = _non_negative_integer(report["scanned_result_count"], "scanned_result_count", maximum=1000)
+    returned_count = _non_negative_integer(report["returned_result_count"], "returned_result_count", maximum=15)
+    if hit_count < scanned_count or scanned_count < returned_count:
+        raise _output_error("discovery report count relationships are invalid")
+    if returned_count > request.max_results:
+        raise _output_error("discovery report exceeds its requested result limit")
+    if (
+        not isinstance(report["truncated"], bool)
+        or isinstance(report["persistent_writes"], bool)
+        or report["persistent_writes"] != 0
+    ):
+        raise _output_error("discovery report persistence or truncation state is invalid")
+    results_value = report["results"]
+    if not isinstance(results_value, list) or len(results_value) != returned_count:
+        raise _output_error("discovery report result count does not match its results")
+
+    results: list[dict[str, Any]] = []
+    keys: set[str] = set()
+    for item in results_value:
+        result = _validate_report_result(item, request, provider)
+        if result["result_key"] in keys:
+            raise _output_error("discovery report contains duplicate result keys")
+        keys.add(result["result_key"])
+        results.append(result)
+    if [item["result_key"] for item in results] != [
+        item["result_key"] for item in sorted(results, key=_result_sort_key)
+    ]:
+        raise _output_error("discovery report results are not deterministically ordered")
+    by_key = {item["result_key"]: item for item in results}
+    for result in results:
+        result_key = result["result_key"]
+        for duplicate_key in result["possible_duplicate_result_keys"]:
+            if duplicate_key == result_key or duplicate_key not in by_key:
+                raise _output_error("possible duplicate reference is invalid")
+            if result_key not in by_key[duplicate_key]["possible_duplicate_result_keys"]:
+                raise _output_error("possible duplicate references are not symmetric")
+    return report
+
+
+def discovery_report_sha256(report: Mapping[str, Any]) -> str:
+    validated = validate_discovery_report(report)
+    return sha256_bytes(serialize_json(validated))
+
+
+def _validate_report_result(
+    value: Any,
+    request: DiscoveryRequest,
+    provider: str,
+) -> dict[str, Any]:
+    if not isinstance(value, Mapping) or set(value) != RESULT_FIELDS:
+        raise _output_error("discovery report result fields do not match the interface contract")
+    result = dict(value)
+    title = _text(result["title"], "title", 2000, required=True)
+    abstract = _text(result["abstract"], "abstract", 50000, required=False)
+    if title != result["title"] or abstract != result["abstract"]:
+        raise _output_error("discovery report title or abstract is not normalized")
+    publication_date = _candidate_date(result["first_publication_date"])
+    if publication_date < request.date_from or publication_date > request.date_until:
+        raise _output_error("discovery report result is outside the requested date range")
+    if not isinstance(result["paper_type"], str) or result["paper_type"] not in PAPER_TYPES:
+        raise _output_error("discovery report paper type is invalid")
+    if not request.include_preprints and result["paper_type"] == "preprint":
+        raise _output_error("discovery report includes an ineligible preprint")
+    if (
+        not isinstance(result["full_text_status"], str)
+        or result["full_text_status"] not in FULL_TEXT_STATUSES
+    ):
+        raise _output_error("discovery report full-text status is invalid")
+
+    matched_title = [keyword for keyword in request.title_keywords if _contains(title, keyword)]
+    matched_abstract = [
+        keyword
+        for keyword in request.abstract_keywords
+        if abstract is not None and _contains(abstract, keyword)
+    ]
+    qualifies = (
+        bool(matched_title or matched_abstract)
+        if request.keyword_mode == "any"
+        else len(matched_title) == len(request.title_keywords)
+        and len(matched_abstract) == len(request.abstract_keywords)
+    )
+    if not qualifies:
+        raise _output_error("discovery report result does not satisfy the requested keywords")
+    matched_keywords = _ordered_unique((*matched_title, *matched_abstract))
+    match_location = "both" if matched_title and matched_abstract else "title" if matched_title else "abstract"
+    if result["matched_keywords"] != matched_keywords or result["match_location"] != match_location:
+        raise _output_error("discovery report keyword match projection is invalid")
+
+    authors_value = result["authors"]
+    if not isinstance(authors_value, list) or len(authors_value) > 500:
+        raise _output_error("discovery report author list is invalid")
+    authors = [_text(item, "author", 512, required=True) for item in authors_value]
+    if authors != authors_value:
+        raise _output_error("discovery report authors are not normalized")
+    publication_types_value = result["publication_types"]
+    if not isinstance(publication_types_value, list) or len(publication_types_value) > 100:
+        raise _output_error("discovery report publication types are invalid")
+    publication_types = [
+        _text(item, "publication_type", 256, required=True)
+        for item in publication_types_value
+    ]
+    if publication_types != sorted(set(publication_types)):
+        raise _output_error("discovery report publication types are not normalized")
+    journal = _text(result["journal_or_server"], "journal_or_server", 1000, required=False)
+    if journal != result["journal_or_server"]:
+        raise _output_error("discovery report journal or server is not normalized")
+    doi = _normalize_doi(result["doi"])
+    if doi != result["doi"]:
+        raise _output_error("discovery report DOI is not normalized")
+
+    source_values = result["discovery_sources"]
+    if not isinstance(source_values, list) or not 1 <= len(source_values) <= 1000:
+        raise _output_error("discovery report sources are invalid")
+    sources: list[DiscoverySource] = []
+    for source in source_values:
+        if not isinstance(source, Mapping) or set(source) != {"provider", "source", "record_id"}:
+            raise _output_error("discovery report source fields are invalid")
+        if not all(isinstance(source[field], str) for field in ("provider", "source", "record_id")):
+            raise _output_error("discovery report source identity is invalid")
+        sources.append(
+            DiscoverySource(
+                provider=source["provider"],
+                source=source["source"],
+                record_id=source["record_id"],
+            )
+        )
+    normalized_sources = _sources(tuple(sources), provider)
+    if [item.to_dict() for item in normalized_sources] != source_values:
+        raise _output_error("discovery report sources are not normalized")
+
+    result_key = result["result_key"]
+    if not isinstance(result_key, str):
+        raise _output_error("discovery report result key is invalid")
+    expected_key = f"doi:{doi}" if doi is not None else _provider_result_key(normalized_sources[0])
+    if doi is not None:
+        key_valid = result_key == expected_key
+    else:
+        key_valid = result_key == expected_key or bool(
+            re.fullmatch(re.escape(expected_key) + r":[2-9][0-9]*", result_key)
+        )
+    if not key_valid:
+        raise _output_error("discovery report result key does not match its source identity")
+    if result["version_relationship"] != {"status": "unresolved", "related_doi": None}:
+        raise _output_error("discovery report version relationship is invalid")
+    duplicate_keys = result["possible_duplicate_result_keys"]
+    if (
+        not isinstance(duplicate_keys, list)
+        or len(duplicate_keys) > 14
+        or not all(isinstance(item, str) and item for item in duplicate_keys)
+        or duplicate_keys != sorted(set(duplicate_keys))
+    ):
+        raise _output_error("discovery report possible duplicate keys are invalid")
+    return result
+
+
+def _non_negative_integer(value: Any, field: str, *, maximum: int | None) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise _output_error(f"discovery report {field} is invalid")
+    if maximum is not None and value > maximum:
+        raise _output_error(f"discovery report {field} exceeds its boundary")
+    return value
 
 
 def _connector_id(connector: DiscoveryConnector) -> str:
@@ -370,4 +589,9 @@ def _output_error(message: str) -> ResearchKBError:
     )
 
 
-__all__ = ["DiscoveryConnectorRegistry", "DiscoveryService"]
+__all__ = [
+    "DiscoveryConnectorRegistry",
+    "DiscoveryService",
+    "discovery_report_sha256",
+    "validate_discovery_report",
+]
