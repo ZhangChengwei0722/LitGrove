@@ -16,6 +16,7 @@ from research_kb.discovery.base import (
     DiscoveryRequest,
     DiscoverySource,
 )
+from research_kb.discovery.resolution import ProviderAssetRef, ProviderResolution
 from research_kb.errors import (
     DISCOVERY_CONNECTOR_ERROR,
     DISCOVERY_OUTPUT_INVALID,
@@ -32,6 +33,8 @@ EUROPE_PMC_MAX_PAGES = 10
 EUROPE_PMC_MAX_RESULTS = 1000
 EUROPE_PMC_TIMEOUT_SECONDS = 20
 EUROPE_PMC_RESPONSE_LIMIT = 5 * 1024 * 1024
+EUROPE_PMC_RESOLUTION_PAGE_SIZE = 100
+_PMC_ID = re.compile(r"^PMC[0-9]+$")
 
 
 class JsonHttpTransport(Protocol):
@@ -167,6 +170,113 @@ class EuropePmcConnector:
         )
 
 
+class EuropePmcResolver:
+    resolver_id = "europe-pmc"
+    network_required = True
+
+    def __init__(self, *, transport: JsonHttpTransport | None = None):
+        self.transport = UrlLibJsonTransport() if transport is None else transport
+
+    def resolve(self, candidate: Mapping[str, Any]) -> ProviderResolution:
+        lookup_identity, query = _resolution_lookup(candidate)
+        payload = self.transport.get_json(
+            endpoint=EUROPE_PMC_ENDPOINT,
+            params={
+                "query": query,
+                "format": "json",
+                "resultType": "core",
+                "pageSize": EUROPE_PMC_RESOLUTION_PAGE_SIZE,
+            },
+            timeout_seconds=EUROPE_PMC_TIMEOUT_SECONDS,
+        )
+        api_version, hit_count, items, _ = _parse_page(payload)
+        if hit_count > EUROPE_PMC_RESOLUTION_PAGE_SIZE:
+            raise _output_error("Europe PMC resolution exceeded the bounded result page")
+        matched = [item for item in items if _matches_resolution_lookup(item, lookup_identity)]
+        if not matched:
+            return _provider_resolution(
+                api_version=api_version,
+                lookup_identity=lookup_identity,
+                status="no_supported_oa_route",
+                asset=None,
+                access_basis="unknown",
+                license_observation="not_observed",
+                manual_reason="no_matching_record",
+            )
+
+        assets: dict[str, list[tuple[str, str]]] = {}
+        saw_free = False
+        saw_subscription = False
+        for item in matched:
+            source = _required_text(item.get("source"), "source", 128)
+            record_id = _required_text(item.get("id"), "id", 128)
+            item_assets, access_codes = _resolution_access(item)
+            for pmcid in item_assets:
+                assets.setdefault(pmcid, []).append((source, record_id))
+            saw_free = saw_free or "F" in access_codes
+            saw_subscription = saw_subscription or "S" in access_codes
+
+        if len(assets) > 1:
+            return _provider_resolution(
+                api_version=api_version,
+                lookup_identity=lookup_identity,
+                status="manual_review_required",
+                asset=None,
+                access_basis="repository_open_access",
+                license_observation="provider_oa_policy_no_license_text",
+                manual_reason="multiple_assets",
+            )
+        if assets:
+            pmcid = next(iter(assets))
+            source, record_id = sorted(set(assets[pmcid]))[0]
+            asset = ProviderAssetRef(
+                provider="europe-pmc",
+                source=source,
+                record_id=record_id,
+                pmcid=pmcid,
+                asset_kind="pdf",
+                route="europe-pmc-pdf-v1",
+            )
+            return _provider_resolution(
+                api_version=api_version,
+                lookup_identity=lookup_identity,
+                status="auto_acquisition_eligible",
+                asset=asset,
+                access_basis="repository_open_access",
+                license_observation="provider_oa_policy_no_license_text",
+                manual_reason=None,
+            )
+        if saw_subscription:
+            return _provider_resolution(
+                api_version=api_version,
+                lookup_identity=lookup_identity,
+                status="institutional_browser_required",
+                asset=None,
+                access_basis="institutional",
+                license_observation="not_observed",
+                manual_reason="subscription_only",
+            )
+        if saw_free:
+            return _provider_resolution(
+                api_version=api_version,
+                lookup_identity=lookup_identity,
+                status="manual_review_required",
+                asset=None,
+                access_basis="public_free_to_read",
+                license_observation="not_observed",
+                manual_reason="ambiguous_access",
+            )
+        return _provider_resolution(
+            api_version=api_version,
+            lookup_identity=lookup_identity,
+            status="no_supported_oa_route",
+            asset=None,
+            access_basis="unknown",
+            license_observation="not_observed",
+            manual_reason="no_pdf_route",
+        )
+
+
 def _build_query(request: DiscoveryRequest) -> str:
     terms: list[str] = []
     for keyword in request.title_keywords:
@@ -189,6 +299,132 @@ def _build_query(request: DiscoveryRequest) -> str:
             )
         )
     return query
+
+
+def _resolution_lookup(candidate: Mapping[str, Any]) -> tuple[dict[str, str], str]:
+    doi = candidate.get("doi")
+    if isinstance(doi, str):
+        identity = {"kind": "doi", "doi": doi}
+        return identity, f'DOI:"{_escape_phrase(doi)}"'
+    sources = candidate.get("discovery_sources")
+    if not isinstance(sources, list):
+        raise _output_error("candidate provider identities are invalid")
+    identities = sorted(
+        (
+            (
+                _required_text(item.get("source"), "source", 128),
+                _required_text(item.get("record_id"), "record_id", 128),
+            )
+            for item in sources
+            if isinstance(item, Mapping) and item.get("provider") == "europe-pmc"
+        )
+    )
+    if not identities:
+        raise _output_error("candidate has no Europe PMC identity")
+    source, record_id = identities[0]
+    identity = {"kind": "source", "source": source, "record_id": record_id}
+    query = f'EXT_ID:"{_escape_phrase(record_id)}" AND SRC:"{_escape_phrase(source)}"'
+    return identity, query
+
+
+def _matches_resolution_lookup(item: Mapping[str, Any], identity: Mapping[str, str]) -> bool:
+    if identity["kind"] == "doi":
+        doi = _optional_text(item.get("doi"), "doi", 512)
+        if doi is None:
+            return False
+        normalized = re.sub(
+            r"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)",
+            "",
+            doi,
+            flags=re.IGNORECASE,
+        ).casefold()
+        return normalized == identity["doi"].casefold()
+    source = _required_text(item.get("source"), "source", 128)
+    record_id = _required_text(item.get("id"), "id", 128)
+    return source == identity["source"] and record_id == identity["record_id"]
+
+
+def _resolution_access(item: Mapping[str, Any]) -> tuple[set[str], set[str]]:
+    flags = {
+        field: _yes_no_flag(item.get(field), field)
+        for field in ("isOpenAccess", "inEPMC", "hasPDF")
+    }
+    pmcid = _optional_text(item.get("pmcid"), "pmcid", 64)
+    if pmcid is not None and not _PMC_ID.fullmatch(pmcid):
+        raise _output_error("Europe PMC pmcid is invalid")
+    links_value = item.get("fullTextUrlList")
+    if links_value is None:
+        links: list[Any] = []
+    else:
+        if not isinstance(links_value, Mapping):
+            raise _output_error("Europe PMC fullTextUrlList must be an object")
+        links = links_value.get("fullTextUrl", [])
+        if not isinstance(links, list) or len(links) > 100:
+            raise _output_error("Europe PMC full-text link array is invalid")
+
+    assets: set[str] = set()
+    access_codes: set[str] = set()
+    for link in links:
+        if not isinstance(link, Mapping):
+            raise _output_error("Europe PMC full-text link must be an object")
+        code = _optional_text(link.get("availabilityCode"), "availabilityCode", 32)
+        style = _optional_text(link.get("documentStyle"), "documentStyle", 32)
+        site = _optional_text(link.get("site"), "site", 64)
+        url = _optional_text(link.get("url"), "url", 2048)
+        if code is not None:
+            access_codes.add(code.upper())
+        if style == "pdf" and site == "Europe_PMC" and url is not None:
+            linked_pmcid = _pmcid_from_provider_url(url)
+            if pmcid is not None and linked_pmcid != pmcid:
+                raise _output_error("Europe PMC PDF route conflicts with its pmcid")
+            if code == "OA":
+                if not all(flags[field] == "Y" for field in flags):
+                    raise _output_error("Europe PMC OA route conflicts with access flags")
+                assets.add(linked_pmcid)
+    return assets, access_codes
+
+
+def _yes_no_flag(value: Any, field: str) -> str:
+    if value not in {"Y", "N"}:
+        raise _output_error(f"Europe PMC {field} flag is invalid")
+    return value
+
+
+def _pmcid_from_provider_url(value: str) -> str:
+    parsed = urlsplit(value)
+    match = re.fullmatch(r"/articles/(PMC[0-9]+)", parsed.path)
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname != "europepmc.org"
+        or parsed.port is not None
+        or match is None
+        or parsed.query != "pdf=render"
+        or parsed.fragment
+    ):
+        raise _output_error("Europe PMC PDF route is invalid")
+    return match.group(1)
+
+
+def _provider_resolution(
+    *,
+    api_version: str,
+    lookup_identity: Mapping[str, str],
+    status: str,
+    asset: ProviderAssetRef | None,
+    access_basis: str,
+    license_observation: str,
+    manual_reason: str | None,
+) -> ProviderResolution:
+    return ProviderResolution(
+        provider="europe-pmc",
+        provider_api_version=api_version,
+        lookup_identity=dict(lookup_identity),
+        resolution_status=status,
+        provider_asset_ref=asset,
+        access_basis=access_basis,
+        license_observation=license_observation,
+        manual_reason=manual_reason,
+    )
 
 
 def _escape_phrase(value: str) -> str:
@@ -418,4 +654,9 @@ def _output_error(message: str) -> ResearchKBError:
     )
 
 
-__all__ = ["EUROPE_PMC_ENDPOINT", "EuropePmcConnector", "UrlLibJsonTransport"]
+__all__ = [
+    "EUROPE_PMC_ENDPOINT",
+    "EuropePmcConnector",
+    "EuropePmcResolver",
+    "UrlLibJsonTransport",
+]

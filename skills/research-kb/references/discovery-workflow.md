@@ -83,9 +83,26 @@ research-kb discovery select --workspace <config> --request - --actor user
 
 Exact selection-intent reruns write nothing. A new query/question context may update the same candidate. `RKBC-034` means the same result key carries changed metadata; stop the complete batch instead of refreshing it.
 
+## OA Resolution
+
+Run this phase only for one persisted candidate already selected by the user and only when the active task requests an OA-route check.
+
+1. Require `legal_oa_resolution: true` and the `discovery resolve` read command.
+2. Re-read the candidate with `discovery show`; do not infer an ID from a report.
+3. Call:
+
+```text
+research-kb discovery resolve --workspace <config> --candidate-id <discovery_id> --provider europe-pmc
+```
+
+4. Preserve one of `auto_acquisition_eligible`, `manual_review_required`, `institutional_browser_required` or `no_supported_oa_route` exactly as returned.
+5. Require `persistent_writes: 0`. Do not store the report or treat its `provider_asset_ref` as a URL.
+
+The command rechecks exact DOI or stored source identity and returns current provider observations. `auto_acquisition_eligible` does not authorize a download; a later acquisition contract must re-resolve under separate user authority.
+
 ## Stop Boundary
 
-Do not download full text. Do not create a Registry record, choose a source-root destination, use a logged-in browser, post a document request or start downstream intake. `user_selected` means follow-up interest only; it is not `human_checked`, `verified`, `included` or acquisition approval.
+Do not download full text. Do not create a Registry record, choose a source-root destination, use a logged-in browser, post a document request or start downstream intake. `user_selected` and `auto_acquisition_eligible` are not `human_checked`, `verified`, `included` or acquisition approval.
 
 ## Failure
 
