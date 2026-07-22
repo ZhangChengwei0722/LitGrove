@@ -123,6 +123,16 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Test exact repeatability, body/table paragraph order, style/heading projection, PDF page order, malformed and empty inputs, source change, empty failure stdout and byte-identical source/managed trees.
 - Keep semantic claim extraction, criteria evaluation, evidence matching and rewriting outside M3D-0A.
 
+## Manuscript Audit Skill Rules
+
+- Keep M3D-1 in the Portable Skill and Agent protocol; do not add a Core audit command, semantic service, provider call or persisted contract.
+- Require at least one explicit criterion and exact current-task question/paper selectors before `manuscript inspect`; never infer default audit dimensions or a broad corpus from topic similarity.
+- Preserve original criterion wording and report selector resolution basis, projection coverage limits and checked-corpus limits.
+- Use exact zero-based/end-exclusive unit slices only when reproduced byte-for-text; otherwise degrade to a stable unit locator with null offsets and text.
+- Start from grounded/revised Card Units and expand to canonical Evidence for exact factual support. Review Memory, review queue and Step 7 remain background or boundaries, never support.
+- Keep reports transient with `persistent_writes: 0`; do not persist claim maps, findings, caches, events, journals, reports, Markdown or manuscript edits.
+- Contract-test these boundaries with invented text only. Static Skill tests verify the published route contract; they do not claim to verify scientific judgment.
+
 ## Discovery Connector Rules
 
 - Register public connectors explicitly in Core; do not add arbitrary URL input, plugin discovery, credentials or environment-driven endpoints.

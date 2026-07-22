@@ -18,7 +18,7 @@ Discovery search results remain report-only until the user explicitly names resu
 
 Ordinary knowledge queries are read-only. If persistence intent is ambiguous, use `ephemeral_query` and report `persistent_writes: 0`.
 
-Manuscript projection is also read-only. It returns transient task units only and never authorizes claim extraction, evidence matching, rewriting, registration or canonical persistence.
+Manuscript projection is also read-only. It returns transient task units only and never authorizes claim extraction, evidence matching, rewriting, registration or canonical persistence. Manuscript audit is a separate explicit-criteria Agent route over that projection; it still authorizes no persistent write or rewrite.
 
 Query and Step 7 maintenance preflight is dry-run-only. A workspace action must be handled as a separate authorized intake/bootstrap task, never hidden inside a query or candidate rerun.
 
@@ -46,6 +46,8 @@ Review Memory is background-only. Review source notes, exact excerpts, Review Me
 
 Review Memory may inform a labeled ephemeral background discussion, but it cannot become primary support.
 
+Manuscript factual findings start from grounded/revised Card Units and expand to canonical Evidence. Review Memory, review queue and Step 7 cannot support a factual manuscript finding. A checked-scope miss is not a whole-field contradiction.
+
 ## Step 7 Authority
 
 Persist only for `explicit_step7_maintenance` or `full_workflow_step7_refresh`. Use `step7 context` before mutation and `record promote` for every append or replace. Never write Step 7 JSONL directly.
@@ -66,6 +68,7 @@ Stop for:
 - malformed, encrypted, image-only or text-unavailable PDF;
 - stale or inconsistent parse identity;
 - claims requiring OCR, geometry, figures, tables, supplements or non-contiguous excerpts.
+- manuscript criteria or checked-corpus selectors that are missing or materially ambiguous.
 
 Never move, copy, rename, delete or edit an existing source asset. The only exception is Core's create-only `discovery acquire`; do not reproduce its source-write or cleanup behavior manually.
 
@@ -120,6 +123,8 @@ Use these only in the non-canonical task report:
 | `resume_available` | Current state supports a deterministic next incomplete stage. |
 | `completed_no_change` | The current chain is already complete and current. |
 | `query_completed_no_write` | An ephemeral query returned a bounded answer with zero persistent writes. |
+| `manuscript_audit_completed_no_write` | Every requested criterion was assessed against the reported local scope with zero persistent writes. |
+| `manuscript_audit_not_assessable` | A criterion could not be assessed within the exact source, projection coverage or checked local corpus. |
 | `discovery_completed_no_write` | Public metadata discovery returned 0-15 results with zero persistent writes. |
 | `discovery_candidates_recorded` | Explicitly selected metadata candidates were created or gained a new selection context. |
 | `discovery_candidates_no_change` | Every explicit selection intent already existed and no write occurred. |
