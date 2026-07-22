@@ -6,7 +6,7 @@ Use only public `research-kb` commands. Build every command result completely be
 
 | Command | Mode | Consume | Skill decision |
 | --- | --- | --- | --- |
-| `research-kb capability show` | read | `read_commands`, adapters, feature flags | Require the approved reads and an available `pdfplumber` adapter. |
+| `research-kb capability show` | read | `read_commands`, adapters, feature flags | Require the approved reads and the adapter required by the active route. |
 | `research-kb discovery search --provider europe-pmc --request -` | external read | normalized public metadata report | Use only for discovery reported in the active task; never infer persistence or acquisition. |
 | `research-kb discovery select --workspace <config> --request - --actor user` | mutation | created, updated and no-change candidate IDs | Use only after explicit result-key selection; submit the complete report and stop before acquisition. |
 | `research-kb discovery list --workspace <config>` | read | bounded candidate summaries | Reconcile selected metadata candidates without reading JSONL. |
@@ -22,7 +22,8 @@ Use only public `research-kb` commands. Build every command result completely be
 | `research-kb paper status --workspace <config> --paper-id <id>` | read | structural stage, freshness and integrity facts | Route resume without treating status as a semantic instruction. |
 | `research-kb paper context --workspace <config> --paper-id <id>` | read | stored Card, Evidence and review queue | Recover Core-owned IDs and exact existing records. |
 | `research-kb review context --workspace <config> --paper-id <id>` | read | stored Review Memory, freshness and transient exact DOI matches | Recover Review IDs without reading canonical files. |
-| `research-kb parse run --workspace <config> --paper-id <id> --adapter pdfplumber` | mutation | parse run, parser identity, page count | Run only when parse is missing and mutation is safe. |
+| `research-kb parse run --workspace <config> --paper-id <id> --adapter pdfplumber-text-flow` | mutation | parse run, parser identity, page count | Preferred fixed profile for a new primary/review parse; run only when parse is missing and mutation is safe. |
+| `research-kb parse run --workspace <config> --paper-id <id> --adapter pdfplumber` | mutation | parse run, parser identity, page count | Legacy spatial profile retained for explicit compatibility; never silently substitute it for text-flow. |
 | `research-kb parse show --workspace <config> --paper-id <id>` | read | validated parsed pages | Use as the only source for scientific text and locators. |
 | `research-kb record promote --workspace <config> --request - --actor agent` | mutation | promoted top-level record ID | Submit one bounded JSON mutation request through existing authority. |
 | `research-kb question list --workspace <config>` | read | bounded question summaries | Find an explicitly selected existing question. |
@@ -60,7 +61,7 @@ step7 render
 
 For discovery search, require `on_demand_discovery: true` and an available `europe-pmc` connector. Do not require a workspace or `pdfplumber`. For explicit candidate handoff, also require `approved_discovery_candidate_handoff: true`, an existing workspace and the `discovery list/show` reads. For one selected candidate's OA check, additionally require `legal_oa_resolution: true`. For exact user-requested acquisition, require `explicit_oa_acquisition: true`, available `pdfplumber`, `discovery show/resolve` and no-change workspace preflight.
 
-For local intake, query and Step 7 modes, require `real_pdf_parse: true`, plus `pdfplumber` with `availability: available` and a non-empty version. A declared feature with a missing optional dependency is not executable.
+For new local primary/review intake, require `real_pdf_parse: true`, plus `pdfplumber-text-flow` with `availability: available` and a non-empty version. Existing-workspace query and Step 7 routes preserve their current parser identity and never reparse implicitly. A declared feature with a missing optional dependency is not executable.
 
 For manuscript projection, require `manuscript_projection: true` and `manuscript inspect`. DOCX projection uses the built-in OOXML reader; PDF projection additionally requires available `pdfplumber`.
 
@@ -78,6 +79,7 @@ For query and Step 7 maintenance, use `workspace init --dry-run` only. Its succe
 - `question render` and `step7 render` are disposable stdout Markdown, never structured input or persistent state.
 - `step7 context` is the only public recovery and freshness surface for Step 7 candidates.
 - `parse show` is the only public parsed-text read surface.
+- `pdfplumber-text-flow` uses a fixed content-stream profile, but it does not guarantee layout-correct reading order. Stop scientific promotion when the returned page remains interleaved, joined or otherwise ambiguous.
 - `guardian check` is read-only unless an explicit future task authorizes report persistence.
 - `discovery search` reads one fixed public metadata provider and writes no local state. Its live results are mutable external input.
 - `discovery list/show` validate the complete workspace and expose only persisted metadata candidates; they do not resolve live-provider staleness.

@@ -18,11 +18,18 @@ EXTRACTION_OPTIONS = {
     "y_tolerance": 3,
     "layout": False,
 }
+TEXT_FLOW_EXTRACTION_OPTIONS = {
+    "x_tolerance": 1,
+    "y_tolerance": 3,
+    "layout": False,
+    "use_text_flow": True,
+}
 PDF_SIGNATURE = bytes((37, 80, 68, 70, 45))
 
 
 class PdfPlumberAdapter:
     name = "pdfplumber"
+    extraction_options = EXTRACTION_OPTIONS
 
     @property
     def version(self) -> str:
@@ -57,7 +64,7 @@ class PdfPlumberAdapter:
                     {
                         "pdf_page": page_number,
                         "printed_page": None,
-                        "text": _normalize_text(page.extract_text(**EXTRACTION_OPTIONS) or ""),
+                        "text": _normalize_text(page.extract_text(**self.extraction_options) or ""),
                         "locator": f"page:{page_number}:text",
                     }
                     for page_number, page in enumerate(document.pages, start=1)
@@ -72,6 +79,11 @@ class PdfPlumberAdapter:
         if all(not page["text"].strip() for page in pages):
             raise _unsupported_error(paper_id, "registered PDF source has no extractable page text")
         return pages
+
+
+class PdfPlumberTextFlowAdapter(PdfPlumberAdapter):
+    name = "pdfplumber-text-flow"
+    extraction_options = TEXT_FLOW_EXTRACTION_OPTIONS
 
 
 def probe_pdfplumber_version() -> str:

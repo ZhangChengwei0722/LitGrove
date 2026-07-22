@@ -22,6 +22,12 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
                 "diagnostic_code": None,
             },
             {
+                "adapter": "pdfplumber-text-flow",
+                "availability": "available",
+                "version": version("pdfplumber"),
+                "diagnostic_code": None,
+            },
+            {
                 "adapter": "synthetic-text",
                 "availability": "available",
                 "version": "1.0",
@@ -87,6 +93,12 @@ def test_capability_report_treats_missing_pdf_extra_as_availability_fact() -> No
     assert report["status"] == "success"
     assert report["parse_adapters"][0] == {
         "adapter": "pdfplumber",
+        "availability": "dependency_missing",
+        "version": None,
+        "diagnostic_code": "RKBC-028",
+    }
+    assert report["parse_adapters"][1] == {
+        "adapter": "pdfplumber-text-flow",
         "availability": "dependency_missing",
         "version": None,
         "diagnostic_code": "RKBC-028",

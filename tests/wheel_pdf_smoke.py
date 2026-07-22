@@ -78,6 +78,16 @@ def main() -> int:
             "diagnostic_code": None,
         }:
             raise SystemExit("PDF wheel capability report does not match the installed adapter")
+        text_flow_capability = next(
+            item for item in capability["parse_adapters"] if item["adapter"] == "pdfplumber-text-flow"
+        )
+        if text_flow_capability != {
+            "adapter": "pdfplumber-text-flow",
+            "availability": "available",
+            "version": installed_version,
+            "diagnostic_code": None,
+        }:
+            raise SystemExit("PDF wheel text-flow capability does not match the installed adapter")
         if not {"discovery search", "intake inspect", "intake inspect-acquired", "manuscript inspect", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
             raise SystemExit("PDF wheel capability report lacks deterministic intake/context reads")
         if capability["discovery_connectors"] != [{"connector": "europe-pmc", "availability": "available", "network_required": True}]:
@@ -240,9 +250,9 @@ def main() -> int:
             "--paper-id",
             paper_id,
             "--adapter",
-            "pdfplumber",
+            "pdfplumber-text-flow",
         )
-        if parse_output["parser"] != {"adapter": "pdfplumber", "version": installed_version}:
+        if parse_output["parser"] != {"adapter": "pdfplumber-text-flow", "version": installed_version}:
             raise SystemExit("PDF wheel parser identity does not match installed package metadata")
         if parse_output["pages"] != 1:
             raise SystemExit("PDF wheel did not persist one row for the generated page")
@@ -275,7 +285,7 @@ def main() -> int:
         )
         if parse_read["returned_page_count"] != 1:
             raise SystemExit("PDF wheel parse show did not return page one")
-        if status["parse"]["adapter"] != "pdfplumber" or status["source"]["state"] != "current":
+        if status["parse"]["adapter"] != "pdfplumber-text-flow" or status["source"]["state"] != "current":
             raise SystemExit("PDF wheel paper status did not expose current PDF parse state")
         if not status["integrity"]["mutation_safe"]:
             raise SystemExit("PDF wheel paper status unexpectedly blocked mutation")

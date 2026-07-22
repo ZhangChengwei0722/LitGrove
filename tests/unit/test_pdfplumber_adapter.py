@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 
 from research_kb.errors import ResearchKBError
-from research_kb.parse.pdfplumber_adapter import PdfPlumberAdapter
+from research_kb.parse.pdfplumber_adapter import PdfPlumberAdapter, PdfPlumberTextFlowAdapter
 from research_kb.storage.json_io import file_sha256
-from tests.pdf_helpers import write_synthetic_pdf
+from tests.pdf_helpers import write_synthetic_pdf, write_synthetic_two_column_pdf
 
 
 PAPER_ID = "paper_a1111111-1111-4111-8111-111111111111"
@@ -36,6 +36,31 @@ def test_pdf_adapter_extracts_one_lf_normalized_row_per_page_and_reports_exact_v
     assert [item["locator"] for item in pages] == ["page:1:text", "page:2:text"]
     assert "Invented first line." in pages[0]["text"]
     assert all("\r" not in item["text"] for item in pages)
+    assert file_sha256(source) == source_before
+
+
+def test_text_flow_adapter_preserves_synthetic_two_column_content_stream_order(tmp_path: Path) -> None:
+    source = write_synthetic_two_column_pdf(
+        tmp_path / "synthetic-two-column.pdf",
+        ["Left column first.", "Left column second."],
+        ["Right column first.", "Right column second."],
+    )
+    source_before = file_sha256(source)
+
+    legacy_text = _parse(PdfPlumberAdapter(), source)[0]["text"]
+    text_flow = PdfPlumberTextFlowAdapter()
+    text_flow_text = _parse(text_flow, source)[0]["text"]
+
+    assert legacy_text.index("Right column first.") < legacy_text.index("Left column second.")
+    assert text_flow.name == "pdfplumber-text-flow"
+    assert text_flow.version == version("pdfplumber")
+    assert text_flow.extraction_options == {
+        "x_tolerance": 1,
+        "y_tolerance": 3,
+        "layout": False,
+        "use_text_flow": True,
+    }
+    assert text_flow_text.index("Left column second.") < text_flow_text.index("Right column first.")
     assert file_sha256(source) == source_before
 
 

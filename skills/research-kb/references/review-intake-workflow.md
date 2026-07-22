@@ -12,6 +12,8 @@ paper context
 review context
 ```
 
+New review parses use the same explicit `pdfplumber-text-flow` profile and the same reading-order stop rule as primary research. A review with unresolved column or spacing extraction remains stopped before Review Memory promotion.
+
 Classify in task memory as one of:
 
 ```text

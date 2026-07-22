@@ -153,6 +153,23 @@ def test_skill_required_read_commands_match_public_capability() -> None:
     assert capability["features"]["explicit_oa_acquisition"] is True
     assert capability["features"]["legal_oa_resolution"] is True
     assert capability["features"]["manuscript_projection"] is True
+    assert any(
+        adapter["adapter"] == "pdfplumber-text-flow" and adapter["availability"] == "available"
+        for adapter in capability["parse_adapters"]
+    )
+
+
+def test_skill_routes_new_scientific_parses_through_text_flow_adapter() -> None:
+    skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+    local = (SKILL_ROOT / "references" / "local-intake-workflow.md").read_text(encoding="utf-8")
+    review = (SKILL_ROOT / "references" / "review-intake-workflow.md").read_text(encoding="utf-8")
+    cli = (SKILL_ROOT / "references" / "cli-contract.md").read_text(encoding="utf-8")
+
+    assert "pdfplumber-text-flow" in skill
+    assert "parse run --adapter pdfplumber-text-flow" in local
+    assert "pdfplumber-text-flow" in review
+    assert "--adapter pdfplumber-text-flow" in cli
+    assert "does not guarantee layout-correct reading order" in cli
 
 
 def test_cli_reference_contains_minimal_stdin_promotion_envelopes() -> None:
