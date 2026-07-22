@@ -19,7 +19,7 @@ Keep source assets read-only. Never move, copy, rename, delete or rewrite them.
 
 ## 2. Capability And Workspace Preflight
 
-Call `capability show`. Require the public read commands listed in the CLI contract and an available versioned `pdfplumber` adapter.
+Call `capability show`. Require the public read commands listed in the CLI contract and an available versioned `pdfplumber-text-flow` adapter.
 
 Call `workspace init --dry-run` with the supplied config. If the existing config is valid and initialization is required, call `workspace init`. If the config is absent, invalid, identity-conflicting or would require authoring configuration, stop with `config_required` or `integrity_blocked`.
 
@@ -55,12 +55,14 @@ After resolving a paper ID, call `paper status` and `paper context`. Stop when s
 
 Use status to route parsing:
 
-- missing parse and mutation-safe paper: run `parse run --adapter pdfplumber`;
+- missing parse and mutation-safe paper: run `parse run --adapter pdfplumber-text-flow`;
 - current parse: reuse it;
 - stale or inconsistent parse: stop and report;
 - existing grounded downstream records with a changed parser context: stop rather than automatically reparse.
 
 Call `parse show` after a current parse exists. Read the complete relevant pages before scientific drafting.
+
+Text-flow is a deterministic extraction profile, not layout verification. Stop the paper before Evidence or Review Memory promotion when parsed text still joins words, interleaves columns, loses required symbols or otherwise cannot support a clean contiguous quote.
 
 Classify the document in task memory as `primary_research`, `review`, `other` or `unknown`, with confidence and reason. Proceed only for high-confidence primary research or an explicit user-supplied primary type. Review, commentary, perspective, protocol, methods-only and low-confidence documents stop before Paper Card or Evidence promotion.
 

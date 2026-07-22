@@ -67,7 +67,7 @@ For `acquired_candidate_intake`, require exact candidate IDs and an explicit lat
 2. Call capability and workspace preflight.
 3. Process sources sequentially. Resolve absolute local PDFs with `intake inspect`; resolve exact acquired candidate IDs with `discovery show` plus `intake inspect-acquired`.
 4. Call `paper status`, `paper context` and `review context` before resume or mutation decisions.
-5. Parse only through explicit available `pdfplumber`, then read through `parse show`.
+5. Parse new primary/review records only through explicit available `pdfplumber-text-flow`, then read through `parse show` and stop if the reading order remains ambiguous.
 6. Classify in task memory and choose one mutually exclusive primary or review route.
 7. Ground a question-independent primary Card or retain a background-only Review Memory.
 8. Map only a user-supplied or explicitly approved question from primary Card Units.

@@ -117,7 +117,7 @@ registered immutable PDF and SHA-256
 -> Evidence promotion and Guardian enforcement
 ```
 
-`pdfplumber` is an optional, lazily imported dependency. The CLI never discovers adapters and never falls back from an explicit `pdfplumber` request. Real Evidence uses zero-based, end-exclusive character locators over stored page text; invented synthetic fixtures retain block locators only under whitespace-normalized same-page containment.
+`pdfplumber` is an optional, lazily imported dependency. The CLI exposes two explicit deterministic profiles and never discovers or substitutes adapters. `pdfplumber` retains the original spatial profile; `pdfplumber-text-flow` uses content-stream order and a smaller horizontal tolerance for new scientific intake. Adapter name plus exact package version forms parser identity. Neither profile claims layout verification. Real Evidence uses zero-based, end-exclusive character locators over stored page text; invented synthetic fixtures retain block locators only under whitespace-normalized same-page containment.
 
 Complete-bundle validation owns active page order, uniqueness, parse-run identity, parser identity, and Evidence resolution. `RecordService` separately owns filesystem source-stability checks before and after Evidence replacement. This adds no schema or layout state and does not make PDF extraction a scientific interpretation step.
 

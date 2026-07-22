@@ -5,7 +5,11 @@ from collections.abc import Callable
 from research_kb import __version__
 from research_kb.contracts.versions import SUPPORTED_VERSION
 from research_kb.errors import PARSE_ADAPTER_UNAVAILABLE, ResearchKBError
-from research_kb.parse.pdfplumber_adapter import probe_pdfplumber_version
+from research_kb.parse.pdfplumber_adapter import (
+    PdfPlumberAdapter,
+    PdfPlumberTextFlowAdapter,
+    probe_pdfplumber_version,
+)
 from research_kb.parse.synthetic_text import SyntheticTextAdapter
 from research_kb.workspace_validation import CURRENT_LAYOUT_CONTRACT_VERSION
 
@@ -20,12 +24,15 @@ class CapabilityService:
     def show(self) -> dict[str, object]:
         pdf_version = self._pdfplumber_version()
         adapters = [
-            {
-                "adapter": "pdfplumber",
-                "availability": "available" if pdf_version is not None else "dependency_missing",
-                "version": pdf_version,
-                "diagnostic_code": None if pdf_version is not None else PARSE_ADAPTER_UNAVAILABLE,
-            },
+            *[
+                {
+                    "adapter": adapter.name,
+                    "availability": "available" if pdf_version is not None else "dependency_missing",
+                    "version": pdf_version,
+                    "diagnostic_code": None if pdf_version is not None else PARSE_ADAPTER_UNAVAILABLE,
+                }
+                for adapter in (PdfPlumberAdapter, PdfPlumberTextFlowAdapter)
+            ],
             {
                 "adapter": SyntheticTextAdapter.name,
                 "availability": "available",

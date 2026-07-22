@@ -25,7 +25,7 @@ Milestone 1B through the M3D-1 repository slice provide:
 - CLI-owned question/link IDs and exact evidence/boundary projection;
 - read-only `question list/show` commands and Guardian mapping freshness warnings.
 - one deterministic, stdout-only Question Reading View with selected Card Units, canonical evidence trace, non-evidence boundaries, and current freshness diagnostics.
-- an explicit optional `pdfplumber` adapter with exact package-version provenance and one row per PDF page;
+- explicit optional legacy-spatial `pdfplumber` and preferred `pdfplumber-text-flow` adapters with exact package-version provenance and one row per PDF page;
 - strict same-paper page/locator/quote validation for canonical Evidence, including bounded synthetic block compatibility.
 - a versioned transient capability report, bounded one-paper status projection, and validated parsed-page read surface;
 - bounded stdin JSON handoff into the existing Registry and mutation authority paths without temporary request files.
@@ -104,6 +104,7 @@ research-kb registry add --workspace <workspace.yaml> --root-id <root> --relativ
 research-kb registry add --workspace <workspace.yaml> --root-id <root> --relative-path <path> --metadata -
 research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapter synthetic-text
 research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapter pdfplumber
+research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapter pdfplumber-text-flow
 research-kb parse show --workspace <workspace.yaml> --paper-id <paper_id> [--page <positive_integer>]
 research-kb paper status --workspace <workspace.yaml> --paper-id <paper_id>
 research-kb paper context --workspace <workspace.yaml> --paper-id <paper_id>
@@ -145,7 +146,7 @@ The Portable Skill's separate `manuscript_audit` mode requires criteria and exac
 
 Stdin accepts one UTF-8 JSON object only. Discovery requests and Registry metadata are capped at 64 KiB; mutation requests are capped at 4 MiB. YAML remains file-only. Invalid input never reaches its service, and no temporary request file is created.
 
-The PDF adapter records exact `pdfplumber` version identity and emits `page:<n>:text` page locators. Real-PDF Evidence must use `page:<n>:char:<start>-<end>` with an exact zero-based, end-exclusive slice of stored page text. Missing PDF dependencies and unsupported PDF sources fail explicitly; there is no OCR or synthetic fallback.
+Both PDF adapters record exact `pdfplumber` package version identity and emit `page:<n>:text` page locators. Their distinct adapter names preserve extraction-profile identity: `pdfplumber` is the legacy spatial profile, while `pdfplumber-text-flow` uses `x_tolerance=1` and content-stream order for new scientific intake. Text-flow is not layout verification; unresolved columns, spacing, tables or OCR remain stop conditions. Real-PDF Evidence must use `page:<n>:char:<start>-<end>` with an exact zero-based, end-exclusive slice of stored page text. Missing PDF dependencies and unsupported PDF sources fail explicitly; there is no OCR or synthetic fallback.
 
 Question Mapping requests use `record promote`. The request selects Paper Card Unit IDs and may add question-specific review queue boundaries; Core derives `evidence_ids`, preserves required unit boundaries, allocates IDs, and stores the result in `questions/mappings.jsonl`. Unapproved Agent-generated questions remain task report candidates and cannot use a persistable `question_origin`.
 

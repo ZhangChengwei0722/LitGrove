@@ -34,3 +34,27 @@ def write_synthetic_pdf(
         document.showPage()
     document.save()
     return path
+
+
+def write_synthetic_two_column_pdf(
+    path: Path,
+    left_lines: list[str],
+    right_lines: list[str],
+) -> Path:
+    document = Canvas(
+        str(path),
+        pagesize=letter,
+        pageCompression=0,
+        invariant=1,
+    )
+    left = document.beginText(72, 720)
+    for line in left_lines:
+        left.textLine(line)
+    document.drawText(left)
+    right = document.beginText(330, 720)
+    for line in right_lines:
+        right.textLine(line)
+    document.drawText(right)
+    document.showPage()
+    document.save()
+    return path

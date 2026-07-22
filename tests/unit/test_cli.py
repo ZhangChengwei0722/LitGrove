@@ -642,6 +642,33 @@ def test_parse_cli_dispatches_pdfplumber_and_reports_exact_identity(tmp_path, ca
     assert file_sha256(source) == source_before
 
 
+def test_parse_cli_dispatches_pdfplumber_text_flow_and_reports_exact_identity(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = write_synthetic_pdf(
+        layout.source_roots["alpha-sources"] / "cli-text-flow.pdf",
+        ["Invented text-flow CLI response."],
+    )
+    source_before = file_sha256(source)
+    metadata = tmp_path / "metadata-text-flow.json"
+    metadata.write_text(json.dumps({"fixture_origin": "synthetic_from_scratch"}), encoding="utf-8")
+
+    assert main([
+        "registry", "add", "--workspace", str(layout.config.path),
+        "--root-id", "alpha-sources", "--relative-path", source.name, "--metadata", str(metadata),
+    ]) == 0
+    paper_id = json.loads(capsys.readouterr().out)["paper_id"]
+
+    assert main([
+        "parse", "run", "--workspace", str(layout.config.path),
+        "--paper-id", paper_id, "--adapter", "pdfplumber-text-flow",
+    ]) == 0
+    output = json.loads(capsys.readouterr().out)
+
+    assert output["parser"] == {"adapter": "pdfplumber-text-flow", "version": version("pdfplumber")}
+    assert output["pages"] == 1
+    assert file_sha256(source) == source_before
+
+
 def test_parse_cli_does_not_fallback_when_pdfplumber_source_is_wrong_type(tmp_path, capsys) -> None:
     layout = make_runtime_workspace(tmp_path)
     source = layout.source_roots["alpha-sources"] / "not-pdf.txt"
