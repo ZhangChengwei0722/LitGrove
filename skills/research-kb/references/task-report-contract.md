@@ -7,7 +7,7 @@ Return one concise private task report after the invocation. The report is not c
 Always report:
 
 ```yaml
-invocation_mode: on_demand_discovery | explicit_oa_acquisition | acquired_candidate_intake | local_intake | manuscript_projection | ephemeral_query | explicit_step7_maintenance | full_workflow_step7_refresh
+invocation_mode: on_demand_discovery | explicit_oa_acquisition | acquired_candidate_intake | local_intake | manuscript_projection | manuscript_audit | ephemeral_query | explicit_step7_maintenance | full_workflow_step7_refresh
 persistent_writes:
 workspace_preflight:
 guardian:
@@ -212,7 +212,47 @@ manuscript_projection:
   persistent_writes: 0
 ```
 
-The active task may use the returned units, locators and style/table coordinates. Stop after projection; do not report audit findings, evidence matches or rewritten text in M3D-0A.
+The active task may use the returned units, locators and style/table coordinates. In `manuscript_projection`, stop after projection; do not report audit findings, evidence matches or rewritten text.
+
+## Manuscript Audit Result
+
+```yaml
+manuscript_audit:
+  source_fingerprint:
+    algorithm: sha256
+    value:
+  requested_criteria:
+    - original_text:
+      normalized_check:
+  checked_scope:
+    question_ids: []
+    paper_ids: []
+    resolution: user_supplied | task_resolved
+    resolution_basis: []
+    corpus_limits: []
+  projection_coverage_limits: []
+  findings:
+    - finding_key: invocation-local
+      criterion:
+      manuscript_spans:
+        - unit_locator:
+          span_resolution: exact_slice | unit_only
+          char_start:
+          char_end:
+          exact_text:
+      assessment: meets | partially_meets | does_not_meet_in_checked_scope | not_assessable
+      rationale:
+      card_unit_refs: []
+      evidence_ids: []
+      non_evidence_boundary_ids: []
+      corpus_boundary:
+  unresolved_items: []
+  persistent_writes: 0
+```
+
+Preserve the user's original criteria and report the exact checked local scope. For `exact_slice`, offsets and text must reproduce one projection unit; for `unit_only`, offsets and text are null. A factual support finding names canonical Evidence IDs. An absence or incomplete-corpus finding remains scope-limited and must not be reported as universal scientific truth.
+
+This report is transient. Do not persist it, a claim map or a finding record, and do not include rewritten manuscript prose.
 
 ## Step 7 Maintenance Result
 

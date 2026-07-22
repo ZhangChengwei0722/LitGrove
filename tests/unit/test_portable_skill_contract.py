@@ -17,6 +17,7 @@ EXPECTED_FILES = {
     "references/discovery-workflow.md",
     "references/local-intake-workflow.md",
     "references/knowledge-query-and-step7-workflow.md",
+    "references/manuscript-audit-workflow.md",
     "references/review-intake-workflow.md",
     "references/task" "-report-contract.md",
 }
@@ -87,9 +88,9 @@ def test_openai_metadata_is_exact_and_mentions_skill() -> None:
     assert metadata == {
         "interface": {
             "display_name": "Research KB",
-            "short_description": "Discover, acquire, ingest, and query traceable research",
+            "short_description": "Discover, ingest, query, and audit traceable research",
             "default_prompt": (
-                "Use $research-kb to discover papers, explicitly acquire eligible OA candidates, ingest local papers, inspect an exact local manuscript read-only, answer traceable knowledge-base questions, or maintain Step 7 candidates."
+                "Use $research-kb to discover papers, ingest local research, audit an exact manuscript against explicit criteria, answer traceable knowledge-base questions, or maintain Step 7 candidates."
             ),
         }
     }
@@ -279,6 +280,7 @@ def test_skill_routes_modes_before_mutation_and_preserves_query_ephemerality() -
         "explicit_step7_maintenance",
         "full_workflow_step7_refresh",
         "manuscript_projection",
+        "manuscript_audit",
     ):
         assert f"`{mode}`" in body
     assert "Classify the invocation mode before any mutation" in body
@@ -301,6 +303,33 @@ def test_manuscript_projection_mode_stops_before_semantic_audit() -> None:
         assert required in text
     assert "Stop after the projection report" in body
     assert "Do not perform or claim semantic claim extraction, criteria evaluation, evidence matching or rewriting" in text
+
+
+def test_manuscript_audit_requires_explicit_criteria_bounded_scope_and_evidence() -> None:
+    _, body = _skill_parts()
+    workflow = (
+        SKILL_ROOT / "references" / "manuscript-audit-workflow.md"
+    ).read_text(encoding="utf-8")
+    report = (SKILL_ROOT / "references" / ("task" + "-report-contract.md")).read_text(
+        encoding="utf-8"
+    )
+    protocol = (ROOT / "agent_protocol" / "README.md").read_text(encoding="utf-8")
+
+    assert "`manuscript_audit`" in body
+    assert "before `manuscript inspect`" in workflow
+    assert "must not silently add" in workflow
+    assert "task_resolved" in workflow
+    assert "must not infer a broad corpus" in workflow
+    assert "resolution_basis" in workflow
+    assert "exact_slice" in workflow
+    assert "unit_only" in workflow
+    assert "canonical Evidence IDs" in workflow
+    assert "Review Memory, review queue and Step 7" in workflow
+    assert "persistent_writes: 0" in workflow
+    assert "rewritten prose" in workflow
+    assert "manuscript_audit:" in report
+    assert "does_not_meet_in_checked_scope" in report
+    assert "For M3D-1" in protocol
 
 
 def test_discovery_workflow_separates_zero_write_search_from_explicit_handoff() -> None:

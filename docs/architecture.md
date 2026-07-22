@@ -19,7 +19,7 @@ Source Intake -> Registry -> Parse
 -> Review route: background-only Review Memory
 -> Ephemeral query route: Paper Card Units -> optional Evidence trace-back -> task report
 -> Candidate thinking route: mapped grounded Card Units -> Step 7 structured candidates
--> Manuscript route: exact local DOCX/PDF -> transient structured projection -> stop before audit
+-> Manuscript route: exact local DOCX/PDF -> transient structured projection -> optional explicit-criteria Agent audit -> private task report
 -> Guardian / Feedback
 ```
 
@@ -303,3 +303,18 @@ initialized workspace + exact local DOCX/PDF under one source root
 DOCX projection reads only `word/document.xml` and optional `word/styles.xml`, preserves body/table paragraph order, and never follows relationships or executes embedded content. PDF projection reuses the fixed text-only `pdfplumber` policy. Both enforce source, archive, unit and text bounds and return `RKBC-035` for unsupported manuscript content while preserving `RKBC-028` for a missing PDF extra.
 
 The source fingerprint identifies the exact inspected draft but does not register it. No manuscript store, schema, ID, event, journal, cache, claim extraction, evidence match, audit finding or rewrite is created in M3D-0A.
+
+## M3D-1 Explicit-Criteria Manuscript Audit
+
+```text
+explicit criteria + exact current-request question/paper selectors
+-> M3D-0A transient projection
+-> bounded invocation-local section/claim map
+-> grounded/revised Card Units
+-> canonical Evidence expansion when exact factual support matters
+-> scope-limited private report with zero writes
+```
+
+M3D-1 is a Portable Skill and Agent-protocol route, not a Core semantic engine. Criteria must exist before manuscript inspection and request-resolved scope may resolve only selectors already present in the request. The Agent preserves source fingerprint and projection limits, uses exact unit slices or honest unit-level fallback, and cannot use Review Memory, review queue or Step 7 as factual support.
+
+The audit creates no schema, stable ID, workspace record, event, journal, cache, Markdown view or manuscript edit. Findings apply only to the requested criterion and checked local corpus; a local absence is not whole-field contradiction. Rewriting remains a separate task tied to the audited source fingerprint.
