@@ -10,7 +10,7 @@
 ## Prohibited
 
 - real or parsed paper content;
-- real evidence, Paper Cards, questions, discovery reports/candidates, candidate insights, or research notes;
+- real evidence, Paper Cards, questions, discovery reports/candidates, candidate insights, manuscripts, manuscript projections, or research notes;
 - credentials, authorization files, tokens, or institution-restricted content;
 - local absolute paths, usernames, or a private directory inventory;
 - private workspace exports or disguised copies.

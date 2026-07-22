@@ -17,6 +17,7 @@ Use only public `research-kb` commands. Build every command result completely be
 | `research-kb workspace init --workspace <config>` | operational mutation | result, diagnostics | Bind or validate the managed layout; never author config. |
 | `research-kb intake inspect --workspace <config> --source <absolute-path>` | read | portable source, registration state, Card sections | Reuse, register or stop exactly as reported. |
 | `research-kb intake inspect-acquired --workspace <config> --candidate-id <id>` | read | receipt-checked intake and Registry projection | Use only for an explicitly requested acquired-candidate intake. |
+| `research-kb manuscript inspect --workspace <config> --source <absolute.docx\|absolute.pdf>` | read | source fingerprint, parser, stable units and coverage limits | Use only for exact-path projection; stop before semantic audit. |
 | `research-kb registry add --workspace <config> --root-id <root> --relative-path <path> --metadata -` | mutation | paper ID, duplicate candidates | Use only source values returned by intake inspection. |
 | `research-kb paper status --workspace <config> --paper-id <id>` | read | structural stage, freshness and integrity facts | Route resume without treating status as a semantic instruction. |
 | `research-kb paper context --workspace <config> --paper-id <id>` | read | stored Card, Evidence and review queue | Recover Core-owned IDs and exact existing records. |
@@ -45,6 +46,7 @@ discovery show
 guardian check
 intake inspect
 intake inspect-acquired
+manuscript inspect
 paper context
 paper status
 parse show
@@ -60,12 +62,15 @@ For discovery search, require `on_demand_discovery: true` and an available `euro
 
 For local intake, query and Step 7 modes, require `real_pdf_parse: true`, plus `pdfplumber` with `availability: available` and a non-empty version. A declared feature with a missing optional dependency is not executable.
 
+For manuscript projection, require `manuscript_projection: true` and `manuscript inspect`. DOCX projection uses the built-in OOXML reader; PDF projection additionally requires available `pdfplumber`.
+
 For query and Step 7 maintenance, use `workspace init --dry-run` only. Its successful `result` is `planned`; determine whether the workspace is already usable from `managed_actions`. Only `already_present` entries plus the planned `acquire_workspace_lock` entry are no-change preflight. Any create, marker write, adoption or upgrade action stops this route. Do not call operational init merely because the dry-run result says `planned`.
 
 ## Read Boundaries
 
 - `intake inspect` owns absolute-path confinement, portable source projection, exact Registry matching and active Card section discovery.
 - `intake inspect-acquired` owns candidate receipt verification and returns Registry metadata without network or writes.
+- `manuscript inspect` owns exact DOCX/PDF source projection, fingerprint stability, bounded units and coverage limits with `persistent_writes: 0`.
 - `paper status` exposes deterministic stage and integrity facts, not scientific content or a next action.
 - `paper context` is the only public recovery surface for Paper Card, Evidence and queue records.
 - `review context` is the only public recovery surface for Review Memory and Review Unit IDs.

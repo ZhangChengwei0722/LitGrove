@@ -78,11 +78,11 @@ def main() -> int:
             "diagnostic_code": None,
         }:
             raise SystemExit("PDF wheel capability report does not match the installed adapter")
-        if not {"discovery search", "intake inspect", "intake inspect-acquired", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
+        if not {"discovery search", "intake inspect", "intake inspect-acquired", "manuscript inspect", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
             raise SystemExit("PDF wheel capability report lacks deterministic intake/context reads")
         if capability["discovery_connectors"] != [{"connector": "europe-pmc", "availability": "available", "network_required": True}]:
             raise SystemExit("PDF wheel capability report lacks the Europe PMC connector")
-        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True:
+        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["manuscript_projection"] is not True:
             raise SystemExit("PDF wheel capability report lacks Review Memory, Step 7 or discovery runtime")
         for command in ("context", "render"):
             subprocess.run(
@@ -156,6 +156,38 @@ def main() -> int:
         )
         if init_output["result"] != "initialized":
             raise SystemExit("PDF wheel workspace did not initialize")
+        manuscript_knowledge_before = {
+            path.relative_to(workspace_root / "knowledge").as_posix(): path.read_bytes()
+            for path in (workspace_root / "knowledge").rglob("*")
+            if path.is_file()
+        }
+        manuscript = _run_json(
+            python,
+            temporary_root,
+            "manuscript",
+            "inspect",
+            "--workspace",
+            str(config_path),
+            "--source",
+            str(source),
+        )
+        if manuscript["document"]["parser"] != {
+            "adapter": "pdfplumber",
+            "version": installed_version,
+        }:
+            raise SystemExit("PDF wheel manuscript parser identity does not match installed metadata")
+        if manuscript["document"]["unit_count"] != 1 or manuscript["persistent_writes"] != 0:
+            raise SystemExit("PDF wheel manuscript projection is incomplete")
+        if manuscript["units"][0]["locator"] != "pdf:page:1":
+            raise SystemExit("PDF wheel manuscript page locator is unstable")
+        if _sha256(source) != source_before:
+            raise SystemExit("PDF wheel manuscript projection changed the source")
+        if {
+            path.relative_to(workspace_root / "knowledge").as_posix(): path.read_bytes()
+            for path in (workspace_root / "knowledge").rglob("*")
+            if path.is_file()
+        } != manuscript_knowledge_before:
+            raise SystemExit("PDF wheel manuscript projection changed managed workspace files")
         intake = _run_json(
             python,
             temporary_root,

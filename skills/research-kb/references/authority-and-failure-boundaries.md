@@ -18,6 +18,8 @@ Discovery search results remain report-only until the user explicitly names resu
 
 Ordinary knowledge queries are read-only. If persistence intent is ambiguous, use `ephemeral_query` and report `persistent_writes: 0`.
 
+Manuscript projection is also read-only. It returns transient task units only and never authorizes claim extraction, evidence matching, rewriting, registration or canonical persistence.
+
 Query and Step 7 maintenance preflight is dry-run-only. A workspace action must be handled as a separate authorized intake/bootstrap task, never hidden inside a query or candidate rerun.
 
 ## Discovery Authority

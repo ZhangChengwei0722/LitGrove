@@ -37,6 +37,7 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Generate PDF fixtures at runtime under `tmp_path` with ReportLab. Do not commit generated PDFs or derive them from real papers.
 - Test blank, malformed, encrypted, all-empty, and multi-page sources with bounded diagnostics that contain no extracted text or absolute path.
 - Keep the base-wheel smoke free of the PDF extra and require `RKBC-028` for explicit PDF selection; validate real PDF parsing in the separate `[pdf]` wheel smoke.
+- Build DOCX fixtures from scratch as minimal OOXML archives; never commit or derive a real manuscript fixture.
 
 ## Mutation Service Rules
 
@@ -111,6 +112,16 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Read stdin as raw bytes with a command-specific limit plus one byte; never echo invalid payloads.
 - Accept stdin only for discovery search/selection requests, Registry metadata and mutation requests, and route successful objects through existing services.
 - Exercise base and `[pdf]` installed wheels so intake inspection, availability, stdin, parse reads, status and paper context do not depend on the editable tree.
+
+## Manuscript Projection Rules
+
+- Accept only an exact absolute `.docx` or `.pdf` path under exactly one configured source root and recheck SHA-256 after extraction.
+- Keep the report transient and stdout-only. Do not create a manuscript store, schema, ID, event, journal, cache, Markdown file or Registry record.
+- Bound source bytes, OOXML entries/uncompressed bytes, projected units and extracted characters before success output.
+- Read only WordprocessingML document/styles parts; do not follow relationships, execute macros or include deleted revisions, drawings, text boxes or embedded content.
+- Reuse the fixed `pdfplumber` text policy and preserve `RKBC-028`; map unsupported manuscript content to `RKBC-035` without exposing paths or text.
+- Test exact repeatability, body/table paragraph order, style/heading projection, PDF page order, malformed and empty inputs, source change, empty failure stdout and byte-identical source/managed trees.
+- Keep semantic claim extraction, criteria evaluation, evidence matching and rewriting outside M3D-0A.
 
 ## Discovery Connector Rules
 

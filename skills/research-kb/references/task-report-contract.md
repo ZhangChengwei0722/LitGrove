@@ -7,7 +7,7 @@ Return one concise private task report after the invocation. The report is not c
 Always report:
 
 ```yaml
-invocation_mode: on_demand_discovery | explicit_oa_acquisition | acquired_candidate_intake | local_intake | ephemeral_query | explicit_step7_maintenance | full_workflow_step7_refresh
+invocation_mode: on_demand_discovery | explicit_oa_acquisition | acquired_candidate_intake | local_intake | manuscript_projection | ephemeral_query | explicit_step7_maintenance | full_workflow_step7_refresh
 persistent_writes:
 workspace_preflight:
 guardian:
@@ -193,6 +193,26 @@ query:
 ```
 
 Keep research-direction and new-question ideas `report-only` unless a separately explicit persistence action is active.
+
+## Manuscript Projection Result
+
+```yaml
+manuscript_projection:
+  format: docx | pdf
+  source_fingerprint:
+    algorithm: sha256
+    value:
+  parser:
+    adapter:
+    version:
+  unit_kind: paragraph | pdf_page
+  unit_count:
+  extracted_character_count:
+  coverage_limits: []
+  persistent_writes: 0
+```
+
+The active task may use the returned units, locators and style/table coordinates. Stop after projection; do not report audit findings, evidence matches or rewritten text in M3D-0A.
 
 ## Step 7 Maintenance Result
 

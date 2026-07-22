@@ -1,7 +1,7 @@
 ---
 name: research-kb
 description: >-
-  Orchestrate the deterministic Research KB CLI to search public paper metadata on demand, persist explicitly user-selected discovery candidates, explicitly acquire eligible Europe PMC OA PDFs into a configured local_inbox, or operate an existing workspace: ingest primary-research or review PDF files, resume paper status, build evidence-traceable records, map approved questions, answer read-only knowledge queries, run paper comparison and claim trace-back, discuss research directions, maintain Step 7 candidates, and run Guardian. Use for bounded literature discovery, approved candidate handoff or OA acquisition, local intake, Paper Card, Review Memory, Evidence Grounding, question-scoped query work, or controlled Step 7 refresh. Do not use for arbitrary or institutional downloads, Field Map integration, manuscript writing, migration, or creating workspace configuration.
+  Orchestrate the deterministic Research KB CLI to search public paper metadata on demand, persist explicitly user-selected discovery candidates, explicitly acquire eligible Europe PMC OA PDFs into a configured local_inbox, or operate an existing workspace: ingest primary-research or review PDF files, inspect an exact local DOCX or PDF manuscript read-only, resume paper status, build evidence-traceable records, map approved questions, answer read-only knowledge queries, run paper comparison and claim trace-back, discuss research directions, maintain Step 7 candidates, and run Guardian. Use for bounded literature discovery, approved candidate handoff or OA acquisition, local intake, manuscript projection, Paper Card, Review Memory, Evidence Grounding, question-scoped query work, or controlled Step 7 refresh. Do not use for arbitrary or institutional downloads, Field Map integration, manuscript audit or writing, migration, or creating workspace configuration.
 ---
 
 # Research KB
@@ -29,16 +29,19 @@ Classify the invocation mode before any mutation:
 - `ephemeral_query`: one paper, selected papers or one existing question; all answers remain in the task report only.
 - `explicit_step7_maintenance`: the user explicitly requests Step 7 create, refresh, revise, reject or render work for one existing question.
 - `full_workflow_step7_refresh`: a local-path or already-acquired intake request explicitly asks for the complete workflow through Step 7 and Guardian.
+- `manuscript_projection`: one exact user-supplied DOCX or PDF under a declared source root; return deterministic units and stop without semantic audit.
 
 If persistence intent is unclear, use `ephemeral_query` or intake without Step 7 persistence. Ordinary knowledge queries never persist a Question Mapping, Step 7 candidate, Markdown view, answer, cache or report.
 
 ## Required Inputs
 
-Require an existing workspace config for intake, query, Step 7, approved discovery-candidate handoff, explicit OA acquisition and acquired-candidate intake. Discovery search is workspace-independent.
+Require an existing workspace config for intake, manuscript projection, query, Step 7, approved discovery-candidate handoff, explicit OA acquisition and acquired-candidate intake. Discovery search is workspace-independent.
 
 For local-path intake, require absolute PDF paths and accept bounded bibliography, a supplied document type and a supplied or explicitly approved question. For acquired-candidate intake, require exact acquired candidate IDs instead of paths. For queries, require a paper ID, ordered paper IDs, an existing question ID or an equivalent selector already resolved in the active task. For Step 7 maintenance, require one existing question ID.
 
 For discovery, require explicit inclusive dates, field-bound title/abstract keywords, `any` or `all`, a preprint choice and `max_results` from 1 through 15. Resolve relative dates in the Agent before CLI invocation.
+
+For manuscript projection, require one exact absolute user-supplied DOCX or PDF path. The file must already belong to exactly one declared source root.
 
 Initialize only the managed layout described by an existing config. Do not create workspace or domain-profile configuration.
 
@@ -75,10 +78,16 @@ For `ephemeral_query`, start from grounded/revised Paper Card Units returned by 
 
 For persisted maintenance, call `step7 context` first, select only grounded/revised Units in the current Question Mapping, reconcile against existing candidates, and use `record promote --request - --actor agent`. Exact reruns write nothing. Replace an existing candidate when the same idea changes; append only a materially distinct candidate; stop on uncertain near-duplicates. Re-read context, optionally call `step7 render`, then run Guardian.
 
+## Execute Manuscript Projection
+
+For `manuscript_projection`, call capability plus `workspace init --dry-run`, require `manuscript_projection: true` and the `manuscript inspect` read. Accept only no-change preflight, then call `manuscript inspect --workspace <config> --source <absolute.docx|absolute.pdf>`.
+
+Return the source fingerprint, parser identity, stable units, locators and `coverage_limits` in the private task report with `persistent_writes: 0`. Stop after the projection report. Do not perform or claim semantic claim extraction, criteria evaluation, evidence matching or rewriting. Do not register the manuscript or treat it as canonical knowledge.
+
 ## Hard Boundaries
 
 Do not parse workspace/domain-profile configuration or read canonical JSON/JSONL directly. Do not allocate IDs, write canonical stores, call an LLM API from Core, move source files or infer success from file presence.
 
 Review Memory is background-only and cannot support canonical Evidence, Question Mapping or persisted Step 7. Review Unit Question Mapping, Field Map integration and subtype-specific review schemas are not implemented. New question candidates remain report-only until explicit approval.
 
-Arbitrary connectors, institutional/browser acquisition, metadata refresh/deletion, OCR, figure/table interpretation, supplementary-data processing, manuscript audit and migration remain outside this Skill. Never infer discovery selection, acquisition or acquired-candidate intake, overwrite an existing source, or assign `human_checked`, `verified`, final screening or source-disposition authority. `discovery acquire` always stops before intake; only a separately explicit acquired-candidate task may resume downstream processing. Review queue records are boundaries, not evidence.
+Arbitrary connectors, institutional/browser acquisition, metadata refresh/deletion, OCR, figure/table interpretation, supplementary-data processing, manuscript audit/evidence matching/rewriting and migration remain outside this Skill. Never infer discovery selection, acquisition or acquired-candidate intake, overwrite an existing source, or assign `human_checked`, `verified`, final screening or source-disposition authority. `discovery acquire` always stops before intake; only a separately explicit acquired-candidate task may resume downstream processing. Review queue records are boundaries, not evidence.
