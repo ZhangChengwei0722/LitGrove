@@ -9,6 +9,7 @@ import pytest
 import research_kb.services.catalog as catalog_module
 from research_kb.application import APPLICATION_SERVICE_INTERFACE_VERSION
 from research_kb.catalog import CatalogDatabase
+from research_kb.catalog.models import canonical_digest
 from research_kb.errors import ResearchKBError
 from research_kb.services import (
     CatalogCapabilityService,
@@ -17,6 +18,7 @@ from research_kb.services import (
     RegistryService,
     WorkspaceSessionService,
 )
+from research_kb.services.pipeline_job import PipelineJobService
 from research_kb.storage.json_io import file_sha256, read_jsonl, serialize_jsonl, sha256_bytes
 from tests.fixture_factory import make_bundle
 from tests.runtime_helpers import make_runtime_workspace
@@ -68,6 +70,67 @@ def test_workspace_session_uses_configured_option_and_redacts_paths(tmp_path: Pa
     with pytest.raises(ResearchKBError) as unknown:
         service.open("not-configured")
     assert unknown.value.diagnostic.code == "RKBC-002"
+
+
+def test_catalog_projects_only_current_pipeline_job_heads_with_stable_pagination(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    jobs = PipelineJobService(layout)
+    authority = {
+        "actor": "user",
+        "granted_operations": ["register_by_reference"],
+        "captured_at": "2026-07-30T01:00:00Z",
+    }
+    first = jobs.create(
+        requested_route="local_source",
+        requested_depth="semantic_gate",
+        current_node="intake_preflight",
+        input_refs=[],
+        authority_snapshot=authority,
+        idempotency_key="synthetic-catalog-job-1",
+        actor="user",
+        fixture_origin="synthetic_from_scratch",
+    )
+    current_first = jobs.transition(
+        first.state["job_id"],
+        expected_state_id=first.state["state_id"],
+        expected_state_digest=canonical_digest(first.state),
+        status="running",
+        current_node="registry",
+        wait_reason=None,
+        output_refs=[],
+        retry_increment=0,
+        recovery_action=None,
+        actor="cli",
+    )
+    second = jobs.create(
+        requested_route="local_source",
+        requested_depth="registry_only",
+        current_node="intake_preflight",
+        input_refs=[],
+        authority_snapshot=authority,
+        idempotency_key="synthetic-catalog-job-2",
+        actor="user",
+        fixture_origin="synthetic_from_scratch",
+    )
+
+    session = WorkspaceSessionService({"alpha": layout.config.path}).open("alpha")
+    projection = CatalogProjectionService(session, tmp_path / "app-state")
+    projection.rebuild()
+    query = CatalogQueryService(projection)
+    first_page = query.search(item_kinds=("pipeline_job",), page_size=1)
+    second_page = query.search(
+        item_kinds=("pipeline_job",),
+        page_size=1,
+        cursor=first_page["next_cursor"],
+    )
+    items = [*first_page["items"], *second_page["items"]]
+
+    assert len(items) == 2
+    assert {item["record_id"] for item in items} == {
+        current_first.state["state_id"],
+        second.state["state_id"],
+    }
+    assert query.detail(items[0]["item_id"])["detail"]["revision"] in {1, 2}
 
 
 def test_workspace_session_rejects_relative_duplicate_and_invalid_options(tmp_path: Path) -> None:

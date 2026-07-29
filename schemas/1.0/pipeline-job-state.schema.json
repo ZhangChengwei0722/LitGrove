@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:pipeline-job-state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "state_id",
+    "job_id",
+    "workspace_id",
+    "revision",
+    "predecessor",
+    "requested_route",
+    "requested_depth",
+    "current_node",
+    "status",
+    "wait_reason",
+    "input_refs",
+    "output_refs",
+    "authority_snapshot",
+    "idempotency_key",
+    "retry_count",
+    "recovery_action",
+    "terminal_receipt",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "state_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/job_state_id"},
+    "job_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/job_id"},
+    "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "revision": {"type": "integer", "minimum": 1},
+    "predecessor": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state_id", "state_digest"],
+          "properties": {
+            "state_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/job_state_id"},
+            "state_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
+      ]
+    },
+    "requested_route": {"enum": ["local_source", "discovery_candidate"]},
+    "requested_depth": {"enum": ["registry_only", "parse_only", "semantic_gate"]},
+    "current_node": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+    "status": {
+      "enum": [
+        "created",
+        "running",
+        "waiting_user",
+        "waiting_agent",
+        "waiting_source",
+        "paused",
+        "recovering",
+        "completed",
+        "completed_with_findings",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "wait_reason": {
+      "enum": [
+        null,
+        "authority_required",
+        "route_ambiguous",
+        "source_selection_required",
+        "source_missing",
+        "source_inaccessible",
+        "source_changed",
+        "parse_failed",
+        "source_adequacy_inadequate",
+        "source_adequacy_stale",
+        "user_paused",
+        "transaction_recovery"
+      ]
+    },
+    "input_refs": {
+      "type": "array",
+      "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/record_id"},
+      "uniqueItems": true
+    },
+    "output_refs": {
+      "type": "array",
+      "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/record_id"},
+      "uniqueItems": true
+    },
+    "authority_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor", "granted_operations", "captured_at"],
+      "properties": {
+        "actor": {"enum": ["user", "cli"]},
+        "granted_operations": {
+          "type": "array",
+          "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+          "uniqueItems": true
+        },
+        "captured_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+      }
+    },
+    "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 256},
+    "retry_count": {"type": "integer", "minimum": 0},
+    "recovery_action": {
+      "anyOf": [
+        {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+        {"type": "null"}
+      ]
+    },
+    "terminal_receipt": {"type": "boolean"},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "updated_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"revision": {"const": 1}}, "required": ["revision"]},
+      "then": {"properties": {"predecessor": {"type": "null"}}},
+      "else": {"properties": {"predecessor": {"type": "object"}}}
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": ["completed", "completed_with_findings", "failed", "cancelled"]
+          }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "terminal_receipt": {"const": true},
+          "wait_reason": {"type": "null"}
+        }
+      },
+      "else": {"properties": {"terminal_receipt": {"const": false}}}
+    }
+  ]
+}

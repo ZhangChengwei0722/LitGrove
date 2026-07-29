@@ -30,6 +30,7 @@ def build_process_event(
     input_refs: list[str],
     output_refs: list[str],
     created_at: str,
+    job_id: str | None = None,
 ) -> dict[str, Any]:
     event = {
         "schema_version": "1.0",
@@ -41,6 +42,8 @@ def build_process_event(
         "output_refs": output_refs,
         "created_at": created_at,
     }
+    if job_id is not None:
+        event["job_id"] = job_id
     diagnostics = validate_record("process-event", event, actor="cli")
     if diagnostics:
         raise ResearchKBError(diagnostics[0])

@@ -13,6 +13,7 @@ from research_kb.catalog.models import (
     canonical_digest,
 )
 from research_kb.errors import DUPLICATE_ID, UNKNOWN_SCHEMA_KIND, Diagnostic, ResearchKBError
+from research_kb.pipeline_jobs import current_pipeline_states
 
 
 MAX_TITLE_CHARACTERS = 1_000
@@ -86,6 +87,7 @@ class CatalogAdapterRegistry:
                 "parsed-page",
                 "review-queue",
                 "discovery-candidate",
+                "guardian-finding-disposition",
                 *ignored_record_kinds,
             }
         )
@@ -114,13 +116,14 @@ class CatalogAdapterRegistry:
         *,
         workspace_id: str,
     ) -> CatalogSnapshot:
+        selected_entries = _select_catalog_entries(tuple(entries))
         source_records: list[CatalogSourceRecord] = []
         documents: list[CatalogDocument] = []
         unknown: list[tuple[str, str]] = []
         seen_sources: set[str] = set()
         seen_items: set[str] = set()
 
-        for record_kind, record in entries:
+        for record_kind, record in selected_entries:
             adapter = self.adapters.get(record_kind)
             if adapter is None:
                 if record_kind not in self.ignored_record_kinds:
@@ -218,6 +221,7 @@ def _default_adapters() -> tuple[CatalogRecordAdapter, ...]:
         _adapter("step7-insight", "candidate_id", _project_step7, _step7_detail),
         _adapter("step7-cross-view", "candidate_id", _project_step7, _step7_detail),
         _adapter("process-event", "event_id", _project_event, _event_detail),
+        _adapter("pipeline-job-state", "state_id", _project_job, _job_detail),
         _adapter("guardian-report", "guardian_report_id", _project_guardian, _guardian_detail),
     )
 
@@ -456,6 +460,43 @@ def _project_event(record: Record, workspace_id: str, digest: str) -> tuple[Cata
     )
 
 
+def _project_job(record: Record, workspace_id: str, digest: str) -> tuple[CatalogDocument, ...]:
+    wait_reason = record.get("wait_reason")
+    return (
+        _document(
+            record_kind="pipeline-job-state",
+            record_id=str(record["state_id"]),
+            child_id=None,
+            item_kind="pipeline_job",
+            authority_layer="operational",
+            paper_id=None,
+            question_id=None,
+            title=f"Pipeline Job {record['job_id'][-12:]}",
+            summary=f"{record['requested_route']} / {record['current_node']} / {record['status']}",
+            statuses=tuple(
+                value
+                for value in (
+                    f"job:{record['status']}",
+                    f"route:{record['requested_route']}",
+                    f"wait:{wait_reason}" if wait_reason is not None else None,
+                )
+                if value is not None
+            ),
+            search_text=_join(
+                [
+                    record["job_id"],
+                    record["requested_route"],
+                    record["requested_depth"],
+                    record["current_node"],
+                    record["status"],
+                    wait_reason or "",
+                ]
+            ),
+            digest=digest,
+        ),
+    )
+
+
 def _project_guardian(record: Record, workspace_id: str, digest: str) -> tuple[CatalogDocument, ...]:
     codes = [finding["code"] for finding in record["findings"]]
     return (
@@ -610,7 +651,7 @@ def _step7_detail(record: Record, child_id: str | None) -> dict[str, Any]:
 
 
 def _event_detail(record: Record, child_id: str | None) -> dict[str, Any]:
-    return {
+    detail = {
         key: record[key]
         for key in (
             "event_id",
@@ -621,6 +662,32 @@ def _event_detail(record: Record, child_id: str | None) -> dict[str, Any]:
             "output_refs",
             "created_at",
         )
+    }
+    if record.get("job_id") is not None:
+        detail["job_id"] = record["job_id"]
+    return detail
+
+
+def _job_detail(record: Record, child_id: str | None) -> dict[str, Any]:
+    del child_id
+    return {
+        key: record[key]
+        for key in (
+            "job_id",
+            "state_id",
+            "revision",
+            "requested_route",
+            "requested_depth",
+            "current_node",
+            "status",
+            "wait_reason",
+            "retry_count",
+            "terminal_receipt",
+            "updated_at",
+        )
+    } | {
+        "input_ref_count": len(record["input_refs"]),
+        "output_ref_count": len(record["output_refs"]),
     }
 
 
@@ -665,6 +732,20 @@ def _bounded(value: str, limit: int) -> tuple[str, bool]:
 
 def _sort_key(value: str) -> str:
     return unicodedata.normalize("NFKC", value).casefold()
+
+
+def _select_catalog_entries(
+    entries: tuple[tuple[str, dict[str, Any]], ...],
+) -> tuple[tuple[str, dict[str, Any]], ...]:
+    job_states = [record for kind, record in entries if kind == "pipeline-job-state"]
+    current_state_ids = {
+        item["state_id"] for item in current_pipeline_states(job_states)
+    }
+    return tuple(
+        (kind, record)
+        for kind, record in entries
+        if kind != "pipeline-job-state" or record["state_id"] in current_state_ids
+    )
 
 
 __all__ = ["CatalogAdapterRegistry", "CatalogRecordAdapter"]

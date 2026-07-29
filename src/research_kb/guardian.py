@@ -75,6 +75,7 @@ class GuardianService:
         diagnostics.extend(self._canonical_path_diagnostics())
         process_events = [record for kind, record in entries if kind == "process-event"]
         diagnostics.extend(self._transaction_diagnostics(process_events))
+        diagnostics.extend(self._job_event_diagnostics(entries, process_events))
         diagnostics = _deduplicate(diagnostics)
         defined_ids = _defined_ids(entries)
         findings = [_finding_from_diagnostic(item, defined_ids) for item in diagnostics]
@@ -208,7 +209,9 @@ class GuardianService:
             self.layout.registry_path,
             self.layout.review_queue_path,
             self.layout.process_events_path,
+            self.layout.pipeline_jobs_path,
             self.layout.guardian_reports_path,
+            self.layout.guardian_finding_dispositions_path,
             self.layout.question_mappings_path,
             self.layout.discovery_candidates_path,
             *(self.layout.step7_store_path(kind) for kind in STEP7_RECORD_KINDS),
@@ -229,6 +232,53 @@ class GuardianService:
             except ResearchKBError:
                 diagnostics.append(
                     Diagnostic(PATH_ESCAPE, "workspace", self.layout.workspace_id, str(path), "canonical target resolves outside knowledge_root")
+                )
+        return diagnostics
+
+    def _job_event_diagnostics(
+        self,
+        entries: list[BundleEntry],
+        process_events: list[dict[str, Any]],
+    ) -> list[Diagnostic]:
+        diagnostics: list[Diagnostic] = []
+        states = [record for kind, record in entries if kind == "pipeline-job-state"]
+        state_ids = {state["state_id"] for state in states}
+        for state in states:
+            matching = [
+                event
+                for event in process_events
+                if event.get("job_id") == state["job_id"]
+                and state["state_id"] in event.get("output_refs", [])
+                and event.get("operation") in {"pipeline_job_create", "pipeline_job_transition"}
+                and event.get("result") == "success"
+            ]
+            if len(matching) != 1:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "pipeline-job-state",
+                        state["state_id"],
+                        "/state_id",
+                        f"Pipeline Job state must have exactly one correlated success event; found {len(matching)}",
+                    )
+                )
+        for event in process_events:
+            if event.get("job_id") is None:
+                continue
+            correlated_states = set(event.get("output_refs", [])) & state_ids
+            if (
+                event.get("operation") in {"pipeline_job_create", "pipeline_job_transition"}
+                and event.get("result") == "success"
+                and len(correlated_states) != 1
+            ):
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "process-event",
+                        event["event_id"],
+                        "/output_refs",
+                        "correlated Pipeline Job event must reference exactly one Job state",
+                    )
                 )
         return diagnostics
 
@@ -385,6 +435,11 @@ def _finding_from_diagnostic(diagnostic: Diagnostic, defined_ids: set[str]) -> d
         "discovery-acquisition",
     }:
         remediation = "Inspect the acquisition journal, receipt and operation-owned files; do not delete or adopt source files automatically."
+    elif diagnostic.code == INCOMPLETE_TRANSACTION and diagnostic.record_kind in {
+        "pipeline-job-state",
+        "guardian-finding-disposition",
+    }:
+        remediation = "Inspect the append-only operational chain and transaction journal; recover by digest or append an explicit disposition without rewriting history."
     return {
         "code": diagnostic.code,
         "severity": diagnostic.severity,
@@ -403,6 +458,8 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
         "review-queue": "queue_id",
         "process-event": "event_id",
         "guardian-report": "guardian_report_id",
+        "pipeline-job-state": "state_id",
+        "guardian-finding-disposition": "disposition_id",
         "question-mapping": "question_id",
         "discovery-candidate": "candidate_id",
         "step7-synthesis": "candidate_id",
@@ -427,6 +484,8 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
             value = record.get(fields[kind])
             if isinstance(value, str):
                 result.add(value)
+            if kind == "pipeline-job-state" and isinstance(record.get("job_id"), str):
+                result.add(record["job_id"])
     return result
 
 

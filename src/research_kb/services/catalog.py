@@ -448,6 +448,8 @@ def _load_exact_workspace_record(layout, row: dict[str, Any]) -> dict[str, Any] 
         return _find_jsonl_record(layout.step7_store_path(kind), "candidate_id", row["record_id"])
     if kind == "process-event":
         return _find_jsonl_record(layout.process_events_path, "event_id", row["record_id"])
+    if kind == "pipeline-job-state":
+        return _find_jsonl_record(layout.pipeline_jobs_path, "state_id", row["record_id"])
     if kind == "guardian-report":
         return _find_jsonl_record(
             layout.guardian_reports_path,

@@ -14,11 +14,13 @@ from research_kb.services.discovery_acquisition import (
 )
 from research_kb.services.discovery_resolution import DiscoveryResolutionService, DiscoveryResolverRegistry
 from research_kb.services.intake_inspect import IntakeInspectService
+from research_kb.services.guardian_disposition import GuardianFindingDispositionService
 from research_kb.services.manuscript_projection import ManuscriptProjectionService
 from research_kb.services.parse import ParseService
 from research_kb.services.parse_application import ParseAdapterRegistry, ParseApplicationService
 from research_kb.services.parse_read import ParseReadService
 from research_kb.services.paper_context import PaperContextService
+from research_kb.services.pipeline_job import PipelineJobService
 from research_kb.services.review_context import ReviewContextService
 from research_kb.services.review_memory import ReviewMemoryService
 from research_kb.services.privacy_scan import PrivacyScanService
@@ -52,6 +54,7 @@ __all__ = [
     "DiscoveryResolverRegistry",
     "DiscoveryService",
     "IntakeInspectService",
+    "GuardianFindingDispositionService",
     "JsonlValidationService",
     "ManuscriptProjectionService",
     "ParseService",
@@ -59,6 +62,7 @@ __all__ = [
     "ParseApplicationService",
     "ParseReadService",
     "PaperContextService",
+    "PipelineJobService",
     "PrivacyScanService",
     "QuestionQueryService",
     "ReviewContextService",

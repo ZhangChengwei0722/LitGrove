@@ -31,7 +31,9 @@ from research_kb.errors import (
     json_pointer,
 )
 from research_kb.evidence_provenance import index_active_pages, parse_locator, validate_evidence_against_pages
+from research_kb.guardian_dispositions import guardian_disposition_diagnostics
 from research_kb.paths import normalize_relative_path, validate_config_relative_path
+from research_kb.pipeline_jobs import pipeline_job_chain_diagnostics, validate_wait_state
 from research_kb.review_memory_provenance import (
     build_active_parse_index,
     review_memory_freshness,
@@ -428,6 +430,50 @@ def _local_semantic_diagnostics(kind: str, record: dict[str, Any]) -> list[Diagn
                                 "selection context ID does not match its canonical intent",
                             )
                         )
+    elif kind == "pipeline-job-state":
+        try:
+            validate_wait_state(
+                str(record.get("status")),
+                record.get("wait_reason"),
+                record.get("recovery_action"),
+            )
+        except ResearchKBError as error:
+            diagnostics.append(
+                Diagnostic(
+                    SCHEMA_VALIDATION_FAILED,
+                    kind,
+                    _record_id(kind, record),
+                    error.diagnostic.json_path,
+                    error.diagnostic.message,
+                )
+            )
+        if record.get("revision") == 1:
+            root_requirements = (
+                ("status", "created", "Pipeline Job root status must be created"),
+                ("retry_count", 0, "Pipeline Job root retry count must be zero"),
+                ("output_refs", [], "Pipeline Job root cannot contain outputs"),
+            )
+            for field, expected, message in root_requirements:
+                if record.get(field) != expected:
+                    diagnostics.append(
+                        Diagnostic(
+                            SCHEMA_VALIDATION_FAILED,
+                            kind,
+                            _record_id(kind, record),
+                            f"/{field}",
+                            message,
+                        )
+                    )
+            if record.get("updated_at") != record.get("created_at"):
+                diagnostics.append(
+                    Diagnostic(
+                        SCHEMA_VALIDATION_FAILED,
+                        kind,
+                        _record_id(kind, record),
+                        "/updated_at",
+                        "Pipeline Job root timestamps must match",
+                    )
+                )
     if kind.startswith("step7-") and isinstance(record.get("evidence_base"), list):
         for value in record["evidence_base"]:
             if isinstance(value, str) and value.startswith("queue_"):
@@ -475,6 +521,10 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
     defined: dict[str, list[str]] = defaultdict(list)
     paper_cards: dict[str, int] = defaultdict(int)
     review_memories: dict[str, int] = defaultdict(int)
+    jobs: set[str] = set()
+    pipeline_states: list[dict[str, Any]] = []
+    guardian_reports: list[dict[str, Any]] = []
+    guardian_dispositions: list[dict[str, Any]] = []
 
     page_index, provenance_failures = index_active_pages(
         record for kind, record in entries if kind == "parsed-page"
@@ -634,8 +684,22 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
             event_id = record.get("event_id", "")
             events.add(event_id)
             defined["event"].append(event_id)
+        elif kind == "pipeline-job-state":
+            pipeline_states.append(record)
+            jobs.add(record.get("job_id", ""))
+            defined["jobstate"].append(record.get("state_id", ""))
         elif kind == "guardian-report":
+            guardian_reports.append(record)
             defined["guardian"].append(record.get("guardian_report_id", ""))
+        elif kind == "guardian-finding-disposition":
+            guardian_dispositions.append(record)
+            defined["gdisp"].append(record.get("disposition_id", ""))
+
+    defined["job"].extend(sorted(filter(None, jobs)))
+    diagnostics.extend(pipeline_job_chain_diagnostics(pipeline_states))
+    diagnostics.extend(
+        guardian_disposition_diagnostics(guardian_dispositions, guardian_reports)
+    )
 
     for namespace, values in defined.items():
         seen: set[str] = set()
@@ -978,6 +1042,13 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                 if set(snapshot.get("review_queue_ids", [])) != set(record.get("review_queue_refs", [])):
                     diagnostics.append(Diagnostic(SNAPSHOT_MISMATCH, kind, record_id, "/input_snapshot/review_queue_ids", "snapshot review queue does not match review_queue_refs"))
         elif kind == "process-event":
+            if record.get("job_id") is not None and record.get("result") == "success":
+                _require_ref(diagnostics, kind, record_id, "/job_id", record.get("job_id"), jobs, "Pipeline Job")
+            for field in ("input_refs", "output_refs"):
+                for value in record.get(field, []):
+                    _require_ref(diagnostics, kind, record_id, f"/{field}", value, all_object_ids, "record")
+        elif kind == "pipeline-job-state":
+            _require_ref(diagnostics, kind, record_id, "/workspace_id", record.get("workspace_id"), workspaces, "workspace")
             for field in ("input_refs", "output_refs"):
                 for value in record.get(field, []):
                     _require_ref(diagnostics, kind, record_id, f"/{field}", value, all_object_ids, "record")
@@ -987,6 +1058,11 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                 value = finding.get("record_ref")
                 if value is not None:
                     _require_ref(diagnostics, kind, record_id, f"/findings/{index}/record_ref", value, all_object_ids, "record")
+        elif kind == "guardian-finding-disposition":
+            _require_ref(diagnostics, kind, record_id, "/workspace_id", record.get("workspace_id"), workspaces, "workspace")
+            _require_ref(diagnostics, kind, record_id, "/guardian_report_id", record.get("guardian_report_id"), {item.get("guardian_report_id", "") for item in guardian_reports}, "Guardian report")
+            if record.get("previous_disposition_id") is not None:
+                _require_ref(diagnostics, kind, record_id, "/previous_disposition_id", record.get("previous_disposition_id"), {item.get("disposition_id", "") for item in guardian_dispositions}, "Guardian disposition")
     return diagnostics
 
 
@@ -1028,6 +1104,8 @@ def _record_id(kind: str, record: dict[str, Any]) -> str | None:
         "discovery-candidate": "candidate_id",
         "process-event": "event_id",
         "guardian-report": "guardian_report_id",
+        "pipeline-job-state": "state_id",
+        "guardian-finding-disposition": "disposition_id",
     }
     field = fields.get(kind)
     value = record.get(field) if field else None

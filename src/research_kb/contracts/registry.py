@@ -33,6 +33,8 @@ SCHEMA_FILES: dict[str, str] = {
     "step7-cross-view": "step7-cross-view.schema.json",
     "process-event": "process-event.schema.json",
     "guardian-report": "guardian-report.schema.json",
+    "pipeline-job-state": "pipeline-job-state.schema.json",
+    "guardian-finding-disposition": "guardian-finding-disposition.schema.json",
     "mutation-request": "mutation-request.schema.json",
     "transaction-journal": "transaction-journal.schema.json",
 }

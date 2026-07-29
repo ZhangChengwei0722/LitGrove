@@ -19,12 +19,14 @@ from research_kb.discovery import (
 from research_kb.discovery.europe_pmc import EuropePmcConnector, EuropePmcResolver
 from research_kb.discovery.europe_pmc_pdf import EuropePmcPdfTransport
 from research_kb.errors import (
+    SCHEMA_VALIDATION_FAILED,
     UNSAFE_DIRECTORY_MODE,
     PROTECTED_INPUT_CHANGED,
     WORKSPACE_IDENTITY_CONFLICT,
     WORKSPACE_LAYOUT_CONFLICT,
     WORKSPACE_LAYOUT_UPGRADE_REQUIRED,
     WORKSPACE_NOT_INITIALIZED,
+    Diagnostic,
     ResearchKBError,
     redact_absolute_paths,
 )
@@ -33,6 +35,8 @@ from research_kb.mutation import load_mutation_request, mutation_request_from_ma
 from research_kb.services.acquired_candidate_intake import AcquiredCandidateIntakeService
 from research_kb.services.application_validation import ContractValidationService, JsonlValidationService
 from research_kb.services.capability import CapabilityService
+from research_kb.services.guardian_disposition import GuardianFindingDispositionService
+from research_kb.services.pipeline_job import PipelineJobService
 from research_kb.services.records import RecordService
 from research_kb.services.parse_read import ParseReadService
 from research_kb.services.paper_status import PaperStatusService
@@ -64,6 +68,8 @@ from research_kb.workspace import WorkspaceLayout
 REGISTRY_METADATA_STDIN_LIMIT = 64 * 1024
 MUTATION_REQUEST_STDIN_LIMIT = 4 * 1024 * 1024
 DISCOVERY_REQUEST_INPUT_LIMIT = 64 * 1024
+PIPELINE_JOB_REQUEST_INPUT_LIMIT = 64 * 1024
+GUARDIAN_DISPOSITION_REQUEST_INPUT_LIMIT = 64 * 1024
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -210,6 +216,37 @@ def build_parser() -> argparse.ArgumentParser:
     guardian_check = guardian_commands.add_parser("check", help="run deterministic Guardian checks")
     guardian_check.add_argument("--workspace", required=True, type=Path)
     guardian_check.add_argument("--write-report", action="store_true")
+    guardian_disposition = guardian_commands.add_parser(
+        "disposition",
+        help="append one auditable Guardian finding disposition",
+    )
+    guardian_disposition.add_argument("--workspace", required=True, type=Path)
+    guardian_disposition.add_argument("--request", required=True, type=Path)
+    guardian_disposition.add_argument("--actor", choices=("agent", "cli", "user"), required=True)
+
+    job = commands.add_parser("job", help="manage deterministic Pipeline Jobs")
+    job_commands = job.add_subparsers(dest="job_command", required=True)
+    job_create = job_commands.add_parser("create", help="create one Pipeline Job")
+    job_create.add_argument("--workspace", required=True, type=Path)
+    job_create.add_argument("--request", required=True, type=Path)
+    job_create.add_argument("--actor", choices=("agent", "cli", "user"), required=True)
+    job_list = job_commands.add_parser("list", help="list current Pipeline Job states")
+    job_list.add_argument("--workspace", required=True, type=Path)
+    job_list.add_argument("--page-size", type=int, default=20)
+    job_list.add_argument("--cursor")
+    job_show = job_commands.add_parser("show", help="show one Pipeline Job history")
+    job_show.add_argument("--workspace", required=True, type=Path)
+    job_show.add_argument("--job-id", required=True)
+    for command_name, command_help in (
+        ("transition", "append one Pipeline Job transition"),
+        ("cancel", "cooperatively cancel one Pipeline Job"),
+        ("recover", "append one Pipeline Job recovery transition"),
+    ):
+        command = job_commands.add_parser(command_name, help=command_help)
+        command.add_argument("--workspace", required=True, type=Path)
+        command.add_argument("--job-id", required=True)
+        command.add_argument("--request", required=True, type=Path)
+        command.add_argument("--actor", choices=("agent", "cli", "user"), required=True)
 
     question = commands.add_parser("question", help="inspect persisted question mappings")
     question_commands = question.add_subparsers(dest="question_command", required=True)
@@ -305,6 +342,20 @@ def main(
             return _review_context(args)
         if args.command == "guardian" and args.guardian_command == "check":
             return _guardian_check(args)
+        if args.command == "guardian" and args.guardian_command == "disposition":
+            return _guardian_disposition(args)
+        if args.command == "job" and args.job_command == "create":
+            return _job_create(args)
+        if args.command == "job" and args.job_command == "list":
+            return _job_list(args)
+        if args.command == "job" and args.job_command == "show":
+            return _job_show(args)
+        if args.command == "job" and args.job_command == "transition":
+            return _job_transition(args)
+        if args.command == "job" and args.job_command == "cancel":
+            return _job_cancel(args)
+        if args.command == "job" and args.job_command == "recover":
+            return _job_recover(args)
         if args.command == "question" and args.question_command == "list":
             return _question_list(args)
         if args.command == "question" and args.question_command == "show":
@@ -600,6 +651,197 @@ def _guardian_check(args: argparse.Namespace) -> int:
         "event_id": result.transaction.event_id if result.transaction is not None else None,
     })
     return 0 if result.report["status"] == "success" else 1
+
+
+def _guardian_disposition(args: argparse.Namespace) -> int:
+    request = _read_bounded_request(
+        args.request,
+        limit=GUARDIAN_DISPOSITION_REQUEST_INPUT_LIMIT,
+        record_kind="guardian-disposition-request",
+    )
+    _require_request_fields(
+        request,
+        required={"guardian_report_id", "finding_index", "status", "rationale"},
+        optional={"expected_previous_disposition_id", "fixture_origin"},
+        record_kind="guardian-disposition-request",
+    )
+    result = GuardianFindingDispositionService(WorkspaceLayout.load(args.workspace)).record(
+        guardian_report_id=request["guardian_report_id"],
+        finding_index=request["finding_index"],
+        status=request["status"],
+        rationale=request["rationale"],
+        expected_previous_disposition_id=request.get("expected_previous_disposition_id"),
+        actor=args.actor,
+        fixture_origin=request.get("fixture_origin"),
+    )
+    _write_json_once(
+        {
+            "status": "success",
+            "result": "updated" if result.transaction is not None else "no_change",
+            "disposition": result.disposition,
+            "persistent_writes": 1 if result.transaction is not None else 0,
+            "event_id": result.transaction.event_id if result.transaction is not None else None,
+        }
+    )
+    return 0
+
+
+def _job_create(args: argparse.Namespace) -> int:
+    request = _read_bounded_request(
+        args.request,
+        limit=PIPELINE_JOB_REQUEST_INPUT_LIMIT,
+        record_kind="pipeline-job-create-request",
+    )
+    _require_request_fields(
+        request,
+        required={
+            "requested_route",
+            "requested_depth",
+            "current_node",
+            "input_refs",
+            "authority_snapshot",
+            "idempotency_key",
+        },
+        optional={"fixture_origin"},
+        record_kind="pipeline-job-create-request",
+    )
+    result = PipelineJobService(WorkspaceLayout.load(args.workspace)).create(
+        requested_route=request["requested_route"],
+        requested_depth=request["requested_depth"],
+        current_node=request["current_node"],
+        input_refs=request["input_refs"],
+        authority_snapshot=request["authority_snapshot"],
+        idempotency_key=request["idempotency_key"],
+        actor=args.actor,
+        fixture_origin=request.get("fixture_origin"),
+    )
+    _write_job_mutation(result)
+    return 0
+
+
+def _job_list(args: argparse.Namespace) -> int:
+    service = PipelineJobService(WorkspaceLayout.load(args.workspace))
+    _write_json_once(service.list(page_size=args.page_size, cursor=args.cursor))
+    return 0
+
+
+def _job_show(args: argparse.Namespace) -> int:
+    _write_json_once(PipelineJobService(WorkspaceLayout.load(args.workspace)).show(args.job_id))
+    return 0
+
+
+def _job_transition(args: argparse.Namespace) -> int:
+    request = _read_bounded_request(
+        args.request,
+        limit=PIPELINE_JOB_REQUEST_INPUT_LIMIT,
+        record_kind="pipeline-job-transition-request",
+    )
+    _require_request_fields(
+        request,
+        required={"expected_state_id", "expected_state_digest", "status", "current_node"},
+        optional={"wait_reason", "output_refs", "retry_increment", "recovery_action"},
+        record_kind="pipeline-job-transition-request",
+    )
+    result = PipelineJobService(WorkspaceLayout.load(args.workspace)).transition(
+        args.job_id,
+        expected_state_id=request["expected_state_id"],
+        expected_state_digest=request["expected_state_digest"],
+        status=request["status"],
+        current_node=request["current_node"],
+        wait_reason=request.get("wait_reason"),
+        output_refs=request.get("output_refs", []),
+        retry_increment=request.get("retry_increment", 0),
+        recovery_action=request.get("recovery_action"),
+        actor=args.actor,
+    )
+    _write_job_mutation(result)
+    return 0
+
+
+def _job_cancel(args: argparse.Namespace) -> int:
+    request = _read_bounded_request(
+        args.request,
+        limit=PIPELINE_JOB_REQUEST_INPUT_LIMIT,
+        record_kind="pipeline-job-cancel-request",
+    )
+    _require_request_fields(
+        request,
+        required={"expected_state_id", "expected_state_digest"},
+        optional=set(),
+        record_kind="pipeline-job-cancel-request",
+    )
+    result = PipelineJobService(WorkspaceLayout.load(args.workspace)).cancel(
+        args.job_id,
+        expected_state_id=request["expected_state_id"],
+        expected_state_digest=request["expected_state_digest"],
+        actor=args.actor,
+    )
+    _write_job_mutation(result)
+    return 0
+
+
+def _job_recover(args: argparse.Namespace) -> int:
+    request = _read_bounded_request(
+        args.request,
+        limit=PIPELINE_JOB_REQUEST_INPUT_LIMIT,
+        record_kind="pipeline-job-recover-request",
+    )
+    _require_request_fields(
+        request,
+        required={"expected_state_id", "expected_state_digest", "recovery_action"},
+        optional=set(),
+        record_kind="pipeline-job-recover-request",
+    )
+    result = PipelineJobService(WorkspaceLayout.load(args.workspace)).recover(
+        args.job_id,
+        expected_state_id=request["expected_state_id"],
+        expected_state_digest=request["expected_state_digest"],
+        recovery_action=request["recovery_action"],
+        actor=args.actor,
+    )
+    _write_job_mutation(result)
+    return 0
+
+
+def _write_job_mutation(result: Any) -> None:
+    _write_json_once(
+        {
+            "status": "success",
+            "result": "updated" if result.transaction is not None else "no_change",
+            "state": result.state,
+            "persistent_writes": 1 if result.transaction is not None else 0,
+            "event_id": result.transaction.event_id if result.transaction is not None else None,
+        }
+    )
+
+
+def _read_bounded_request(path: Path, *, limit: int, record_kind: str) -> dict[str, Any]:
+    stream = sys.stdin.buffer if path == Path("-") else path.open("rb")
+    try:
+        return read_bounded_json_object(stream, limit=limit, record_kind=record_kind)
+    finally:
+        if path != Path("-"):
+            stream.close()
+
+
+def _require_request_fields(
+    request: dict[str, Any],
+    *,
+    required: set[str],
+    optional: set[str],
+    record_kind: str,
+) -> None:
+    fields = set(request)
+    if not required <= fields or not fields <= required | optional:
+        raise ResearchKBError(
+            Diagnostic(
+                SCHEMA_VALIDATION_FAILED,
+                record_kind,
+                None,
+                "",
+                "request fields do not match the interface contract",
+            )
+        )
 
 
 def _question_list(args: argparse.Namespace) -> int:
