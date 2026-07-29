@@ -1,0 +1,4 @@
+Synthetic primary source created from scratch for contract validation.
+The fabricated intervention increased the measured signal in the represented test.
+A matched fabricated control was used for the procedure.
+This content is synthetic_from_scratch.
