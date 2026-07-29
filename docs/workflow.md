@@ -170,3 +170,23 @@ configured option ID
 `status` reports `missing`, `current`, `stale`, `corrupt` or `incompatible`. Only `current` and explicitly labeled `stale` projections are queryable. Rebuild and update may write under the confined disposable App state root only. Session opening, status, search and detail create no workspace record, event, journal or canonical scientific write.
 
 Catalog snippets are search projections. A detail response is usable as current record data only when `current_record_status` is `current`; `changed` and `missing` require projection maintenance or upstream inspection. Parsed-page text remains available only through the existing explicit paper-scoped Parse read surface and is not a catalog fallback.
+
+Exact paper and Question filters may be combined with query text and item-kind filters. A cursor is valid only for the same normalized query, item kinds, paper ID, Question ID and ordering. App hosts may pass a successful rebuild/update result to `bind_projection_result` to avoid recomputing the workspace watermark; Core accepts it only when it matches the stored disposable projection.
+
+## P2-B Repository Benchmark Workflow
+
+P2-B benchmark commands run from a source checkout and are not production CLI commands:
+
+```text
+profile
+-> generate one absent external target
+-> inspect counts and digests
+-> build/update/query/detail measurement
+-> preserve a path-redacted receipt
+```
+
+Use `python -m benchmarks.p2_catalog_scale profile` for count-only inspection, `generate` for materialization, `inspect` for digest verification, `estimate` for pilot-based disk preflight and `measure` for Core observations. `generate-measure` additionally requires a matching passing preflight and rechecks current free space. Output receipts must be new files under an existing parent.
+
+`p2-small` is materialized through `WorkspaceBootstrapService` before use. The large `p2-pilot-v1` and `p2-r0-scale-v1` targets remain outside the repository. Measurements temporarily revise generated Registry rows, call the ordinary projection update, restore original payload bytes and report whether the projection was restored or intentionally left stale. Cleanup remains a separate destructive operation and is not part of these commands.
+
+The preliminary reference measurement is not a release acceptance result. Full build and selective query observations met provisional targets, while 1,000-record incremental projection and monolithic Registry detail did not. P2-E must fix and remeasure both before freezing the R0 Windows budget.

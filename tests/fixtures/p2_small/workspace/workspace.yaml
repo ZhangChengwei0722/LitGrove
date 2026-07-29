@@ -1,0 +1,14 @@
+contract_version: '1.0'
+workspace:
+  id: workspace_93e229ce-9dee-4ab6-a303-10236030a8f4
+  knowledge_root: ./knowledge
+  source_roots:
+  - root_id: synthetic-sources
+    path: ./sources
+    read_only_assets: true
+  local_inbox: ./inbox
+  domain_profile: ./domain-profile.yaml
+runtime:
+  path_serialization: workspace_relative_posix
+  default_encoding: utf-8
+  line_ending: lf

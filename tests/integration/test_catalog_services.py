@@ -148,6 +148,26 @@ def test_projection_uses_authoritative_workspace_loader_and_validator(tmp_path: 
     ]
 
 
+def test_catalog_query_service_filters_related_paper_and_question_items(tmp_path: Path) -> None:
+    _, _, _, entries, projection = _projection(tmp_path)
+    projection.rebuild()
+    query = CatalogQueryService(projection)
+    paper_id = next(record["paper_id"] for kind, record in entries if kind == "paper-card")
+    question_id = next(
+        record["question_id"] for kind, record in entries if kind == "question-mapping"
+    )
+
+    paper_items = query.search(paper_id=paper_id, page_size=100)
+    question_items = query.search(question_id=question_id, page_size=100)
+
+    assert paper_items["paper_id"] == paper_id
+    assert paper_items["items"]
+    assert {item["paper_id"] for item in paper_items["items"]} == {paper_id}
+    assert question_items["question_id"] == question_id
+    assert question_items["items"]
+    assert {item["question_id"] for item in question_items["items"]} == {question_id}
+
+
 def test_projection_status_classifies_missing_corrupt_and_incompatible_workspace(
     tmp_path: Path,
 ) -> None:
@@ -208,6 +228,21 @@ def test_query_requires_a_queryable_projection_and_current_detail_id(tmp_path: P
     assert absent.value.diagnostic.code == "RKBC-005"
 
 
+def test_query_binds_only_a_projection_result_matching_stored_metadata(tmp_path: Path) -> None:
+    _, _, _, _, projection = _projection(tmp_path)
+    built = projection.rebuild()
+    query = CatalogQueryService(projection)
+
+    status = query.bind_projection_result(built)
+    mismatched = {**built, "source_watermark": "0" * 64}
+    with pytest.raises(ResearchKBError) as rejected:
+        query.bind_projection_result(mismatched)
+
+    assert status["projection_state"] == "current"
+    assert query.search(page_size=1)["items"]
+    assert rejected.value.diagnostic.code == "RKBC-036"
+
+
 def test_catalog_services_are_public_and_capability_is_machine_readable() -> None:
     from research_kb import services
 
@@ -227,4 +262,5 @@ def test_catalog_services_are_public_and_capability_is_machine_readable() -> Non
     )
     assert capability["projection_storage"] == "disposable_sqlite_fts"
     assert capability["raw_parsed_text_indexed"] is False
+    assert capability["query_filters"] == ["item_kinds", "paper_id", "question_id"]
     assert capability["unregistered_record_kinds"] == ["future-kind"]

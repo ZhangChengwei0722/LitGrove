@@ -13,6 +13,10 @@ from research_kb.errors import ResearchKBError
 
 
 WORKSPACE_ID = "workspace_a1111111-1111-4111-8111-111111111111"
+PAPER_A = "paper_a1111111-1111-4111-8111-111111111111"
+PAPER_B = "paper_b2222222-2222-4222-8222-222222222222"
+QUESTION_A = "question_a1111111-1111-4111-8111-111111111111"
+QUESTION_B = "question_b2222222-2222-4222-8222-222222222222"
 
 
 def _snapshot(
@@ -72,6 +76,62 @@ def _snapshot(
 
 def _all_items(path: Path) -> list[dict]:
     return CatalogDatabase.query(path, page_size=100)["items"]
+
+
+def _filter_snapshot() -> CatalogSnapshot:
+    source_records: list[CatalogSourceRecord] = []
+    documents: list[CatalogDocument] = []
+    values = (
+        ("paper-a", "Alpha one", PAPER_A, QUESTION_A),
+        ("paper-b", "Alpha two", PAPER_A, QUESTION_B),
+        ("paper-c", "Beta one", PAPER_B, QUESTION_A),
+        ("paper-d", "Beta two", PAPER_B, QUESTION_B),
+    )
+    for record_id, title, paper_id, question_id in values:
+        source_key = f"registry-paper:{record_id}"
+        digest = canonical_digest({"record_id": record_id, "title": title})
+        source_records.append(
+            CatalogSourceRecord(source_key, "registry-paper", record_id, digest, "1.0")
+        )
+        documents.append(
+            CatalogDocument(
+                item_id="catalog_" + canonical_digest(source_key)[:32],
+                item_kind="paper",
+                authority_layer="canonical",
+                source_key=source_key,
+                record_kind="registry-paper",
+                record_id=record_id,
+                child_id=None,
+                paper_id=paper_id,
+                question_id=question_id,
+                title=title,
+                summary="Synthetic filter summary",
+                status_labels=("review:ai_checked",),
+                search_text=f"{title} fabricated-filter",
+                sort_key=title.casefold(),
+                source_record_digest=digest,
+                adapter_version="1.0",
+            )
+        )
+    source_records.sort(key=lambda item: item.source_key)
+    documents.sort(key=lambda item: (item.sort_key, item.item_kind, item.item_id))
+    watermark = canonical_digest(
+        {
+            "registry_version": "1.0",
+            "sources": [
+                [item.source_key, item.source_record_digest, item.adapter_version]
+                for item in source_records
+            ],
+        }
+    )
+    return CatalogSnapshot(
+        WORKSPACE_ID,
+        "1.0",
+        watermark,
+        tuple(source_records),
+        tuple(documents),
+        (),
+    )
 
 
 def test_incremental_add_change_remove_matches_full_rebuild_without_fts_orphans(
@@ -220,3 +280,70 @@ def test_cursor_rejects_missing_position_malformed_value_and_oversized_page(tmp_
     assert {error.value.diagnostic.code for error in (missing, malformed, oversized)} == {
         "RKBC-037"
     }
+
+
+def test_exact_paper_and_question_filters_combine_with_search_and_pagination(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "catalog.sqlite3"
+    CatalogDatabase.build(path, _filter_snapshot(), build_mode="full")
+
+    paper_page = CatalogDatabase.query(path, paper_id=PAPER_A, page_size=1)
+    combined = CatalogDatabase.query(
+        path,
+        query="Alpha",
+        paper_id=PAPER_A,
+        question_id=QUESTION_B,
+    )
+    no_match = CatalogDatabase.query(path, paper_id=PAPER_A, question_id=QUESTION_A, query="Beta")
+
+    assert paper_page["paper_id"] == PAPER_A
+    assert paper_page["items"][0]["paper_id"] == PAPER_A
+    assert paper_page["has_more"] is True
+    second_page = CatalogDatabase.query(
+        path,
+        paper_id=PAPER_A,
+        page_size=1,
+        cursor=paper_page["next_cursor"],
+    )
+    assert [item["title"] for item in paper_page["items"] + second_page["items"]] == [
+        "Alpha one",
+        "Alpha two",
+    ]
+    assert combined["paper_id"] == PAPER_A
+    assert combined["question_id"] == QUESTION_B
+    assert [item["title"] for item in combined["items"]] == ["Alpha two"]
+    assert no_match["items"] == []
+    assert "paper_id" not in CatalogDatabase.query(path)
+    assert "question_id" not in CatalogDatabase.query(path)
+
+
+def test_filter_ids_and_cursor_query_identity_fail_closed(tmp_path: Path) -> None:
+    path = tmp_path / "catalog.sqlite3"
+    CatalogDatabase.build(path, _filter_snapshot(), build_mode="full")
+    first_page = CatalogDatabase.query(path, paper_id=PAPER_A, page_size=1)
+
+    with pytest.raises(ResearchKBError) as paper_cursor_mismatch:
+        CatalogDatabase.query(
+            path,
+            paper_id=PAPER_B,
+            page_size=1,
+            cursor=first_page["next_cursor"],
+        )
+    with pytest.raises(ResearchKBError) as question_cursor_mismatch:
+        CatalogDatabase.query(
+            path,
+            paper_id=PAPER_A,
+            question_id=QUESTION_A,
+            page_size=1,
+            cursor=first_page["next_cursor"],
+        )
+    with pytest.raises(ResearchKBError) as malformed_paper:
+        CatalogDatabase.query(path, paper_id="paper-not-valid")
+    with pytest.raises(ResearchKBError) as malformed_question:
+        CatalogDatabase.query(path, question_id="question-not-valid")
+
+    assert paper_cursor_mismatch.value.diagnostic.code == "RKBC-037"
+    assert question_cursor_mismatch.value.diagnostic.code == "RKBC-037"
+    assert malformed_paper.value.diagnostic.code == "RKBC-002"
+    assert malformed_question.value.diagnostic.code == "RKBC-002"

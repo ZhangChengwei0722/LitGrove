@@ -10,6 +10,7 @@ from typing import Any
 
 from research_kb.catalog.models import CATALOG_CONTRACT_VERSION, CatalogDocument, CatalogSnapshot, canonical_digest
 from research_kb.errors import Diagnostic, ResearchKBError
+from research_kb.identifiers import Namespace, validate_id
 
 
 CATALOG_PROJECTION_ERROR = "RKBC-036"
@@ -139,6 +140,8 @@ class CatalogDatabase:
         *,
         query: str = "",
         item_kinds: tuple[str, ...] = (),
+        paper_id: str | None = None,
+        question_id: str | None = None,
         page_size: int = DEFAULT_PAGE_SIZE,
         cursor: str | None = None,
     ) -> dict[str, Any]:
@@ -148,10 +151,16 @@ class CatalogDatabase:
         if page_size < 1 or page_size > MAX_PAGE_SIZE:
             raise _cursor_error("catalog page size is outside the supported range")
         normalized_kinds = tuple(sorted(set(item_kinds)))
+        if paper_id is not None:
+            validate_id(paper_id, Namespace.PAPER)
+        if question_id is not None:
+            validate_id(question_id, Namespace.QUESTION)
         query_key = canonical_digest(
             {
                 "query": normalized_query,
                 "item_kinds": normalized_kinds,
+                "paper_id": paper_id,
+                "question_id": question_id,
                 "order": "sort_key,item_kind,item_id",
             }
         )
@@ -175,6 +184,12 @@ class CatalogDatabase:
                 placeholders = ",".join("?" for _ in normalized_kinds)
                 sql += f" AND item_kind IN ({placeholders})"
                 parameters.extend(normalized_kinds)
+            if paper_id is not None:
+                sql += " AND paper_id = ?"
+                parameters.append(paper_id)
+            if question_id is not None:
+                sql += " AND question_id = ?"
+                parameters.append(question_id)
             if after is not None:
                 sql += """
                     AND (
@@ -198,7 +213,7 @@ class CatalogDatabase:
                     query_key,
                     (last["sort_key"], last["item_kind"], last["item_id"]),
                 )
-            return {
+            result = {
                 "status": "success",
                 "query": normalized_query,
                 "item_kinds": list(normalized_kinds),
@@ -207,6 +222,11 @@ class CatalogDatabase:
                 "next_cursor": next_cursor,
                 "has_more": has_more,
             }
+            if paper_id is not None:
+                result["paper_id"] = paper_id
+            if question_id is not None:
+                result["question_id"] = question_id
+            return result
         except sqlite3.DatabaseError as error:
             raise _projection_error("catalog query failed") from error
         finally:

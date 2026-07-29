@@ -1,0 +1,30 @@
+contract_version: '1.0'
+domain_profile:
+  id: synthetic-p2-catalog
+  name: Synthetic P2 Catalog Studies
+  version: '1.0'
+paper_card_sections:
+- section_id: research_background_significance
+  label: Research Background Significance
+- section_id: research_problem
+  label: Research Problem
+- section_id: method_principle_advantages
+  label: Method Principle Advantages
+- section_id: conclusions_applications
+  label: Conclusions Applications
+- section_id: innovation
+  label: Innovation
+- section_id: limitations
+  label: Limitations
+- section_id: future_outlook
+  label: Future Outlook
+evidence_axes:
+- input
+- process
+- outcome
+question_types:
+- mechanism
+- comparison
+terminology:
+  sample: synthetic catalog case
+step7_extensions: {}

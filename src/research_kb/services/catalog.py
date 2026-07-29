@@ -16,6 +16,7 @@ from research_kb.bundle import BundleEntry, load_workspace_entries, validate_wor
 from research_kb.catalog import CATALOG_CONTRACT_VERSION, CatalogAdapterRegistry, CatalogDatabase, CatalogSnapshot
 from research_kb.catalog.models import canonical_digest
 from research_kb.catalog.storage import CATALOG_PROJECTION_ERROR
+from research_kb.contracts.validator import validate_record
 from research_kb.errors import (
     PATH_ESCAPE,
     SCHEMA_VALIDATION_FAILED,
@@ -23,7 +24,13 @@ from research_kb.errors import (
     Diagnostic,
     ResearchKBError,
 )
-from research_kb.storage.json_io import atomic_write_bytes, ensure_private_directory, read_json_document, serialize_json
+from research_kb.storage.json_io import (
+    atomic_write_bytes,
+    ensure_private_directory,
+    read_json_document,
+    read_jsonl,
+    serialize_json,
+)
 from research_kb.services.workspace_session import WorkspaceSession
 
 
@@ -58,6 +65,7 @@ class CatalogProjectionService:
         self.registry = registry or CatalogAdapterRegistry()
         self.entry_loader = entry_loader
         self.entry_validator = entry_validator
+        self._uses_workspace_loader = entry_loader is load_workspace_entries
         self.paths = _catalog_paths(session, Path(state_root))
 
     def rebuild(self) -> dict[str, Any]:
@@ -135,11 +143,37 @@ class CatalogQueryService:
         self._status = self.projection.status()
         return dict(self._status)
 
+    def bind_projection_result(self, result: dict[str, Any]) -> dict[str, Any]:
+        inspection = CatalogDatabase.inspect(self.projection.paths.database_path)
+        if (
+            result.get("status") != "success"
+            or result.get("workspace_id") != self.projection.session.workspace_id
+            or inspection.state != "ready"
+            or inspection.metadata.get("workspace_id") != result.get("workspace_id")
+            or inspection.metadata.get("source_watermark") != result.get("source_watermark")
+            or inspection.item_count != result.get("item_count")
+            or inspection.metadata.get("unknown_record_kinds", [])
+            != result.get("unknown_record_kinds", [])
+        ):
+            raise _projection_error("catalog projection result does not match stored state")
+        self._status = {
+            "status": "success",
+            "projection_state": "current",
+            "workspace_id": self.projection.session.workspace_id,
+            "item_count": inspection.item_count,
+            "source_watermark": result["source_watermark"],
+            "current_source_watermark": result["source_watermark"],
+            "unknown_record_kinds": result.get("unknown_record_kinds", []),
+        }
+        return dict(self._status)
+
     def search(
         self,
         *,
         query: str = "",
         item_kinds: Iterable[str] = (),
+        paper_id: str | None = None,
+        question_id: str | None = None,
         page_size: int = 20,
         cursor: str | None = None,
     ) -> dict[str, Any]:
@@ -150,6 +184,8 @@ class CatalogQueryService:
             self.projection.paths.database_path,
             query=query,
             item_kinds=tuple(item_kinds),
+            paper_id=paper_id,
+            question_id=question_id,
             page_size=page_size,
             cursor=cursor,
         )
@@ -182,17 +218,27 @@ class CatalogQueryService:
                     "catalog item does not exist",
                 )
             )
-        entries = self.projection.entry_loader(self.projection.session._layout)
-        self.projection.entry_validator(entries)
         adapter = self.projection.registry.find_adapter(row["record_kind"])
-        record = next(
-            (
-                record
-                for kind, record in entries
-                if kind == row["record_kind"] and adapter.record_id(record) == row["record_id"]
-            ),
-            None,
-        )
+        if self.projection._uses_workspace_loader:
+            record = _load_exact_workspace_record(self.projection.session._layout, row)
+            if record is not None:
+                diagnostics = validate_record(row["record_kind"], record, actor="stored")
+                if diagnostics:
+                    raise ResearchKBError(diagnostics[0])
+                if adapter.record_id(record) != row["record_id"]:
+                    record = None
+        else:
+            entries = self.projection.entry_loader(self.projection.session._layout)
+            self.projection.entry_validator(entries)
+            record = next(
+                (
+                    record
+                    for kind, record in entries
+                    if kind == row["record_kind"]
+                    and adapter.record_id(record) == row["record_id"]
+                ),
+                None,
+            )
         current_digest = None if record is None else canonical_digest(record)
         detail = None
         current_record_status = "missing"
@@ -225,8 +271,62 @@ class CatalogCapabilityService:
             "projection_storage": "disposable_sqlite_fts",
             "raw_parsed_text_indexed": False,
             "max_page_size": 100,
+            "query_filters": ["item_kinds", "paper_id", "question_id"],
             **self.registry.capability(record_kinds),
         }
+
+
+def _load_exact_workspace_record(layout, row: dict[str, Any]) -> dict[str, Any] | None:
+    kind = row["record_kind"]
+    paper_id = row["paper_id"]
+    if kind == "registry-paper":
+        return _find_jsonl_record(layout.registry_path, "paper_id", row["record_id"])
+    if kind == "paper-card" and paper_id is not None:
+        return _read_bound_json(layout.paper_card_path(paper_id), "paper_id", paper_id)
+    if kind == "evidence" and paper_id is not None:
+        return _find_jsonl_record(layout.evidence_path(paper_id), "evidence_id", row["record_id"])
+    if kind == "review-memory" and paper_id is not None:
+        return _read_bound_json(
+            layout.review_memory_path(paper_id),
+            "review_memory_id",
+            row["record_id"],
+        )
+    if kind == "question-mapping":
+        return _find_jsonl_record(layout.question_mappings_path, "question_id", row["record_id"])
+    if kind in {
+        "step7-synthesis",
+        "step7-review-angle",
+        "step7-insight",
+        "step7-cross-view",
+    }:
+        return _find_jsonl_record(layout.step7_store_path(kind), "candidate_id", row["record_id"])
+    if kind == "process-event":
+        return _find_jsonl_record(layout.process_events_path, "event_id", row["record_id"])
+    if kind == "guardian-report":
+        return _find_jsonl_record(
+            layout.guardian_reports_path,
+            "guardian_report_id",
+            row["record_id"],
+        )
+    return None
+
+
+def _read_bound_json(path: Path, id_field: str, expected_id: str) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    record = read_json_document(path, record_kind="catalog-detail")
+    return record if record.get(id_field) == expected_id else None
+
+
+def _find_jsonl_record(path: Path, id_field: str, expected_id: str) -> dict[str, Any] | None:
+    return next(
+        (
+            record
+            for record in read_jsonl(path, record_kind="catalog-detail", id_field=id_field)
+            if record.get(id_field) == expected_id
+        ),
+        None,
+    )
 
 
 def _catalog_paths(session: WorkspaceSession, state_root: Path) -> CatalogPaths:

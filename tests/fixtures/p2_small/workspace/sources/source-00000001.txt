@@ -1,0 +1,2 @@
+Synthetic primary catalog record 00000001.
+The fabricated intervention produced response token 00000001.
