@@ -4,7 +4,7 @@ Cross-platform, local-first contracts and deterministic CLI primitives for evide
 
 ## Current Scope
 
-Milestone 1B through the M3D-1 repository slice provide:
+Milestone 1B through the P3-A repository slice provide:
 
 - versioned workspace, domain, record, and candidate schemas;
 - portable source references and stable IDs;
@@ -43,6 +43,8 @@ Milestone 1B through the M3D-1 repository slice provide:
 - a read-only acquired-candidate intake projection and Portable Skill continuation into the existing primary/review workflow through Guardian.
 - a bounded, stdout-only DOCX/PDF manuscript projection with source fingerprints, stable paragraph/page locators and explicit coverage limits.
 - a Portable Skill-only explicit-criteria manuscript audit route over transient projection and existing knowledge reads, with scope-limited findings and zero persistence.
+- an append-only Pipeline Job operational kernel with stable Job/state IDs, predecessor-digest chains, compare-and-swap transitions, cooperative cancellation, recovery states, and immutable terminal receipts;
+- optional Job correlation on process events and transaction journals, current-head Catalog projection, and auditable Guardian finding dispositions without rewriting Guardian reports.
 
 The installed CLI contains no private adapter and performs no adapter or connector discovery. The CLI never calls an LLM or makes scientific judgments. M3D-1 audit semantics remain Agent-owned in the Portable Skill; Core still only projects manuscripts and exposes existing reads. OCR, manuscript rewriting, subtype-specific review runtime, persisted Markdown or additional derived views, Field Map integration, Review Unit Question Mapping, institutional/browser acquisition and migration remain later milestones.
 
@@ -116,13 +118,20 @@ research-kb question show --workspace <workspace.yaml> --question-id <question_i
 research-kb question render --workspace <workspace.yaml> --question-id <question_id>
 research-kb step7 context --workspace <workspace.yaml> --question-id <question_id>
 research-kb step7 render --workspace <workspace.yaml> --question-id <question_id>
+research-kb job create --workspace <workspace.yaml> --request <request.json> --actor user
+research-kb job list --workspace <workspace.yaml> [--page-size <1-100>] [--cursor <job_id>]
+research-kb job show --workspace <workspace.yaml> --job-id <job_id>
+research-kb job transition --workspace <workspace.yaml> --job-id <job_id> --request <request.json> --actor <cli|user>
+research-kb job cancel --workspace <workspace.yaml> --job-id <job_id> --request <request.json> --actor <cli|user>
+research-kb job recover --workspace <workspace.yaml> --job-id <job_id> --request <request.json> --actor <cli|user>
 research-kb guardian check --workspace <workspace.yaml> [--write-report]
+research-kb guardian disposition --workspace <workspace.yaml> --request <request.json> --actor <cli|user>
 research-kb transaction recover --workspace <workspace.yaml> [--dry-run]
 ```
 
 Existing source assets remain immutable. The only source-write exception is exact-user-authority `discovery acquire`, which may create one previously absent PDF under the configured `local_inbox`. Canonical writes stay under `knowledge_root` and emit a process event only after a validated atomic replacement.
 
-`capability show`, `discovery search`, `discovery list`, `discovery show`, `discovery resolve`, `intake inspect`, `intake inspect-acquired`, `manuscript inspect`, `parse show`, `paper status`, `paper context`, `review context`, and `step7 context` emit bounded JSON and write no workspace state. Capability output distinguishes installed adapters and built-in connectors without calling the network. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
+`capability show`, `discovery search`, `discovery list`, `discovery show`, `discovery resolve`, `intake inspect`, `intake inspect-acquired`, `manuscript inspect`, `parse show`, `paper status`, `paper context`, `review context`, `step7 context`, `job list`, and `job show` emit bounded JSON and write no workspace state. Capability output distinguishes installed adapters and built-in connectors without calling the network. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
 
 `discovery search` accepts an explicit date range, field-bound keywords, preprint choice and maximum of 1-15 results. It calls only the built-in fixed Europe PMC HTTPS endpoint, reapplies filters locally, merges exact DOI identity and marks possible title duplicates without merging them. It creates no workspace, candidate, event, report file or downloaded source. Public provider state is mutable; identical requests and provider page payloads produce identical normalized bytes.
 
@@ -137,6 +146,8 @@ Existing source assets remain immutable. The only source-write exception is exac
 `intake inspect-acquired` accepts one acquired discovery candidate ID, verifies its receipt against the exact current inbox PDF, and emits the same intake projection plus deterministic Registry bibliography input. It writes nothing and performs no provider request. A separately requested Skill route may pass that projection to the existing `registry add`; acquisition alone still stops before Registry. Unless that later task explicitly requests `registry_only`, the returned paper ID resumes the same status, Parse and mutually exclusive primary/review workflow used by local-path intake.
 
 `manuscript inspect` accepts one exact absolute `.docx` or `.pdf` path under exactly one declared source root. It fingerprints the source before and after bounded extraction, returns stable paragraph or page units plus parser identity and coverage limits, and writes nothing. DOCX uses a standard-library OOXML reader; PDF uses the installed `pdfplumber` policy. The output is private task context, not Registry, Evidence, a claim map or an audit result.
+
+Pipeline Job creation requires an explicit user authority snapshot. Each transition appends one immutable state revision with predecessor ID/digest and expected-head compare-and-swap; exact reruns are zero-write, stale callers fail closed, and terminal revisions cannot have successors. `job list` exposes only bounded current-head summaries, while `job show` returns one complete history. `waiting_agent` remains reserved until the later Agent Task phase. Guardian dispositions append separately to the referenced immutable report finding; they never edit the report or certify scientific truth.
 
 The Portable Skill's separate `manuscript_audit` mode requires criteria and exact current-task question/paper selectors before inspection. It preserves the requested dimensions, limits every finding to the reported local corpus, expands exact factual support from Card Units to canonical Evidence and returns only a private report with `persistent_writes: 0`. It creates no Core audit command, stored claim map, finding record or rewritten manuscript.
 

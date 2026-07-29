@@ -173,6 +173,26 @@ Catalog snippets are search projections. A detail response is usable as current 
 
 Exact paper and Question filters may be combined with query text and item-kind filters. A cursor is valid only for the same normalized query, item kinds, paper ID, Question ID and ordering. App hosts may pass a successful rebuild/update result to `bind_projection_result` to avoid recomputing the workspace watermark; Core accepts it only when it matches the stored disposable projection.
 
+## P3-A Pipeline Job Workflow
+
+P3-A exposes deterministic operational state without orchestrating source intake yet:
+
+```text
+explicit user authority snapshot
+-> create Job revision 1
+-> append CAS-guarded running/wait/recovery revisions
+-> correlate downstream events and journals when a Job exists
+-> append one terminal revision as the immutable receipt
+-> project only the current head for bounded lists
+```
+
+Exact transition reruns produce no write. A changed expected state or digest fails closed;
+cancellation preserves prior committed outputs, and recovery appends a new revision rather
+than rewriting history. `waiting_agent` is unavailable until Agent Task support exists.
+Guardian finding dispositions are separate records that reference an immutable report
+and finding digest. They preserve diagnostic history and cannot turn a finding into a
+scientific verification.
+
 ## P2-B Repository Benchmark Workflow
 
 P2-B benchmark commands run from a source checkout and are not production CLI commands:

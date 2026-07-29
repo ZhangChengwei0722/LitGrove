@@ -405,3 +405,32 @@ CLI or future host
 The CLI owns only argument parsing, bounded stdin/file decoding, JSON/byte output, diagnostic redaction and process exit projection. Workspace-aware render services load and validate structured entries before invoking the existing pure renderers. The named Parse registry contains only explicit factories and never auto-detects, substitutes or falls back.
 
 P1 changes no public CLI arguments or payloads, schema, layout, source-write authority or scientific semantics. It creates no App, Pipeline Job, Source Adequacy or Agent Task runtime.
+
+## P3-A Pipeline Job Operational Kernel
+
+P3-A adds two optional append-only operational stores without changing layout contract
+`m3c-2a`:
+
+```text
+process/jobs.jsonl
+guardian/finding_dispositions.jsonl
+```
+
+One Pipeline Job has a stable Job ID and an immutable chain of state revisions. Revision
+one is `created`; every successor binds the predecessor state ID and canonical digest,
+retains authority and input identity, and uses expected-state compare-and-swap inside the
+workspace transaction lock. A terminal revision is the receipt and cannot have a
+successor. Current state is a projection of the highest valid revision, not a second
+mutable record.
+
+Process events and transaction journals may carry a Core-owned `job_id` correlation.
+Existing records without that field remain valid. A failed create may retain correlation
+for diagnosis without inventing a canonical Job state. Guardian validates revision-chain
+continuity, terminal/event agreement and unresolved recovery. Finding disposition is a
+separate append-only decision chain bound to an immutable report finding digest; it never
+rewrites the report.
+
+P3-A adds no source asset, intake, Source Adequacy or Agent Task runtime. `waiting_agent`
+is therefore schema-readable for forward compatibility but rejected by the current Job
+service. Existing workspaces remain valid until a Job or disposition operation creates
+its own absent optional store transactionally.
