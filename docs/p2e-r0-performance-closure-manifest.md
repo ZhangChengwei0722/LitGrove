@@ -37,7 +37,7 @@ process events and every other indexed store changed by one transaction.
 | restart inspect-only bind p95 | `3.609 s` | recorded observation |
 
 The 750,000-item, 640,000-source-record synthetic workspace returned to its original
-payload digest after each mutation-based measurement. No private workspace, Q001,
+payload digest after each mutation-based measurement. No protected private workspace,
 source PDF or canonical scientific write was accessed.
 
 ## Validation
