@@ -19,6 +19,14 @@ class CatalogSourceRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class CatalogSourceLocator:
+    source_key: str
+    store_key: str
+    byte_offset: int
+    byte_length: int
+
+
+@dataclass(frozen=True, slots=True)
 class CatalogDocument:
     item_id: str
     item_kind: str
@@ -62,6 +70,7 @@ __all__ = [
     "CATALOG_CONTRACT_VERSION",
     "CatalogDocument",
     "CatalogSnapshot",
+    "CatalogSourceLocator",
     "CatalogSourceRecord",
     "canonical_digest",
 ]

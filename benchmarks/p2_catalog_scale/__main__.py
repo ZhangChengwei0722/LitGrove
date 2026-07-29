@@ -15,7 +15,10 @@ from benchmarks.p2_catalog_scale.generator import (
 )
 from benchmarks.p2_catalog_scale.measurement import (
     estimate_reference_workload,
+    measure_catalog_reads,
     measure_core_catalog,
+    measure_projection_rebuild,
+    measure_registry_delta,
 )
 from benchmarks.p2_catalog_scale.profiles import profile_by_id
 from research_kb.errors import ResearchKBError
@@ -69,6 +72,54 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "profile_id": receipt["profile_id"],
                 "catalog_item_count": receipt["catalog_item_count"],
                 "payload_restored": receipt["payload_restored"],
+                "receipt_written": args.output is not None,
+                "receipt": receipt if args.output is None else None,
+            }
+        elif args.command == "measure-registry-delta":
+            receipt = measure_registry_delta(
+                Path(args.target),
+                repetitions=args.repetitions,
+                incremental_change_count=args.incremental_change_count,
+            )
+            if args.output is not None:
+                _write_absent_output(parser, Path(args.output), receipt)
+            result = {
+                "status": "success",
+                "profile_id": receipt["profile_id"],
+                "payload_restored": receipt["payload_restored"],
+                "projection_registry_restored": receipt["projection_registry_restored"],
+                "receipt_written": args.output is not None,
+                "receipt": receipt if args.output is None else None,
+            }
+        elif args.command == "measure-projection-rebuild":
+            receipt = measure_projection_rebuild(
+                Path(args.target),
+                repetitions=args.repetitions,
+                warm_up_runs=args.warm_up_runs,
+            )
+            if args.output is not None:
+                _write_absent_output(parser, Path(args.output), receipt)
+            result = {
+                "status": "success",
+                "profile_id": receipt["profile_id"],
+                "payload_restored": receipt["payload_restored"],
+                "receipt_written": args.output is not None,
+                "receipt": receipt if args.output is None else None,
+            }
+        elif args.command == "measure-catalog-reads":
+            receipt = measure_catalog_reads(
+                Path(args.target),
+                repetitions=args.repetitions,
+            )
+            if args.output is not None:
+                _write_absent_output(parser, Path(args.output), receipt)
+            result = {
+                "status": "success",
+                "profile_id": receipt["profile_id"],
+                "payload_restored": receipt["payload_restored"],
+                "current_record_status": receipt["registry_detail"][
+                    "current_record_status"
+                ],
                 "receipt_written": args.output is not None,
                 "receipt": receipt if args.output is None else None,
             }
@@ -175,6 +226,32 @@ def _parser() -> argparse.ArgumentParser:
     measure.add_argument("--warm-up-runs", type=int, default=1)
     measure.add_argument("--leave-stale-projection", action="store_true")
     measure.add_argument("--output")
+
+    delta = commands.add_parser(
+        "measure-registry-delta",
+        help="measure the benchmark-only Registry delta against an existing projection",
+    )
+    delta.add_argument("--target", required=True)
+    delta.add_argument("--repetitions", type=int, default=5)
+    delta.add_argument("--incremental-change-count", type=int, default=1_000)
+    delta.add_argument("--output")
+
+    rebuild = commands.add_parser(
+        "measure-projection-rebuild",
+        help="measure projection rebuild without query or cursor workloads",
+    )
+    rebuild.add_argument("--target", required=True)
+    rebuild.add_argument("--repetitions", type=int, default=1)
+    rebuild.add_argument("--warm-up-runs", type=int, default=0)
+    rebuild.add_argument("--output")
+
+    reads = commands.add_parser(
+        "measure-catalog-reads",
+        help="measure restart binding, selective FTS and authoritative detail",
+    )
+    reads.add_argument("--target", required=True)
+    reads.add_argument("--repetitions", type=int, default=20)
+    reads.add_argument("--output")
 
     combined = commands.add_parser(
         "generate-measure",

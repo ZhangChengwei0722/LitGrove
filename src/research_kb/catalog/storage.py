@@ -6,16 +6,24 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
+from collections.abc import Mapping
 from typing import Any
 
-from research_kb.catalog.models import CATALOG_CONTRACT_VERSION, CatalogDocument, CatalogSnapshot, canonical_digest
+from research_kb.catalog.models import (
+    CATALOG_CONTRACT_VERSION,
+    CatalogDocument,
+    CatalogSnapshot,
+    CatalogSourceLocator,
+    CatalogSourceRecord,
+    canonical_digest,
+)
 from research_kb.errors import Diagnostic, ResearchKBError
 from research_kb.identifiers import Namespace, validate_id
 
 
 CATALOG_PROJECTION_ERROR = "RKBC-036"
 CATALOG_CURSOR_INVALID = "RKBC-037"
-CATALOG_SCHEMA_VERSION = 1
+CATALOG_SCHEMA_VERSION = 2
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
 MAX_QUERY_CHARACTERS = 500
@@ -31,16 +39,35 @@ class CatalogInspection:
 
 class CatalogDatabase:
     @staticmethod
-    def build(path: Path, snapshot: CatalogSnapshot, *, build_mode: str) -> None:
+    def build(
+        path: Path,
+        snapshot: CatalogSnapshot,
+        *,
+        build_mode: str,
+        source_locators: tuple[CatalogSourceLocator, ...] = (),
+        source_store_digests: Mapping[str, str] | None = None,
+    ) -> None:
         connection = _connect(path)
         try:
             _create_schema(connection)
-            _replace_all(connection, snapshot, build_mode=build_mode)
+            _replace_all(
+                connection,
+                snapshot,
+                build_mode=build_mode,
+                source_locators=source_locators,
+                source_store_digests=source_store_digests or {},
+            )
         finally:
             connection.close()
 
     @staticmethod
-    def update(path: Path, snapshot: CatalogSnapshot) -> dict[str, int]:
+    def update(
+        path: Path,
+        snapshot: CatalogSnapshot,
+        *,
+        source_locators: tuple[CatalogSourceLocator, ...] = (),
+        source_store_digests: Mapping[str, str] | None = None,
+    ) -> dict[str, int]:
         inspection = CatalogDatabase.inspect(path)
         if inspection.state != "ready":
             raise _projection_error("catalog projection is not compatible with incremental update")
@@ -74,6 +101,7 @@ class CatalogDatabase:
             documents_by_source: dict[str, list[CatalogDocument]] = {}
             for document in snapshot.documents:
                 documents_by_source.setdefault(document.source_key, []).append(document)
+            locators = {item.source_key: item for item in source_locators}
 
             with connection:
                 _delete_source_items(connection, changed)
@@ -81,32 +109,146 @@ class CatalogDatabase:
                 changed_sources = [
                     item for item in snapshot.source_records if item.source_key in changed
                 ]
-                connection.executemany(
-                    """
-                    INSERT INTO source_records(
-                        source_key, record_kind, record_id, source_record_digest, adapter_version
-                    ) VALUES (?, ?, ?, ?, ?)
-                    """,
-                    [
-                        (
-                            item.source_key,
-                            item.record_kind,
-                            item.record_id,
-                            item.source_record_digest,
-                            item.adapter_version,
-                        )
-                        for item in changed_sources
-                    ],
+                _insert_source_records(connection, changed_sources, locators)
+                _update_source_locators(connection, locators)
+                changed_documents = [
+                    document
+                    for source_key in sorted(changed & set(new_sources))
+                    for document in documents_by_source.get(source_key, [])
+                ]
+                _insert_documents(connection, changed_documents)
+                _write_metadata(
+                    connection,
+                    snapshot,
+                    build_mode="incremental",
+                    source_store_digests=source_store_digests or {},
                 )
-                for source_key in sorted(changed & set(new_sources)):
-                    for document in documents_by_source.get(source_key, []):
-                        _insert_document(connection, document)
-                _write_metadata(connection, snapshot, build_mode="incremental")
                 _require_snapshot_counts(connection, snapshot)
             return {
                 "changed_source_count": len(changed),
                 "removed_source_count": len(removed),
                 "item_count": len(snapshot.documents),
+            }
+        finally:
+            connection.close()
+
+    @staticmethod
+    def update_registry_sources(
+        path: Path,
+        snapshot: CatalogSnapshot,
+        *,
+        source_locators: tuple[CatalogSourceLocator, ...],
+        registry_store_digest: str,
+        base_source_watermark: str,
+        before_registry_store_digest: str,
+    ) -> dict[str, Any]:
+        inspection = CatalogDatabase.inspect(path)
+        if inspection.state != "ready":
+            raise _projection_error("catalog projection is not compatible with Registry delta")
+        connection = _connect(path)
+        try:
+            metadata = _metadata(connection)
+            if metadata.get("workspace_id") != snapshot.workspace_id:
+                raise _projection_error("catalog projection workspace does not match Registry delta")
+            if metadata.get("adapter_registry_version") != snapshot.registry_version:
+                raise _projection_error("catalog adapter registry changed before Registry delta")
+            if metadata.get("source_watermark") != base_source_watermark:
+                raise _projection_error("catalog source watermark changed before Registry delta")
+            store_digests = _decode_store_digests(metadata)
+            if store_digests.get("registry") != before_registry_store_digest:
+                raise _projection_error("Registry store digest does not match the projected base")
+            if snapshot.unknown_record_kinds:
+                raise _projection_error("Registry delta cannot carry unknown record kinds")
+
+            old_sources = {
+                row["source_key"]: (row["source_record_digest"], row["adapter_version"])
+                for row in connection.execute(
+                    """
+                    SELECT source_key, source_record_digest, adapter_version
+                    FROM source_records WHERE record_kind = 'registry-paper'
+                    """
+                )
+            }
+            new_sources = {
+                item.source_key: (item.source_record_digest, item.adapter_version)
+                for item in snapshot.source_records
+            }
+            changed = {
+                key
+                for key in set(old_sources) | set(new_sources)
+                if old_sources.get(key) != new_sources.get(key)
+            }
+            removed = set(old_sources) - set(new_sources)
+            documents_by_source: dict[str, list[CatalogDocument]] = {}
+            for document in snapshot.documents:
+                documents_by_source.setdefault(document.source_key, []).append(document)
+            locators = {item.source_key: item for item in source_locators}
+            if set(locators) != set(new_sources):
+                raise _projection_error("Registry delta locators do not match Registry sources")
+
+            with connection:
+                _delete_source_items(connection, changed)
+                _delete_source_records(connection, changed)
+                changed_sources = [
+                    item for item in snapshot.source_records if item.source_key in changed
+                ]
+                _insert_source_records(connection, changed_sources, locators)
+                _update_source_locators(connection, locators)
+                changed_documents = [
+                    document
+                    for source_key in sorted(changed & set(new_sources))
+                    for document in documents_by_source.get(source_key, [])
+                ]
+                _insert_documents(connection, changed_documents)
+                source_watermark = _source_watermark(
+                    connection,
+                    registry_version=snapshot.registry_version,
+                    unknown=(),
+                )
+                store_digests["registry"] = registry_store_digest
+                counts = _actual_counts(connection)
+                _write_metadata_values(
+                    connection,
+                    workspace_id=snapshot.workspace_id,
+                    registry_version=snapshot.registry_version,
+                    source_watermark=source_watermark,
+                    build_mode="benchmark-registry-delta",
+                    source_record_count=counts["source_records"],
+                    item_count=counts["catalog_items"],
+                    unknown_record_kinds=(),
+                    source_store_digests=store_digests,
+                )
+                _require_counts(connection, counts)
+            return {
+                "status": "success",
+                "build_mode": "benchmark-registry-delta",
+                "workspace_id": snapshot.workspace_id,
+                "source_watermark": source_watermark,
+                "source_record_count": counts["source_records"],
+                "item_count": counts["catalog_items"],
+                "unknown_record_kinds": [],
+                "changed_source_count": len(changed),
+                "removed_source_count": len(removed),
+            }
+        finally:
+            connection.close()
+
+    @staticmethod
+    def source_index(path: Path, *, record_kind: str) -> dict[str, tuple[str, str]]:
+        connection = _connect(path, read_only=True)
+        try:
+            return {
+                row["source_key"]: (
+                    row["source_record_digest"],
+                    row["adapter_version"],
+                )
+                for row in connection.execute(
+                    """
+                    SELECT source_key, source_record_digest, adapter_version
+                    FROM source_records WHERE record_kind = ?
+                    """,
+                    (record_kind,),
+                )
             }
         finally:
             connection.close()
@@ -234,18 +376,39 @@ class CatalogDatabase:
 
     @staticmethod
     def detail_row(path: Path, item_id: str) -> dict[str, Any] | None:
+        binding = CatalogDatabase.detail_binding(path, item_id)
+        return None if binding is None else binding["item"]
+
+    @staticmethod
+    def detail_binding(path: Path, item_id: str) -> dict[str, Any] | None:
         connection = _connect(path, read_only=True)
         try:
             row = connection.execute(
                 """
-                SELECT item_id, item_kind, authority_layer, source_key, record_kind,
-                       record_id, child_id, paper_id, question_id, title, summary,
-                       status_labels, sort_key, source_record_digest, adapter_version
-                FROM catalog_items WHERE item_id = ?
+                SELECT i.item_id, i.item_kind, i.authority_layer, i.source_key,
+                       i.record_kind, i.record_id, i.child_id, i.paper_id,
+                       i.question_id, i.title, i.summary, i.status_labels, i.sort_key,
+                       i.source_record_digest, i.adapter_version, s.store_key,
+                       s.byte_offset, s.byte_length
+                FROM catalog_items AS i
+                JOIN source_records AS s ON s.source_key = i.source_key
+                WHERE i.item_id = ?
                 """,
                 (item_id,),
             ).fetchone()
-            return None if row is None else _row_to_item(row, include_source=True)
+            if row is None:
+                return None
+            locator = None
+            if row["store_key"] is not None:
+                locator = {
+                    "store_key": row["store_key"],
+                    "byte_offset": row["byte_offset"],
+                    "byte_length": row["byte_length"],
+                }
+            return {
+                "item": _row_to_item(row, include_source=True),
+                "locator": locator,
+            }
         finally:
             connection.close()
 
@@ -266,7 +429,7 @@ def _connect(path: Path, *, read_only: bool = False) -> sqlite3.Connection:
 def _create_schema(connection: sqlite3.Connection) -> None:
     connection.executescript(
         """
-        PRAGMA user_version = 1;
+        PRAGMA user_version = 2;
         CREATE TABLE catalog_metadata (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
@@ -276,7 +439,10 @@ def _create_schema(connection: sqlite3.Connection) -> None:
             record_kind TEXT NOT NULL,
             record_id TEXT NOT NULL,
             source_record_digest TEXT NOT NULL,
-            adapter_version TEXT NOT NULL
+            adapter_version TEXT NOT NULL,
+            store_key TEXT,
+            byte_offset INTEGER,
+            byte_length INTEGER
         );
         CREATE TABLE catalog_items (
             item_id TEXT PRIMARY KEY,
@@ -312,33 +478,77 @@ def _create_schema(connection: sqlite3.Connection) -> None:
     )
 
 
-def _replace_all(connection: sqlite3.Connection, snapshot: CatalogSnapshot, *, build_mode: str) -> None:
+def _replace_all(
+    connection: sqlite3.Connection,
+    snapshot: CatalogSnapshot,
+    *,
+    build_mode: str,
+    source_locators: tuple[CatalogSourceLocator, ...],
+    source_store_digests: Mapping[str, str],
+) -> None:
+    locators = {item.source_key: item for item in source_locators}
     with connection:
-        connection.executemany(
-            """
-            INSERT INTO source_records(
-                source_key, record_kind, record_id, source_record_digest, adapter_version
-            ) VALUES (?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    item.source_key,
-                    item.record_kind,
-                    item.record_id,
-                    item.source_record_digest,
-                    item.adapter_version,
-                )
-                for item in snapshot.source_records
-            ],
+        _insert_source_records(connection, snapshot.source_records, locators)
+        _insert_documents(connection, snapshot.documents)
+        _write_metadata(
+            connection,
+            snapshot,
+            build_mode=build_mode,
+            source_store_digests=source_store_digests,
         )
-        for document in snapshot.documents:
-            _insert_document(connection, document)
-        _write_metadata(connection, snapshot, build_mode=build_mode)
         _require_snapshot_counts(connection, snapshot)
 
 
-def _insert_document(connection: sqlite3.Connection, document: CatalogDocument) -> None:
-    connection.execute(
+def _insert_source_records(
+    connection: sqlite3.Connection,
+    sources: list[CatalogSourceRecord] | tuple[CatalogSourceRecord, ...],
+    locators: Mapping[str, CatalogSourceLocator],
+) -> None:
+    connection.executemany(
+        """
+        INSERT INTO source_records(
+            source_key, record_kind, record_id, source_record_digest, adapter_version,
+            store_key, byte_offset, byte_length
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                item.source_key,
+                item.record_kind,
+                item.record_id,
+                item.source_record_digest,
+                item.adapter_version,
+                locators[item.source_key].store_key if item.source_key in locators else None,
+                locators[item.source_key].byte_offset if item.source_key in locators else None,
+                locators[item.source_key].byte_length if item.source_key in locators else None,
+            )
+            for item in sources
+        ],
+    )
+
+
+def _update_source_locators(
+    connection: sqlite3.Connection,
+    locators: Mapping[str, CatalogSourceLocator],
+) -> None:
+    connection.executemany(
+        """
+        UPDATE source_records
+        SET store_key = ?, byte_offset = ?, byte_length = ?
+        WHERE source_key = ?
+        """,
+        [
+            (item.store_key, item.byte_offset, item.byte_length, item.source_key)
+            for item in locators.values()
+        ],
+    )
+
+
+def _insert_documents(
+    connection: sqlite3.Connection,
+    documents: list[CatalogDocument] | tuple[CatalogDocument, ...],
+) -> None:
+    connection.executemany(
         """
         INSERT INTO catalog_items(
             item_id, item_kind, authority_layer, source_key, record_kind, record_id,
@@ -346,28 +556,35 @@ def _insert_document(connection: sqlite3.Connection, document: CatalogDocument) 
             sort_key, source_record_digest, adapter_version
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
+        (_document_row(document) for document in documents),
+    )
+    connection.executemany(
+        "INSERT INTO catalog_fts(item_id, title, summary, search_text) VALUES (?, ?, ?, ?)",
         (
-            document.item_id,
-            document.item_kind,
-            document.authority_layer,
-            document.source_key,
-            document.record_kind,
-            document.record_id,
-            document.child_id,
-            document.paper_id,
-            document.question_id,
-            document.title,
-            document.summary,
-            json.dumps(document.status_labels, ensure_ascii=False, separators=(",", ":")),
-            document.search_text,
-            document.sort_key,
-            document.source_record_digest,
-            document.adapter_version,
+            (document.item_id, document.title, document.summary, document.search_text)
+            for document in documents
         ),
     )
-    connection.execute(
-        "INSERT INTO catalog_fts(item_id, title, summary, search_text) VALUES (?, ?, ?, ?)",
-        (document.item_id, document.title, document.summary, document.search_text),
+
+
+def _document_row(document: CatalogDocument) -> tuple[Any, ...]:
+    return (
+        document.item_id,
+        document.item_kind,
+        document.authority_layer,
+        document.source_key,
+        document.record_kind,
+        document.record_id,
+        document.child_id,
+        document.paper_id,
+        document.question_id,
+        document.title,
+        document.summary,
+        json.dumps(document.status_labels, ensure_ascii=False, separators=(",", ":")),
+        document.search_text,
+        document.sort_key,
+        document.source_record_digest,
+        document.adapter_version,
     )
 
 
@@ -409,17 +626,51 @@ def _batches(values: list[str]) -> list[list[str]]:
     ]
 
 
-def _write_metadata(connection: sqlite3.Connection, snapshot: CatalogSnapshot, *, build_mode: str) -> None:
+def _write_metadata(
+    connection: sqlite3.Connection,
+    snapshot: CatalogSnapshot,
+    *,
+    build_mode: str,
+    source_store_digests: Mapping[str, str],
+) -> None:
+    _write_metadata_values(
+        connection,
+        workspace_id=snapshot.workspace_id,
+        registry_version=snapshot.registry_version,
+        source_watermark=snapshot.source_watermark,
+        build_mode=build_mode,
+        source_record_count=len(snapshot.source_records),
+        item_count=len(snapshot.documents),
+        unknown_record_kinds=snapshot.unknown_record_kinds,
+        source_store_digests=source_store_digests,
+    )
+
+
+def _write_metadata_values(
+    connection: sqlite3.Connection,
+    *,
+    workspace_id: str,
+    registry_version: str,
+    source_watermark: str,
+    build_mode: str,
+    source_record_count: int,
+    item_count: int,
+    unknown_record_kinds: tuple[str, ...],
+    source_store_digests: Mapping[str, str],
+) -> None:
     values = {
         "catalog_contract_version": CATALOG_CONTRACT_VERSION,
         "catalog_schema_version": str(CATALOG_SCHEMA_VERSION),
-        "workspace_id": snapshot.workspace_id,
-        "adapter_registry_version": snapshot.registry_version,
-        "source_watermark": snapshot.source_watermark,
+        "workspace_id": workspace_id,
+        "adapter_registry_version": registry_version,
+        "source_watermark": source_watermark,
         "build_mode": build_mode,
-        "source_record_count": str(len(snapshot.source_records)),
-        "item_count": str(len(snapshot.documents)),
-        "unknown_record_kinds": json.dumps(snapshot.unknown_record_kinds, separators=(",", ":")),
+        "source_record_count": str(source_record_count),
+        "item_count": str(item_count),
+        "unknown_record_kinds": json.dumps(unknown_record_kinds, separators=(",", ":")),
+        "source_store_digests": json.dumps(
+            dict(sorted(source_store_digests.items())), separators=(",", ":")
+        ),
     }
     connection.execute("DELETE FROM catalog_metadata")
     connection.executemany(
@@ -439,20 +690,68 @@ def _require_snapshot_counts(
     connection: sqlite3.Connection,
     snapshot: CatalogSnapshot,
 ) -> None:
-    actual = {
+    actual = _actual_counts(connection)
+    expected = {
+        "source_records": len(snapshot.source_records),
+        "catalog_items": len(snapshot.documents),
+        "catalog_fts": len(snapshot.documents),
+    }
+    if actual != expected:
+        raise _projection_error("catalog projection integrity does not match its source snapshot")
+    _require_counts(connection, actual)
+
+
+def _actual_counts(connection: sqlite3.Connection) -> dict[str, int]:
+    return {
         "source_records": int(
             connection.execute("SELECT COUNT(*) FROM source_records").fetchone()[0]
         ),
         "catalog_items": int(connection.execute("SELECT COUNT(*) FROM catalog_items").fetchone()[0]),
         "catalog_fts": int(connection.execute("SELECT COUNT(*) FROM catalog_fts").fetchone()[0]),
     }
-    expected = {
-        "source_records": len(snapshot.source_records),
-        "catalog_items": len(snapshot.documents),
-        "catalog_fts": len(snapshot.documents),
-    }
-    if actual != expected or connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+
+
+def _require_counts(connection: sqlite3.Connection, counts: Mapping[str, int]) -> None:
+    if (
+        counts["catalog_items"] != counts["catalog_fts"]
+        or connection.execute("PRAGMA foreign_key_check").fetchone() is not None
+    ):
         raise _projection_error("catalog projection integrity does not match its source snapshot")
+
+
+def _source_watermark(
+    connection: sqlite3.Connection,
+    *,
+    registry_version: str,
+    unknown: tuple[tuple[str, str], ...],
+) -> str:
+    indexed = [
+        [row["source_key"], row["source_record_digest"], row["adapter_version"]]
+        for row in connection.execute(
+            """
+            SELECT source_key, source_record_digest, adapter_version
+            FROM source_records ORDER BY source_key
+            """
+        )
+    ]
+    return canonical_digest(
+        {
+            "registry_version": registry_version,
+            "indexed": indexed,
+            "unknown": list(unknown),
+        }
+    )
+
+
+def _decode_store_digests(metadata: Mapping[str, str]) -> dict[str, str]:
+    value = metadata.get("source_store_digests", "{}")
+    decoded = json.loads(value)
+    if not isinstance(decoded, dict) or not all(
+        isinstance(key, str) and isinstance(item, str)
+        for key, item in decoded.items()
+    ):
+        raise _projection_error("catalog source-store digests are invalid")
+    return decoded
 
 
 def _decode_metadata(metadata: dict[str, str]) -> dict[str, Any]:
@@ -462,6 +761,8 @@ def _decode_metadata(metadata: dict[str, str]) -> dict[str, Any]:
             result[key] = int(result[key])
     if "unknown_record_kinds" in result:
         result["unknown_record_kinds"] = json.loads(result["unknown_record_kinds"])
+    if "source_store_digests" in result:
+        result["source_store_digests"] = _decode_store_digests(metadata)
     return result
 
 

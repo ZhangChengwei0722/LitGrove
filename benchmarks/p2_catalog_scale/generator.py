@@ -876,18 +876,35 @@ def _workspace_inventory(workspace_root: Path) -> dict[str, str]:
         raise _benchmark_error("generated workspace root is missing or unsafe")
     target = workspace_root.parent
     inventory: dict[str, str] = {}
-    for path in sorted(workspace_root.rglob("*")):
-        if path.is_symlink() or _is_unsafe_link(path):
-            raise _benchmark_error("generated workspace contains an unsafe path type")
-        if path.is_file():
-            relative = path.relative_to(target).as_posix()
-            if relative not in RUNTIME_BOUND_PATHS:
-                inventory[relative] = _sha256_file(path)
+    pending = [(workspace_root, (workspace_root.name,))]
+    while pending:
+        directory, relative_parts = pending.pop()
+        try:
+            children = sorted(os.scandir(directory), key=lambda item: item.name)
+        except OSError as error:
+            raise _benchmark_error("generated workspace inventory cannot be read") from error
+        for child in children:
+            try:
+                metadata = child.stat(follow_symlinks=False)
+            except OSError as error:
+                raise _benchmark_error("generated workspace path cannot be inspected") from error
+            if child.is_symlink() or bool(
+                getattr(metadata, "st_file_attributes", 0)
+                & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+            ):
+                raise _benchmark_error("generated workspace contains an unsafe path type")
+            child_parts = (*relative_parts, child.name)
+            if stat.S_ISDIR(metadata.st_mode):
+                pending.append((Path(child.path), child_parts))
+            elif stat.S_ISREG(metadata.st_mode):
+                relative = "/".join(child_parts)
+                if relative not in RUNTIME_BOUND_PATHS:
+                    inventory[relative] = _sha256_file(Path(child.path))
     for relative in RUNTIME_BOUND_PATHS:
         bound_path = target / Path(*relative.split("/"))
         if not bound_path.is_file() or _is_unsafe_link(bound_path):
             raise _benchmark_error("generated workspace runtime binding is missing or unsafe")
-    return inventory
+    return dict(sorted(inventory.items()))
 
 
 def _write_jsonl(path: Path, records: Iterable[dict[str, Any]]) -> None:
