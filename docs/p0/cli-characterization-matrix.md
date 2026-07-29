@@ -74,3 +74,9 @@ No command may be declared migrated merely because the CLI instantiates a class.
 ## 5. Deferred Characterization
 
 Pipeline Job, Source Adequacy, Agent Task, App preview/approval, Direction/Field Map/Tag, Exchange, managed Obsidian writes, backup and large-workspace maintenance have no baseline CLI behavior. Their scenario specifications are design inputs, not characterization tests, and cannot be counted as P1 parity coverage.
+
+## 6. P1 Closure Status
+
+All rows marked for extraction now have a focused application service. `tests/unit/test_application_services.py` compares direct service and CLI behavior across all six service classes and enforces that `cli.py` no longer imports the moved validators, bundle composition, privacy scanner, transaction manager or parse adapter classes.
+
+The twenty baseline reusable commands retain their original services and characterization. P1 does not wrap them in another command-dispatch backend.

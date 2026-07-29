@@ -137,3 +137,19 @@ current parse + supported review classification
 ```
 
 Ordinary reruns reuse a current memory without writing. A stale parse requires rereading before explicit refresh. A low-value review may persist zero Units with a reason. Review-derived content remains non-evidence and receives no Field Map, Question Mapping or Step 7 identity in M3A-2A.
+
+## P1 Host-Neutral Service Workflow
+
+Every current CLI leaf command now reaches one reusable service/use case. Hosts call those services directly; they do not invoke `main()`, parse CLI stdout or read JSONL stores themselves.
+
+```text
+host input
+-> host performs its own transport decoding
+-> Core application service validates authority and workspace state
+-> service returns mapping / bytes / typed result
+-> host projects transport-specific output
+```
+
+Expected validation findings return a typed result and exit classification. Exceptional authority, version, path, integrity and unresolved-reference failures raise `ResearchKBError` with one `Diagnostic`. Mutation services continue to return transaction receipts, and rendering returns final bytes. This is a host boundary only; it does not grant a browser or Agent additional filesystem or write authority.
+
+The CLI compatibility surface remains unchanged. A future App backend must use these services through a Core-controlled workspace session and may not duplicate bundle validation, parse adapter selection, recovery classification or Question filtering.

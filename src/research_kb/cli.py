@@ -18,39 +18,33 @@ from research_kb.discovery import (
 )
 from research_kb.discovery.europe_pmc import EuropePmcConnector, EuropePmcResolver
 from research_kb.discovery.europe_pmc_pdf import EuropePmcPdfTransport
-from research_kb.contracts.registry import SchemaRegistry
-from research_kb.bundle import load_workspace_entries, records_of_kind, validate_workspace_entries
-from research_kb.contracts.validator import validate_bundle, validate_record
 from research_kb.errors import (
     UNSAFE_DIRECTORY_MODE,
-    UNRESOLVED_REFERENCE,
     PROTECTED_INPUT_CHANGED,
     WORKSPACE_IDENTITY_CONFLICT,
     WORKSPACE_LAYOUT_CONFLICT,
     WORKSPACE_LAYOUT_UPGRADE_REQUIRED,
     WORKSPACE_NOT_INITIALIZED,
-    Diagnostic,
     ResearchKBError,
     redact_absolute_paths,
 )
 from research_kb.guardian import GuardianService
-from research_kb.identifiers import Namespace, validate_id
 from research_kb.mutation import load_mutation_request, mutation_request_from_mapping
-from research_kb.parse.pdfplumber_adapter import PdfPlumberAdapter, PdfPlumberTextFlowAdapter
-from research_kb.parse.synthetic_text import SyntheticTextAdapter
-from research_kb.privacy import scan_repository
 from research_kb.services.acquired_candidate_intake import AcquiredCandidateIntakeService
+from research_kb.services.application_validation import ContractValidationService, JsonlValidationService
 from research_kb.services.capability import CapabilityService
 from research_kb.services.records import RecordService
 from research_kb.services.parse_read import ParseReadService
 from research_kb.services.paper_status import PaperStatusService
 from research_kb.services.paper_context import PaperContextService
 from research_kb.services.review_context import ReviewContextService
-from research_kb.services.question_view import QuestionReadingViewService
+from research_kb.services.parse_application import ParseApplicationService
+from research_kb.services.privacy_scan import PrivacyScanService
+from research_kb.services.question_read import QuestionQueryService, WorkspaceQuestionReadingViewService
+from research_kb.services.recovery import TransactionRecoveryService
 from research_kb.services.step7_context import Step7ContextService
-from research_kb.services.step7_view import Step7ReadingViewService
+from research_kb.services.step7_render import WorkspaceStep7ReadingViewService
 from research_kb.services.registry import RegistryService
-from research_kb.services.parse import ParseService
 from research_kb.services.bootstrap import WorkspaceBootstrapService
 from research_kb.services.compatibility import CompatibilityAdapterRegistry, CompatibilityInspectionService
 from research_kb.services.intake_inspect import IntakeInspectService
@@ -63,24 +57,10 @@ from research_kb.services.discovery_acquisition import (
 )
 from research_kb.services.discovery_resolution import DiscoveryResolutionService, DiscoveryResolverRegistry
 from research_kb.compatibility import LegacyReaderAdapter
-from research_kb.storage.json_io import read_jsonl, serialize_json
-from research_kb.storage.transactions import MANUAL_RESOLUTION_ACTIONS, TransactionManager
+from research_kb.storage.json_io import serialize_json
 from research_kb.workspace import WorkspaceLayout
 
 
-ID_FIELDS = {
-    "registry-paper": "paper_id",
-    "evidence": "evidence_id",
-    "review-queue": "queue_id",
-    "process-event": "event_id",
-    "guardian-report": "guardian_report_id",
-    "question-mapping": "question_id",
-    "step7-synthesis": "candidate_id",
-    "step7-review-angle": "candidate_id",
-    "step7-insight": "candidate_id",
-    "step7-cross-view": "candidate_id",
-    "discovery-candidate": "candidate_id",
-}
 REGISTRY_METADATA_STDIN_LIMIT = 64 * 1024
 MUTATION_REQUEST_STDIN_LIMIT = 4 * 1024 * 1024
 DISCOVERY_REQUEST_INPUT_LIMIT = 64 * 1024
@@ -488,74 +468,35 @@ def _compatibility_inspect(
 
 
 def _contract_validate(args: argparse.Namespace) -> int:
-    registry = SchemaRegistry()
     record = _load_mapping(args.input)
-    diagnostics = validate_record(args.kind, record, registry=registry, actor=args.actor)
-    if args.bundle is not None:
-        bundle = _load_mapping(args.bundle)
-        diagnostics.extend(validate_bundle(bundle, registry=registry, actor=args.actor))
-    unique = []
-    seen = set()
-    for diagnostic in diagnostics:
-        key = (diagnostic.code, diagnostic.record_kind, diagnostic.record_id, diagnostic.json_path, diagnostic.message)
-        if key not in seen:
-            seen.add(key)
-            unique.append(diagnostic)
-    _write_json({"status": "success" if not unique else "failure", "diagnostics": [item.to_dict() for item in unique]})
-    if any(item.code == "RKBC-001" or item.code == "RKBC-003" for item in unique):
-        return 3
-    return 0 if not unique else 1
+    bundle = _load_mapping(args.bundle) if args.bundle is not None else None
+    result = ContractValidationService().validate(
+        kind=args.kind,
+        record=record,
+        bundle=bundle,
+        actor=args.actor,
+    )
+    _write_json(result.to_dict())
+    return result.exit_code
 
 
 def _privacy_scan(args: argparse.Namespace) -> int:
-    result = scan_repository(args.root, args.allowlist)
-    _write_json(
-        {
-            "status": "success" if result.ok else "failure",
-            "expected_findings": len(result.expected),
-            "unexpected_findings": [
-                {"path": item.path, "finding_type": item.finding_type, "detail": item.detail}
-                for item in result.unexpected
-            ],
-        }
-    )
-    return 0 if result.ok else 1
+    result = PrivacyScanService().scan(root=args.root, allowlist=args.allowlist)
+    _write_json(result.to_dict())
+    return result.exit_code
 
 
 def _data_check_jsonl(args: argparse.Namespace) -> int:
-    try:
-        records = read_jsonl(
-            args.input,
-            record_kind=args.kind,
-            missing_ok=False,
-            id_field=ID_FIELDS.get(args.kind),
-        )
-    except ResearchKBError as error:
-        _write_json({"status": "failure", "records": 0, "diagnostics": [error.diagnostic.to_dict()]})
-        return 1
-    diagnostics = []
-    for record in records:
-        diagnostics.extend(validate_record(args.kind, record, actor=args.actor))
-    _write_json({
-        "status": "success" if not diagnostics else "failure",
-        "records": len(records),
-        "diagnostics": [item.to_dict() for item in diagnostics],
-    })
-    if any(item.code in {"RKBC-001", "RKBC-003"} for item in diagnostics):
-        return 3
-    return 0 if not diagnostics else 1
+    result = JsonlValidationService().check(path=args.input, kind=args.kind, actor=args.actor)
+    _write_json(result.to_dict())
+    return result.exit_code
 
 
 def _transaction_recover(args: argparse.Namespace) -> int:
     layout = WorkspaceLayout.load(args.workspace)
-    actions = TransactionManager(layout).recover(dry_run=args.dry_run)
-    needs_resolution = any(item["action"] in MANUAL_RESOLUTION_ACTIONS for item in actions)
-    _write_json({
-        "status": "needs_resolution" if needs_resolution else "success",
-        "dry_run": args.dry_run,
-        "actions": actions,
-    })
-    return 4 if needs_resolution else 0
+    result = TransactionRecoveryService(layout).recover(dry_run=args.dry_run)
+    _write_json(result.to_dict())
+    return result.exit_code
 
 
 def _record_promote(args: argparse.Namespace) -> int:
@@ -611,24 +552,12 @@ def _registry_add(args: argparse.Namespace) -> int:
 
 def _parse_run(args: argparse.Namespace) -> int:
     layout = WorkspaceLayout.load(args.workspace)
-    adapter = {
-        "synthetic-text": SyntheticTextAdapter,
-        "pdfplumber": PdfPlumberAdapter,
-        "pdfplumber-text-flow": PdfPlumberTextFlowAdapter,
-    }[args.adapter]()
-    pages, transaction = ParseService(layout).run(
+    result = ParseApplicationService(layout).run(
         paper_id=args.paper_id,
-        adapter=adapter,
+        adapter_name=args.adapter,
         actor="cli",
     )
-    _write_json({
-        "status": "success",
-        "paper_id": args.paper_id,
-        "parse_run_id": transaction.event_id,
-        "parser": pages[0]["parser"],
-        "pages": len(pages),
-        "target": layout.target_relative_path(transaction.target),
-    })
+    _write_json(result.to_dict())
     return 0
 
 
@@ -675,53 +604,19 @@ def _guardian_check(args: argparse.Namespace) -> int:
 
 def _question_list(args: argparse.Namespace) -> int:
     layout = WorkspaceLayout.load(args.workspace)
-    entries = load_workspace_entries(layout)
-    validate_workspace_entries(entries)
-    questions = sorted(records_of_kind(entries, "question-mapping"), key=lambda item: item["question_id"])
-    _write_json({
-        "status": "success",
-        "questions": [
-            {
-                "question_id": item["question_id"],
-                "question_text": item["question_text"],
-                "scope": item["scope"],
-                "mapping_status": item["mapping_status"],
-                "linked_paper_count": len(item["paper_links"]),
-                "updated_at": item["updated_at"],
-            }
-            for item in questions
-        ],
-    })
+    _write_json(QuestionQueryService(layout).list())
     return 0
 
 
 def _question_show(args: argparse.Namespace) -> int:
     layout = WorkspaceLayout.load(args.workspace)
-    question_id = validate_id(args.question_id, Namespace.QUESTION)
-    entries = load_workspace_entries(layout)
-    validate_workspace_entries(entries)
-    question = next(
-        (item for item in records_of_kind(entries, "question-mapping") if item["question_id"] == question_id),
-        None,
-    )
-    if question is None:
-        raise ResearchKBError(
-            Diagnostic(
-                UNRESOLVED_REFERENCE,
-                "question-mapping",
-                question_id,
-                "/question_id",
-                "question mapping does not exist",
-            )
-        )
-    _write_json({"status": "success", "question": question})
+    _write_json(QuestionQueryService(layout).show(args.question_id))
     return 0
 
 
 def _question_render(args: argparse.Namespace) -> int:
     layout = WorkspaceLayout.load(args.workspace)
-    entries = load_workspace_entries(layout)
-    content = QuestionReadingViewService(entries).render(args.question_id)
+    content = WorkspaceQuestionReadingViewService(layout).render(args.question_id)
     _write_bytes_once(content)
     return 0
 
@@ -734,8 +629,7 @@ def _step7_context(args: argparse.Namespace) -> int:
 
 def _step7_render(args: argparse.Namespace) -> int:
     layout = WorkspaceLayout.load(args.workspace)
-    entries = load_workspace_entries(layout)
-    content = Step7ReadingViewService(entries).render(args.question_id)
+    content = WorkspaceStep7ReadingViewService(layout).render(args.question_id)
     _write_bytes_once(content)
     return 0
 

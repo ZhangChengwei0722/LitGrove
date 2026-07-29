@@ -75,12 +75,14 @@ The baseline has 29 public leaf commands.
 Summary:
 
 ```text
-already_reusable_service: 21
+already_reusable_service: 20
 cli_orchestration_to_extract: 4
-missing_query_service: 4
+missing_query_service: 5
 missing_mutation_service: 0
 deferred public commands: 0
 ```
+
+The original P0 prose summary miscounted one `missing_query_service` row. The command table and 29-command total were correct; this numerical correction does not change the P0 classification or exit decision.
 
 The `main()` dispatch tree, bounded stdin/file decoding, JSON/byte output, redaction and process exit-code mapping remain CLI adapter concerns. Business result classification must move into the relevant service only where the table identifies current CLI ownership.
 
@@ -152,3 +154,20 @@ Source Adequacy, Pipeline Job, Agent Task, staging/preview, Direction/Field Map/
 | external Codex/Claude work | deterministic stdin/context and Portable Skill baseline | P4 versioned tasks | explicit content classes and execution scope; untrusted content is data; no direct write. |
 
 No row authorizes an embedded Agent runtime, a second provider, a private-workspace migration or legacy cutover.
+
+## 9. P1 Migration Result
+
+P1 extracted all nine non-reusable baseline rows:
+
+| Baseline composition | P1 service |
+|---|---|
+| contract record/bundle validation | `ContractValidationService` |
+| JSONL store validation | `JsonlValidationService` |
+| privacy report projection | `PrivacyScanService` |
+| Question list/show | `QuestionQueryService` |
+| workspace Question rendering | `WorkspaceQuestionReadingViewService` |
+| workspace Step 7 rendering | `WorkspaceStep7ReadingViewService` |
+| named parse adapter selection/receipt | `ParseApplicationService` and `ParseAdapterRegistry` |
+| transaction recovery classification | `TransactionRecoveryService` |
+
+The CLI retains argument parsing, bounded input decoding, output serialization, redaction and process exit projection only. No P1 service adds a record type, schema, layout, App or semantic decision.
