@@ -54,7 +54,7 @@ The four skipped cases are the existing POSIX permission contracts. The final fu
 
 | Boundary | Result |
 |---|---|
-| Q001, private workspaces, legacy records and real PDFs | not accessed |
+| private scientific workspaces, legacy records and real PDFs | not accessed |
 | canonical/source mutation by catalog operations | byte-preservation integration test passed |
 | App repository or frontend | not created |
 | schema/layout migration | not performed |
