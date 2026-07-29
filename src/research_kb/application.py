@@ -1,0 +1,7 @@
+from __future__ import annotations
+
+
+APPLICATION_SERVICE_INTERFACE_VERSION = "1.0"
+
+
+__all__ = ["APPLICATION_SERVICE_INTERFACE_VERSION"]
