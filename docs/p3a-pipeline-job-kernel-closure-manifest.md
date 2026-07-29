@@ -53,7 +53,7 @@ their own immutable receipts.
 - package version: `research-kb 0.1.0`;
 - privacy scan: `7 expected, 0 unexpected`;
 - `git diff --check`: passed before implementation commit;
-- source assets, Q001, private workspaces and real PDFs: not accessed.
+- source assets, protected private research data and real PDFs: not accessed.
 
 ## Explicitly Not Delivered
 
@@ -62,7 +62,7 @@ their own immutable receipts.
 - Source Adequacy profiles and deterministic intake/Parse orchestration: P3-C;
 - localhost App controls and integrated browser acceptance: P3-D;
 - Agent Task, Evidence, Review Unit, scientific `review_queue`, Research Synthesis and
-  any Q001 migration or write.
+  any protected legacy migration or write.
 
 P3-B may begin only from its own bounded implementation plan and from the merged,
 post-merge-validated P3-A head.
