@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pytest
 
+import research_kb.services.catalog as catalog_module
 from research_kb.application import APPLICATION_SERVICE_INTERFACE_VERSION
+from research_kb.catalog import CatalogDatabase
 from research_kb.errors import ResearchKBError
 from research_kb.services import (
     CatalogCapabilityService,
@@ -15,6 +17,7 @@ from research_kb.services import (
     RegistryService,
     WorkspaceSessionService,
 )
+from research_kb.storage.json_io import file_sha256, read_jsonl, serialize_jsonl, sha256_bytes
 from tests.fixture_factory import make_bundle
 from tests.runtime_helpers import make_runtime_workspace
 
@@ -146,6 +149,161 @@ def test_projection_uses_authoritative_workspace_loader_and_validator(tmp_path: 
     assert [(item["paper_id"], item["title"]) for item in items] == [
         (paper["paper_id"], "Authoritative catalog paper")
     ]
+
+
+def test_registry_detail_uses_canonical_locator_without_monolithic_scan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = layout.source_roots["alpha-sources"] / "locator-paper.txt"
+    source.write_text("Synthetic locator source.\n", encoding="utf-8", newline="\n")
+    paper, _ = RegistryService(layout).add(
+        root_id="alpha-sources",
+        relative_path=source.name,
+        metadata={
+            "bibliography": {"title": "Locator-backed paper"},
+            "fixture_origin": "synthetic_from_scratch",
+        },
+    )
+    session = WorkspaceSessionService({"alpha": layout.config.path}).open("alpha")
+    projection = CatalogProjectionService(session, tmp_path / "app-state")
+    built = projection.rebuild()
+    query = CatalogQueryService(projection)
+    query.bind_projection_result(built)
+    item = query.search(paper_id=paper["paper_id"], item_kinds=("paper",))["items"][0]
+
+    monkeypatch.setattr(
+        catalog_module,
+        "_find_jsonl_record",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("full JSONL scan")),
+    )
+    detail = query.detail(item["item_id"])
+
+    assert detail["current_record_status"] == "current"
+    assert detail["detail"]["bibliography"]["title"] == "Locator-backed paper"
+    assert "byte_offset" not in str(detail)
+
+
+def test_registry_locator_drift_never_returns_current_detail(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    papers = []
+    for ordinal in range(2):
+        source = layout.source_roots["alpha-sources"] / f"drift-paper-{ordinal}.txt"
+        source.write_text(f"Synthetic drift source {ordinal}.\n", encoding="utf-8", newline="\n")
+        paper, _ = RegistryService(layout).add(
+            root_id="alpha-sources",
+            relative_path=source.name,
+            metadata={
+                "bibliography": {"title": f"Drift paper {ordinal}"},
+                "fixture_origin": "synthetic_from_scratch",
+            },
+        )
+        papers.append(paper)
+    session = WorkspaceSessionService({"alpha": layout.config.path}).open("alpha")
+    projection = CatalogProjectionService(session, tmp_path / "app-state")
+    built = projection.rebuild()
+    query = CatalogQueryService(projection)
+    query.bind_projection_result(built)
+    second = query.search(paper_id=papers[1]["paper_id"], item_kinds=("paper",))["items"][0]
+
+    records = read_jsonl(
+        layout.registry_path,
+        record_kind="registry-paper",
+        missing_ok=False,
+        id_field="paper_id",
+    )
+    records[0]["bibliography"]["title"] += " with offset-changing content"
+    layout.registry_path.write_bytes(serialize_jsonl(records))
+
+    detail = query.detail(second["item_id"])
+    assert detail["current_record_status"] == "changed"
+    assert detail["detail"] is None
+
+
+def test_benchmark_registry_delta_matches_full_rebuild_without_workspace_loader(
+    tmp_path: Path,
+) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = layout.source_roots["alpha-sources"] / "delta-paper.txt"
+    source.write_text("Synthetic delta source.\n", encoding="utf-8", newline="\n")
+    paper, _ = RegistryService(layout).add(
+        root_id="alpha-sources",
+        relative_path=source.name,
+        metadata={
+            "bibliography": {"title": "Delta paper old"},
+            "fixture_origin": "synthetic_from_scratch",
+        },
+    )
+    session = WorkspaceSessionService({"alpha": layout.config.path}).open("alpha")
+    incremental = CatalogProjectionService(session, tmp_path / "incremental-state")
+    base = incremental.rebuild()
+    before = file_sha256(layout.registry_path)
+    assert before is not None
+    records = read_jsonl(
+        layout.registry_path,
+        record_kind="registry-paper",
+        missing_ok=False,
+        id_field="paper_id",
+    )
+    records[0]["bibliography"]["title"] = "Delta paper revised"
+    layout.registry_path.write_bytes(serialize_jsonl(records))
+    after = file_sha256(layout.registry_path)
+    assert after is not None
+    incremental.entry_loader = lambda _: (_ for _ in ()).throw(AssertionError("workspace loader"))
+
+    result = incremental._benchmark_registry_delta(
+        base_source_watermark=base["source_watermark"],
+        before_registry_store_digest=before,
+        after_registry_store_digest=after,
+    )
+    rebuilt = CatalogProjectionService(session, tmp_path / "rebuilt-state")
+    rebuilt_result = rebuilt.rebuild()
+
+    assert result["changed_source_count"] == 1
+    assert result["source_watermark"] == rebuilt_result["source_watermark"]
+    assert CatalogDatabase.query(incremental.paths.database_path, page_size=100) == (
+        CatalogDatabase.query(rebuilt.paths.database_path, page_size=100)
+    )
+    query = CatalogQueryService(incremental)
+    query.bind_projection_result(result)
+    revised = query.search(paper_id=paper["paper_id"], item_kinds=("paper",))["items"][0]
+    assert revised["title"] == "Delta paper revised"
+
+
+def test_benchmark_registry_delta_rejects_stale_base_without_mutation(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    session = WorkspaceSessionService({"alpha": layout.config.path}).open("alpha")
+    projection = CatalogProjectionService(session, tmp_path / "app-state")
+    built = projection.rebuild()
+    digest = file_sha256(layout.registry_path) or sha256_bytes(b"")
+    before = projection.paths.database_path.read_bytes()
+
+    with pytest.raises(ResearchKBError) as rejected:
+        projection._benchmark_registry_delta(
+            base_source_watermark="0" * 64,
+            before_registry_store_digest=digest,
+            after_registry_store_digest=digest,
+        )
+
+    assert rejected.value.diagnostic.code == "RKBC-036"
+    assert projection.paths.database_path.read_bytes() == before
+    assert built["item_count"] == 0
+
+
+def test_inspect_only_binding_is_stale_and_does_not_load_workspace(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    session = WorkspaceSessionService({"alpha": layout.config.path}).open("alpha")
+    projection = CatalogProjectionService(session, tmp_path / "app-state")
+    projection.rebuild()
+    projection.entry_loader = lambda _: (_ for _ in ()).throw(AssertionError("workspace loader"))
+    query = CatalogQueryService(projection)
+
+    status = query.bind_existing_projection()
+
+    assert status["projection_state"] == "stale"
+    assert status["freshness_verification"] == "unverified_after_restart"
+    assert query.search(page_size=1)["projection_state"] == "stale"
 
 
 def test_catalog_query_service_filters_related_paper_and_question_items(tmp_path: Path) -> None:

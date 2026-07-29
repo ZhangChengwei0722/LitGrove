@@ -6,6 +6,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
+from urllib.parse import urldefrag
 
 from jsonschema import Draft202012Validator, FormatChecker
 
@@ -43,6 +44,68 @@ HUMAN_ONLY_REVIEW_STATES = {"human_checked", "verified"}
 NON_SUPPORTING_UNIT_STATES = {"interpretive", "background_only", "needs_resolution"}
 
 
+class RecordValidationSession:
+    def __init__(
+        self,
+        kind: str,
+        *,
+        registry: SchemaRegistry | None = None,
+        actor: str = "agent",
+    ):
+        self.kind = kind
+        self.registry = registry or SchemaRegistry()
+        self.actor = actor
+        if kind not in self.registry.kinds:
+            raise ResearchKBError(
+                Diagnostic(
+                    UNKNOWN_SCHEMA_KIND,
+                    kind,
+                    None,
+                    "",
+                    f"unknown record schema kind: {kind}",
+                )
+            )
+        self.validator = Draft202012Validator(
+            _validation_schema(self.registry, kind),
+            registry=self.registry.referencing_registry(),
+            format_checker=FormatChecker(),
+        )
+
+    def validate(self, record: dict[str, Any]) -> list[Diagnostic]:
+        version_field = "contract_version" if self.kind in CONFIG_KINDS else "schema_version"
+        try:
+            require_supported(record.get(version_field))
+        except ResearchKBError as error:
+            diagnostic = error.diagnostic
+            return [
+                Diagnostic(
+                    diagnostic.code,
+                    self.kind,
+                    _record_id(self.kind, record),
+                    f"/{version_field}",
+                    diagnostic.message,
+                    diagnostic.severity,
+                )
+            ]
+
+        diagnostics = [
+            Diagnostic(
+                SCHEMA_VALIDATION_FAILED,
+                self.kind,
+                _record_id(self.kind, record),
+                json_pointer(error.absolute_path),
+                error.message,
+            )
+            for error in sorted(
+                self.validator.iter_errors(record),
+                key=lambda item: (list(item.absolute_path), item.message),
+            )
+        ]
+        diagnostics.extend(_local_semantic_diagnostics(self.kind, record))
+        diagnostics.extend(_authority_diagnostics(self.kind, record, self.actor))
+        return diagnostics
+
+
 def validate_record(
     kind: str,
     record: dict[str, Any],
@@ -50,48 +113,11 @@ def validate_record(
     registry: SchemaRegistry | None = None,
     actor: str = "agent",
 ) -> list[Diagnostic]:
-    schema_registry = registry or SchemaRegistry()
-    if kind not in schema_registry.kinds:
-        return [Diagnostic(UNKNOWN_SCHEMA_KIND, kind, None, "", f"unknown record schema kind: {kind}")]
     try:
-        schema = schema_registry.schema(kind)
+        session = RecordValidationSession(kind, registry=registry, actor=actor)
     except ResearchKBError as error:
         return [error.diagnostic]
-
-    version_field = "contract_version" if kind in CONFIG_KINDS else "schema_version"
-    try:
-        require_supported(record.get(version_field))
-    except ResearchKBError as error:
-        diagnostic = error.diagnostic
-        return [
-            Diagnostic(
-                diagnostic.code,
-                kind,
-                _record_id(kind, record),
-                f"/{version_field}",
-                diagnostic.message,
-                diagnostic.severity,
-            )
-        ]
-
-    validator = Draft202012Validator(
-        schema,
-        registry=schema_registry.referencing_registry(),
-        format_checker=FormatChecker(),
-    )
-    diagnostics = [
-        Diagnostic(
-            SCHEMA_VALIDATION_FAILED,
-            kind,
-            _record_id(kind, record),
-            json_pointer(error.absolute_path),
-            error.message,
-        )
-        for error in sorted(validator.iter_errors(record), key=lambda item: (list(item.absolute_path), item.message))
-    ]
-    diagnostics.extend(_local_semantic_diagnostics(kind, record))
-    diagnostics.extend(_authority_diagnostics(kind, record, actor))
-    return diagnostics
+    return session.validate(record)
 
 
 def validate_bundle(
@@ -104,6 +130,7 @@ def validate_bundle(
     schema_registry = registry or SchemaRegistry()
     diagnostics: list[Diagnostic] = []
     normalized: list[tuple[str, dict[str, Any]]] = []
+    sessions: dict[str, RecordValidationSession] = {}
     for index, entry in enumerate(entries):
         if not isinstance(entry, dict) or not isinstance(entry.get("kind"), str) or not isinstance(entry.get("record"), dict):
             diagnostics.append(
@@ -112,12 +139,67 @@ def validate_bundle(
             continue
         kind = entry["kind"]
         record = entry["record"]
-        record_diagnostics = validate_record(kind, record, registry=schema_registry, actor=actor)
+        try:
+            session = sessions.get(kind)
+            if session is None:
+                session = RecordValidationSession(kind, registry=schema_registry, actor=actor)
+                sessions[kind] = session
+            record_diagnostics = session.validate(record)
+        except ResearchKBError as error:
+            record_diagnostics = [error.diagnostic]
         diagnostics.extend(record_diagnostics)
         if not any(item.code in {UNSUPPORTED_VERSION, SCHEMA_VALIDATION_FAILED, UNKNOWN_SCHEMA_KIND} for item in record_diagnostics):
             normalized.append((kind, record))
     diagnostics.extend(_cross_record_diagnostics(normalized))
     return _deduplicate_diagnostics(diagnostics)
+
+
+def _validation_schema(registry: SchemaRegistry, kind: str) -> dict[str, Any]:
+    schemas = registry.schemas()
+    roots_by_id = {schema["$id"]: schema for schema in schemas.values()}
+    root = schemas[kind]
+    try:
+        return _inline_schema_references(root, root, roots_by_id, ())
+    except (KeyError, TypeError, ValueError):
+        return root
+
+
+def _inline_schema_references(
+    node: Any,
+    resource_root: dict[str, Any],
+    roots_by_id: dict[str, dict[str, Any]],
+    stack: tuple[tuple[str, str], ...],
+) -> Any:
+    if isinstance(node, list):
+        return [
+            _inline_schema_references(item, resource_root, roots_by_id, stack)
+            for item in node
+        ]
+    if not isinstance(node, dict):
+        return node
+    if set(node) == {"$ref"}:
+        uri, fragment = urldefrag(node["$ref"])
+        target_root = resource_root if not uri else roots_by_id[uri]
+        identity = (target_root["$id"], fragment)
+        if identity in stack:
+            raise ValueError("recursive schema reference cannot be inlined")
+        target: Any = target_root
+        if fragment:
+            if not fragment.startswith("/"):
+                raise ValueError("unsupported schema fragment")
+            for component in fragment[1:].split("/"):
+                key = component.replace("~1", "/").replace("~0", "~")
+                target = target[int(key)] if isinstance(target, list) else target[key]
+        return _inline_schema_references(
+            target,
+            target_root,
+            roots_by_id,
+            (*stack, identity),
+        )
+    return {
+        key: _inline_schema_references(value, resource_root, roots_by_id, stack)
+        for key, value in node.items()
+    }
 
 
 def _authority_diagnostics(kind: str, record: dict[str, Any], actor: str) -> list[Diagnostic]:

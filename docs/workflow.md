@@ -190,3 +190,39 @@ Use `python -m benchmarks.p2_catalog_scale profile` for count-only inspection, `
 `p2-small` is materialized through `WorkspaceBootstrapService` before use. The large `p2-pilot-v1` and `p2-r0-scale-v1` targets remain outside the repository. Measurements temporarily revise generated Registry rows, call the ordinary projection update, restore original payload bytes and report whether the projection was restored or intentionally left stale. Cleanup remains a separate destructive operation and is not part of these commands.
 
 The preliminary reference measurement is not a release acceptance result. Full build and selective query observations met provisional targets, while 1,000-record incremental projection and monolithic Registry detail did not. P2-E must fix and remeasure both before freezing the R0 Windows budget.
+
+## P2-E R0 Catalog Workflow
+
+P2-E adds three source-checkout benchmark commands:
+
+```text
+measure-projection-rebuild
+measure-registry-delta
+measure-catalog-reads
+```
+
+The Registry delta command is not a production CLI or App mutation. It binds one
+benchmark-owned changed store to the current projection watermark and before/after
+digests, validates the complete Registry JSONL, applies the exact delta transactionally,
+restores generated payload bytes and records a path-redacted receipt. Ordinary
+`CatalogProjectionService.update()` remains the complete production path.
+
+After restart, an App backend should use:
+
+```text
+configured option ID
+-> WorkspaceSessionService.open
+-> CatalogProjectionService.bind_existing_projection
+-> cache stale / unverified_after_restart status
+-> CatalogQueryService.search
+-> CatalogQueryService.detail
+```
+
+Health and polling reuse the inspected status instead of repeatedly walking the
+workspace. Search may use the stale projection with explicit labeling. Registry detail
+seeks and validates the exact canonical bytes at the stored locator before returning
+`current`; a stale locator or digest never falls back to projected content.
+
+The final R0 workload and receipts are synthetic and path-redacted. Cleanup remains a
+separate explicitly authorized lifecycle operation; benchmark completion alone deletes
+nothing.

@@ -51,6 +51,35 @@ Default detail lookup resolves the exact authoritative store selected by the pro
 
 The fixed reference profile represents 50,000 papers, 250,000 scientific catalog items and 500,000 operational catalog items. The 250,000 figure is a projection-item count, not 250,000 independent canonical records. Preliminary Windows results are development evidence only: final budget freeze remains P2-E, where slow incremental projection and monolithic Registry detail are explicit blockers.
 
+## P2-E Bounded R0 Projection And Detail Boundary
+
+P2-E closes the two P2-B blockers while preserving canonical authority. Disposable
+Catalog schema version 2 stores a normalized Registry store key, byte offset and byte
+length. Registry detail maps that key through the active `WorkspaceLayout`, seeks the
+exact canonical JSONL bytes, then validates UTF-8/LF, record ID, schema and canonical
+digest. Offset drift, missing stores and changed bytes return `changed` or `missing`;
+SQLite content never substitutes for canonical detail.
+
+The optimized Registry delta is benchmark-only. It requires the current projection
+watermark, Registry before/after digests and a stable writer boundary, streams and
+validates the complete changed store, and applies changed/added/removed rows in one
+SQLite transaction. Production `update()` still performs complete workspace loading
+because a current Registry transaction also appends a process event. P3 may promote a
+receipt-bound delta only after its writer receipt covers every changed store.
+
+`CatalogProjectionService.bind_existing_projection()` performs bounded projection and
+workspace-identity inspection after process restart. It conservatively reports `stale`
+with `freshness_verification: unverified_after_restart`; it does not claim a current
+watermark without a full rebuild, complete validation or receipt-bound update. Querying
+the stale projection is allowed with the label, while each detail independently proves
+current canonical bytes.
+
+The frozen `r0-windows-catalog-v1` profile passed full rebuild, 1,000-record Registry
+delta, selective FTS, authoritative Registry detail, App/Core ready-state and memory
+thresholds. Raw receipts and the centralized no-deletion lifecycle report are retained
+in the local App repository. No canonical schema, workspace layout, CLI command,
+scientific mutation or private workspace was added.
+
 ## Knowledge Flow
 
 ```text

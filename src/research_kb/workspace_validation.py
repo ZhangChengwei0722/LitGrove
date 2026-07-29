@@ -405,15 +405,17 @@ def _layout_diagnostics(context: WorkspaceContext, *, require_initialized: bool)
             diagnostics.extend(_mode_diagnostics(path, context.workspace_id, f"/{relative}", directory=True))
 
     if root.is_dir():
-        for path in _iter_managed_descendants(root, allowed_directories):
-            relative = path.relative_to(root).as_posix()
-            if _is_unsafe_link(path):
+        for _path, relative, is_directory, is_unsafe in _iter_managed_descendants(
+            root,
+            allowed_directories,
+        ):
+            if is_unsafe:
                 diagnostics.append(_layout_error(context.workspace_id, f"managed descendant {relative} is an unsafe link"))
                 continue
             if not _recognized_descendant(
-                path,
                 relative,
                 allowed_directories,
+                is_directory=is_directory,
                 allow_discovery_store=not marker_is_predecessor,
             ):
                 diagnostics.append(_layout_error(context.workspace_id, "managed layout contains an unknown descendant"))
@@ -433,13 +435,13 @@ def _layout_diagnostics(context: WorkspaceContext, *, require_initialized: bool)
 
 
 def _recognized_descendant(
-    path: Path,
     relative: str,
     managed_directories: tuple[str, ...],
     *,
+    is_directory: bool,
     allow_discovery_store: bool,
 ) -> bool:
-    if path.is_dir():
+    if is_directory:
         return relative in managed_directories
     if relative == MARKER_RELATIVE_PATH or relative == ".research-kb/locks/workspace.lock":
         return True
@@ -510,21 +512,31 @@ def _declared_path_has_unsafe_component(document: ConfigDocument, value: str) ->
     return False
 
 
-def _iter_managed_descendants(root: Path, managed_directories: tuple[str, ...]) -> Iterator[Path]:
-    pending = [root]
+def _iter_managed_descendants(
+    root: Path,
+    managed_directories: tuple[str, ...],
+) -> Iterator[tuple[Path, str, bool, bool]]:
+    pending = [(root, ())]
     while pending:
-        current = pending.pop()
+        current, parent_parts = pending.pop()
         with os.scandir(current) as entries:
             for entry in sorted(entries, key=lambda item: _normalized_name(item.name)):
                 path = Path(entry.path)
-                yield path
-                relative = path.relative_to(root).as_posix()
+                metadata = entry.stat(follow_symlinks=False)
+                is_directory = stat.S_ISDIR(metadata.st_mode)
+                is_unsafe = entry.is_symlink() or bool(
+                    getattr(metadata, "st_file_attributes", 0)
+                    & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+                )
+                relative_parts = (*parent_parts, entry.name)
+                relative = "/".join(relative_parts)
+                yield path, relative, is_directory, is_unsafe
                 if (
                     relative in managed_directories
-                    and entry.is_dir(follow_symlinks=False)
-                    and not _is_unsafe_link(path)
+                    and is_directory
+                    and not is_unsafe
                 ):
-                    pending.append(path)
+                    pending.append((path, relative_parts))
 
 
 def _path_identity(path: Path) -> str:

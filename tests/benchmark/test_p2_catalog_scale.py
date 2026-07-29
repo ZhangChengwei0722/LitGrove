@@ -11,7 +11,10 @@ from benchmarks.p2_catalog_scale import (
     generate_workspace,
     inspect_generated_workspace,
     materialize_portable_seed,
+    measure_catalog_reads,
     measure_core_catalog,
+    measure_projection_rebuild,
+    measure_registry_delta,
     profile_by_id,
 )
 from benchmarks.p2_catalog_scale.__main__ import main
@@ -226,6 +229,57 @@ def test_reference_estimate_uses_pilot_and_enforces_disk_reserve(tmp_path: Path)
     assert enough["required_free_space_reserve_bytes"] >= 20 * 1024**3
     assert enough["may_proceed"] is True
     assert constrained["may_proceed"] is False
+
+
+def test_registry_delta_measurement_uses_existing_projection_and_restores_payload(
+    tmp_path: Path,
+) -> None:
+    generated = generate_workspace(tmp_path / "generated", profile_id="p2-small")
+    session = WorkspaceSessionService({"small": generated.layout.config.path}).open("small")
+    projection = CatalogProjectionService(session, generated.target / "runtime" / "app-state")
+    projection.rebuild()
+
+    receipt = measure_registry_delta(
+        generated,
+        repetitions=2,
+        incremental_change_count=1,
+    )
+
+    assert receipt["measurement_contract_version"] == "p2-registry-delta-measurement@1.0"
+    assert receipt["implementation"] == "benchmark_registry_delta_v1"
+    assert receipt["changed_source_count"] == 1
+    assert receipt["payload_restored"] is True
+    assert receipt["projection_registry_restored"] is True
+
+
+def test_projection_rebuild_measurement_is_separate_and_restores_payload(tmp_path: Path) -> None:
+    generated = generate_workspace(tmp_path / "generated", profile_id="p2-small")
+
+    receipt = measure_projection_rebuild(generated, repetitions=1, warm_up_runs=0)
+
+    assert receipt["measurement_contract_version"] == "p2-projection-rebuild-measurement@1.0"
+    assert receipt["item_count"] == generated.profile.catalog_item_count
+    assert receipt["catalog_schema_version"] == 2
+    assert receipt["payload_restored"] is True
+
+
+def test_catalog_read_measurement_uses_stale_bind_and_current_registry_detail(
+    tmp_path: Path,
+) -> None:
+    generated = generate_workspace(tmp_path / "generated", profile_id="p2-small")
+    session = WorkspaceSessionService({"small": generated.layout.config.path}).open("small")
+    projection = CatalogProjectionService(session, generated.target / "runtime" / "app-state")
+    projection.rebuild()
+
+    receipt = measure_catalog_reads(generated, repetitions=2)
+
+    assert receipt["measurement_contract_version"] == "p2-catalog-read-measurement@1.0"
+    assert receipt["restart_bind"]["projection_state"] == "stale"
+    assert receipt["restart_bind"]["freshness_verification"] == "unverified_after_restart"
+    assert receipt["fts_selective"]["projection_state"] == "stale"
+    assert receipt["registry_detail"]["record_kind"] == "registry-paper"
+    assert receipt["registry_detail"]["current_record_status"] == "current"
+    assert receipt["payload_restored"] is True
 
 
 def test_benchmark_cli_profile_generate_inspect_and_measure(tmp_path: Path, capsys) -> None:

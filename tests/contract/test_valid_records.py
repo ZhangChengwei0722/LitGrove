@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from research_kb.contracts import validator as validator_module
 from research_kb.config.loader import load_config
 from research_kb.contracts.validator import validate_bundle, validate_record
 from tests.fixture_factory import make_bundle
@@ -20,6 +21,23 @@ def test_two_domains_share_one_public_contract(domain: str) -> None:
 def test_every_generated_record_validates_individually(domain: str) -> None:
     for entry in make_bundle(domain)["records"]:
         assert validate_record(entry["kind"], entry["record"], actor="cli") == []
+
+
+def test_bundle_reuses_one_validation_session_per_record_kind(monkeypatch) -> None:
+    bundle = make_bundle("alpha")
+    original = validator_module.RecordValidationSession
+    initialized_kinds: list[str] = []
+
+    def recording_session(kind, **kwargs):
+        initialized_kinds.append(kind)
+        return original(kind, **kwargs)
+
+    monkeypatch.setattr(validator_module, "RecordValidationSession", recording_session)
+
+    assert validator_module.validate_bundle(bundle, actor="cli") == []
+    assert sorted(initialized_kinds) == sorted(
+        {entry["kind"] for entry in bundle["records"]}
+    )
 
 
 def test_public_templates_validate() -> None:

@@ -11,14 +11,23 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from filelock import FileLock, Timeout
+
 from research_kb.application import APPLICATION_SERVICE_INTERFACE_VERSION
 from research_kb.bundle import BundleEntry, load_workspace_entries, validate_workspace_entries
 from research_kb.catalog import CATALOG_CONTRACT_VERSION, CatalogAdapterRegistry, CatalogDatabase, CatalogSnapshot
-from research_kb.catalog.models import canonical_digest
+from research_kb.catalog.models import (
+    CatalogSourceLocator,
+    CatalogSourceRecord,
+    canonical_digest,
+)
 from research_kb.catalog.storage import CATALOG_PROJECTION_ERROR
-from research_kb.contracts.validator import validate_record
+from research_kb.contracts.validator import RecordValidationSession, validate_record
+from research_kb.contracts.registry import SchemaRegistry
 from research_kb.errors import (
     PATH_ESCAPE,
+    JSONL_FORMAT_ERROR,
+    LOCK_TIMEOUT,
     SCHEMA_VALIDATION_FAILED,
     UNRESOLVED_REFERENCE,
     Diagnostic,
@@ -30,6 +39,7 @@ from research_kb.storage.json_io import (
     read_json_document,
     read_jsonl,
     serialize_json,
+    sha256_bytes,
 )
 from research_kb.services.workspace_session import WorkspaceSession
 
@@ -49,6 +59,13 @@ class CatalogPaths:
     workspace_root: Path
     marker_path: Path
     database_path: Path
+
+
+@dataclass(frozen=True, slots=True)
+class RegistryProjectionInput:
+    snapshot: CatalogSnapshot
+    locators: tuple[CatalogSourceLocator, ...]
+    store_digest: str
 
 
 class CatalogProjectionService:
@@ -71,10 +88,19 @@ class CatalogProjectionService:
     def rebuild(self) -> dict[str, Any]:
         _validate_existing_catalog_paths(self.paths)
         snapshot = self._snapshot()
+        registry_input = self._registry_input() if self._uses_workspace_loader else None
         _prepare_managed_root(self.paths)
         temporary = self.paths.workspace_root / f".{DATABASE_FILENAME}.{uuid.uuid4().hex}.tmp"
         try:
-            CatalogDatabase.build(temporary, snapshot, build_mode="full")
+            CatalogDatabase.build(
+                temporary,
+                snapshot,
+                build_mode="full",
+                source_locators=() if registry_input is None else registry_input.locators,
+                source_store_digests=(
+                    {} if registry_input is None else {"registry": registry_input.store_digest}
+                ),
+            )
             os.replace(temporary, self.paths.database_path)
         finally:
             temporary.unlink(missing_ok=True)
@@ -86,9 +112,53 @@ class CatalogProjectionService:
         if not self.paths.database_path.is_file():
             return self.rebuild()
         snapshot = self._snapshot()
+        registry_input = self._registry_input() if self._uses_workspace_loader else None
         _prepare_managed_root(self.paths)
-        changes = CatalogDatabase.update(self.paths.database_path, snapshot)
+        changes = CatalogDatabase.update(
+            self.paths.database_path,
+            snapshot,
+            source_locators=() if registry_input is None else registry_input.locators,
+            source_store_digests=(
+                {} if registry_input is None else {"registry": registry_input.store_digest}
+            ),
+        )
         return {**_build_result(snapshot, mode="incremental"), **changes}
+
+    def inspect_status(self) -> dict[str, Any]:
+        _validate_existing_catalog_paths(self.paths)
+        inspection = CatalogDatabase.inspect(self.paths.database_path)
+        if inspection.state != "ready":
+            return {
+                "status": "success",
+                "projection_state": inspection.state,
+                "freshness_verification": "not_applicable",
+                "workspace_id": self.session.workspace_id,
+                "item_count": inspection.item_count,
+                "source_watermark": inspection.metadata.get("source_watermark"),
+                "current_source_watermark": None,
+                "unknown_record_kinds": inspection.metadata.get("unknown_record_kinds", []),
+            }
+        if inspection.metadata.get("workspace_id") != self.session.workspace_id:
+            return {
+                "status": "success",
+                "projection_state": "incompatible",
+                "freshness_verification": "not_applicable",
+                "workspace_id": self.session.workspace_id,
+                "item_count": 0,
+                "source_watermark": inspection.metadata.get("source_watermark"),
+                "current_source_watermark": None,
+                "unknown_record_kinds": inspection.metadata.get("unknown_record_kinds", []),
+            }
+        return {
+            "status": "success",
+            "projection_state": "stale",
+            "freshness_verification": "unverified_after_restart",
+            "workspace_id": self.session.workspace_id,
+            "item_count": inspection.item_count,
+            "source_watermark": inspection.metadata["source_watermark"],
+            "current_source_watermark": None,
+            "unknown_record_kinds": inspection.metadata.get("unknown_record_kinds", []),
+        }
 
     def status(self) -> dict[str, Any]:
         _validate_existing_catalog_paths(self.paths)
@@ -133,6 +203,60 @@ class CatalogProjectionService:
             raise _projection_error("catalog input workspace identity does not match the active session")
         return self.registry.project_entries(entries, workspace_id=self.session.workspace_id)
 
+    def _registry_input(self) -> RegistryProjectionInput:
+        return _load_registry_projection_input(
+            self.session._layout.registry_path,
+            self.registry,
+            workspace_id=self.session.workspace_id,
+        )
+
+    def _benchmark_registry_delta(
+        self,
+        *,
+        base_source_watermark: str,
+        before_registry_store_digest: str,
+        after_registry_store_digest: str,
+    ) -> dict[str, Any]:
+        if not self._uses_workspace_loader:
+            raise _projection_error("Registry benchmark delta requires the workspace loader")
+        _validate_existing_catalog_paths(self.paths)
+        lock = FileLock(
+            self.paths.workspace_root / ".benchmark-registry-delta.lock",
+            timeout=30.0,
+        )
+        try:
+            with lock:
+                existing_sources = CatalogDatabase.source_index(
+                    self.paths.database_path,
+                    record_kind="registry-paper",
+                )
+                registry_input = _load_registry_projection_input(
+                    self.session._layout.registry_path,
+                    self.registry,
+                    workspace_id=self.session.workspace_id,
+                    existing_sources=existing_sources,
+                )
+                if registry_input.store_digest != after_registry_store_digest:
+                    raise _projection_error("Registry benchmark digest changed before projection")
+                return CatalogDatabase.update_registry_sources(
+                    self.paths.database_path,
+                    registry_input.snapshot,
+                    source_locators=registry_input.locators,
+                    registry_store_digest=registry_input.store_digest,
+                    base_source_watermark=base_source_watermark,
+                    before_registry_store_digest=before_registry_store_digest,
+                )
+        except Timeout as error:
+            raise ResearchKBError(
+                Diagnostic(
+                    LOCK_TIMEOUT,
+                    "catalog-projection",
+                    None,
+                    "",
+                    "Registry benchmark delta lock acquisition timed out",
+                )
+            ) from error
+
 
 class CatalogQueryService:
     def __init__(self, projection: CatalogProjectionService):
@@ -141,6 +265,10 @@ class CatalogQueryService:
 
     def refresh_status(self) -> dict[str, Any]:
         self._status = self.projection.status()
+        return dict(self._status)
+
+    def bind_existing_projection(self) -> dict[str, Any]:
+        self._status = self.projection.inspect_status()
         return dict(self._status)
 
     def bind_projection_result(self, result: dict[str, Any]) -> dict[str, Any]:
@@ -207,8 +335,8 @@ class CatalogQueryService:
         status = self._status or self.refresh_status()
         _require_queryable(status)
         _validate_existing_catalog_paths(self.projection.paths)
-        row = CatalogDatabase.detail_row(self.projection.paths.database_path, item_id)
-        if row is None:
+        binding = CatalogDatabase.detail_binding(self.projection.paths.database_path, item_id)
+        if binding is None:
             raise ResearchKBError(
                 Diagnostic(
                     UNRESOLVED_REFERENCE,
@@ -218,9 +346,18 @@ class CatalogQueryService:
                     "catalog item does not exist",
                 )
             )
+        row = binding["item"]
         adapter = self.projection.registry.find_adapter(row["record_kind"])
         if self.projection._uses_workspace_loader:
-            record = _load_exact_workspace_record(self.projection.session._layout, row)
+            locator = binding["locator"]
+            if row["record_kind"] == "registry-paper" and locator is not None:
+                record = _read_registry_record_at_locator(
+                    self.projection.session._layout,
+                    row,
+                    locator,
+                )
+            else:
+                record = _load_exact_workspace_record(self.projection.session._layout, row)
             if record is not None:
                 diagnostics = validate_record(row["record_kind"], record, actor="stored")
                 if diagnostics:
@@ -241,7 +378,16 @@ class CatalogQueryService:
             )
         current_digest = None if record is None else canonical_digest(record)
         detail = None
-        current_record_status = "missing"
+        current_record_status = (
+            "changed"
+            if (
+                record is None
+                and row["record_kind"] == "registry-paper"
+                and binding["locator"] is not None
+                and self.projection.session._layout.registry_path.is_file()
+            )
+            else "missing"
+        )
         if record is not None and current_digest == row["source_record_digest"]:
             try:
                 detail = adapter.detail(record, row["child_id"])
@@ -309,6 +455,130 @@ def _load_exact_workspace_record(layout, row: dict[str, Any]) -> dict[str, Any] 
             row["record_id"],
         )
     return None
+
+
+def _load_registry_projection_input(
+    path: Path,
+    registry: CatalogAdapterRegistry,
+    *,
+    workspace_id: str,
+    existing_sources: dict[str, tuple[str, str]] | None = None,
+) -> RegistryProjectionInput:
+    try:
+        content = path.read_bytes() if path.exists() else b""
+    except OSError as error:
+        raise _jsonl_error(path, f"cannot read Registry store: {error}") from error
+    if content.startswith(b"\xef\xbb\xbf"):
+        raise _jsonl_error(path, "UTF-8 BOM is not permitted")
+    if b"\r" in content:
+        raise _jsonl_error(path, "canonical structured files must use LF line endings")
+    if content and not content.endswith(b"\n"):
+        raise _jsonl_error(path, "JSONL must end with LF")
+
+    entries: list[tuple[str, dict[str, Any]]] = []
+    source_records: list[CatalogSourceRecord] = []
+    documents = []
+    offsets: dict[str, tuple[int, int]] = {}
+    seen: set[str] = set()
+    validation = RecordValidationSession(
+        "registry-paper",
+        registry=SchemaRegistry(),
+        actor="stored",
+    )
+    adapter = registry.find_adapter("registry-paper")
+    offset = 0
+    for line_number, raw_line in enumerate(content.splitlines(keepends=True), start=1):
+        if raw_line == b"\n":
+            raise _jsonl_error(path, f"blank JSONL line at {line_number}")
+        try:
+            value = json.loads(raw_line[:-1].decode("utf-8", errors="strict"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise _jsonl_error(path, f"invalid JSONL at line {line_number}") from error
+        if not isinstance(value, dict):
+            raise _jsonl_error(path, f"JSONL line {line_number} must be an object")
+        paper_id = value.get("paper_id")
+        if not isinstance(paper_id, str) or not paper_id:
+            raise _jsonl_error(path, f"JSONL line {line_number} lacks paper_id")
+        if paper_id in seen:
+            raise _jsonl_error(path, f"duplicate paper_id at line {line_number}")
+        seen.add(paper_id)
+        source_key = f"registry-paper:{paper_id}"
+        digest = canonical_digest(value)
+        current_identity = (digest, adapter.adapter_version)
+        changed = existing_sources is None or existing_sources.get(source_key) != current_identity
+        if changed:
+            diagnostics = validation.validate(value)
+            if diagnostics:
+                raise ResearchKBError(diagnostics[0])
+        if existing_sources is None:
+            entries.append(("registry-paper", value))
+        else:
+            source_records.append(
+                CatalogSourceRecord(
+                    source_key,
+                    "registry-paper",
+                    paper_id,
+                    digest,
+                    adapter.adapter_version,
+                )
+            )
+            if changed:
+                documents.extend(adapter.project(value, workspace_id, digest))
+        offsets[source_key] = (offset, len(raw_line))
+        offset += len(raw_line)
+
+    if existing_sources is None:
+        snapshot = registry.project_entries(entries, workspace_id=workspace_id)
+    else:
+        source_records.sort(key=lambda item: item.source_key)
+        documents.sort(key=lambda item: (item.sort_key, item.item_kind, item.item_id))
+        snapshot = CatalogSnapshot(
+            workspace_id,
+            registry.registry_version,
+            "",
+            tuple(source_records),
+            tuple(documents),
+            (),
+        )
+    locators = tuple(
+        CatalogSourceLocator(source.source_key, "registry", *offsets[source.source_key])
+        for source in snapshot.source_records
+    )
+    return RegistryProjectionInput(snapshot, locators, sha256_bytes(content))
+
+
+def _read_registry_record_at_locator(
+    layout,
+    row: dict[str, Any],
+    locator: dict[str, Any],
+) -> dict[str, Any] | None:
+    if locator.get("store_key") != "registry":
+        return None
+    offset = locator.get("byte_offset")
+    length = locator.get("byte_length")
+    if not isinstance(offset, int) or offset < 0 or not isinstance(length, int) or length < 2:
+        return None
+    try:
+        with layout.registry_path.open("rb") as handle:
+            handle.seek(offset)
+            raw_line = handle.read(length)
+    except OSError:
+        return None
+    if len(raw_line) != length or not raw_line.endswith(b"\n") or b"\r" in raw_line:
+        return None
+    try:
+        record = json.loads(raw_line[:-1].decode("utf-8", errors="strict"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(record, dict) or record.get("paper_id") != row["record_id"]:
+        return None
+    return record
+
+
+def _jsonl_error(path: Path, message: str) -> ResearchKBError:
+    return ResearchKBError(
+        Diagnostic(JSONL_FORMAT_ERROR, "registry-paper", None, "", f"{message}: {path.name}")
+    )
 
 
 def _read_bound_json(path: Path, id_field: str, expected_id: str) -> dict[str, Any] | None:
