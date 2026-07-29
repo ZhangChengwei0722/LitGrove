@@ -31,6 +31,26 @@ Search uses a maximum page size of 100 and an opaque cursor bound to the normali
 
 The public App-facing interface is `research_kb.application` version `1.0` plus services exported from `research_kb.services`. P2-A adds no CLI command, canonical schema, workspace layout, scientific mutation or Agent runtime.
 
+## P2-B Catalog Scale Measurement Boundary
+
+P2-B adds repository-only benchmark tooling around the existing P2-A contracts. It does not add a production schema or install benchmark commands in the wheel.
+
+```text
+named synthetic profile + fixed seed
+-> absent operation-owned target outside the repository
+-> current Core workspace validation
+-> disposable catalog projection
+-> path-redacted measurement receipt
+```
+
+`p2-catalog-generator@1.0` produces deterministic current-contract records, authored synthetic source text, canonical serialization and digest inventories. The committed `p2-small` form is an uninitialized portable seed because the Core workspace marker intentionally binds resolved runtime paths. Large generated workspaces and SQLite files remain outside Git, and benchmark execution never implies cleanup authority.
+
+Catalog search now accepts optional exact `paper_id` and `question_id` filters. Both filters participate in opaque cursor identity and use existing SQLite indexes; omitting them preserves the P2-A response shape. A just-completed projection result may be bound to a Query Service only after its workspace, stored watermark, item count and unknown-kind set match the actual SQLite projection.
+
+Default detail lookup resolves the exact authoritative store selected by the projection row, validates that record and compares its canonical digest before returning content. Injected loaders retain the complete-bundle fallback. This removes complete-workspace reloads for per-paper JSON records, but monolithic JSONL stores still require a bounded scan and are not claimed to meet the final R0 budget.
+
+The fixed reference profile represents 50,000 papers, 250,000 scientific catalog items and 500,000 operational catalog items. The 250,000 figure is a projection-item count, not 250,000 independent canonical records. Preliminary Windows results are development evidence only: final budget freeze remains P2-E, where slow incremental projection and monolithic Registry detail are explicit blockers.
+
 ## Knowledge Flow
 
 ```text
