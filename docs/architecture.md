@@ -318,3 +318,20 @@ explicit criteria + exact current-request question/paper selectors
 M3D-1 is a Portable Skill and Agent-protocol route, not a Core semantic engine. Criteria must exist before manuscript inspection and request-resolved scope may resolve only selectors already present in the request. The Agent preserves source fingerprint and projection limits, uses exact unit slices or honest unit-level fallback, and cannot use Review Memory, review queue or Step 7 as factual support.
 
 The audit creates no schema, stable ID, workspace record, event, journal, cache, Markdown view or manuscript edit. Findings apply only to the requested criterion and checked local corpus; a local absence is not whole-field contradiction. Rewriting remains a separate task tied to the audited source fingerprint.
+
+## P1 Shared Application-Service Facade
+
+The CLI and future App backend share focused Python application services. P1 extracts the remaining CLI-owned validation, Question query/render, Step 7 render, named Parse and transaction-recovery composition without introducing a generic command interpreter.
+
+```text
+CLI or future host
+-> focused application service
+-> existing domain service / contract / transaction primitive
+-> typed mapping, bytes or result + exit classification
+```
+
+`ContractValidationService`, `JsonlValidationService`, `PrivacyScanService`, `QuestionQueryService`, workspace-aware Question/Step 7 render services, `ParseApplicationService` and `TransactionRecoveryService` own the extracted rules. Existing Registry, record, discovery, capability, compatibility, intake, paper/review, Guardian and bootstrap services remain directly reusable.
+
+The CLI owns only argument parsing, bounded stdin/file decoding, JSON/byte output, diagnostic redaction and process exit projection. Workspace-aware render services load and validate structured entries before invoking the existing pure renderers. The named Parse registry contains only explicit factories and never auto-detects, substitutes or falls back.
+
+P1 changes no public CLI arguments or payloads, schema, layout, source-write authority or scientific semantics. It creates no App, Pipeline Job, Source Adequacy or Agent Task runtime.
