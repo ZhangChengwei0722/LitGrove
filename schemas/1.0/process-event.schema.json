@@ -7,6 +7,7 @@
   "properties": {
     "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
     "event_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/event_id"},
+    "job_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/job_id"},
     "operation": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
     "actor": {"enum": ["agent", "cli", "user"]},
     "result": {"enum": ["success", "failure", "needs_resolution"]},

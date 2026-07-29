@@ -62,6 +62,8 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "guardian check",
             "intake inspect",
             "intake inspect-acquired",
+            "job list",
+            "job show",
             "manuscript inspect",
             "paper context",
             "paper status",
@@ -73,6 +75,20 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "step7 context",
             "step7 render",
         ],
+        "write_commands": [
+            "guardian disposition",
+            "job cancel",
+            "job create",
+            "job recover",
+            "job transition",
+        ],
+        "operational_record_kinds": [
+            "guardian-finding-disposition",
+            "guardian-report",
+            "pipeline-job-state",
+            "process-event",
+            "transaction-journal",
+        ],
         "features": {
             "approved_discovery_candidate_handoff": True,
             "explicit_oa_acquisition": True,
@@ -83,6 +99,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "review_runtime": True,
             "step7_runtime": True,
             "on_demand_discovery": True,
+            "pipeline_jobs": True,
         },
     }
 

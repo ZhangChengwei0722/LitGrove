@@ -81,7 +81,13 @@ def load_workspace_entries(
     ):
         add_jsonl(layout.step7_store_path(kind), kind, "candidate_id")
     add_jsonl(layout.process_events_path, "process-event", "event_id")
+    add_jsonl(layout.pipeline_jobs_path, "pipeline-job-state", "state_id")
     add_jsonl(layout.guardian_reports_path, "guardian-report", "guardian_report_id")
+    add_jsonl(
+        layout.guardian_finding_dispositions_path,
+        "guardian-finding-disposition",
+        "disposition_id",
+    )
 
     for path, override_entries in resolved_overrides.items():
         if path not in consumed:

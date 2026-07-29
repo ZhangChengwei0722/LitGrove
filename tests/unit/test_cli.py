@@ -7,6 +7,7 @@ import pytest
 import yaml
 
 from research_kb.cli import _configure_standard_streams, _write_bytes_once, _write_json, main
+from research_kb.catalog.models import canonical_digest
 from research_kb.errors import Diagnostic
 from research_kb.discovery.base import (
     DiscoveryCandidate,
@@ -97,6 +98,74 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert output["features"]["approved_discovery_candidate_handoff"] is True
     assert output["features"]["explicit_oa_acquisition"] is True
     assert output["features"]["legal_oa_resolution"] is True
+    assert output["features"]["pipeline_jobs"] is True
+    assert {"job list", "job show"} <= set(output["read_commands"])
+    assert {"job create", "job transition", "job cancel", "job recover"} <= set(output["write_commands"])
+
+
+def test_pipeline_job_cli_create_list_show_and_transition(tmp_path, capsys) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    create_request = tmp_path / "job-create.json"
+    create_request.write_bytes(
+        serialize_json(
+            {
+                "requested_route": "local_source",
+                "requested_depth": "semantic_gate",
+                "current_node": "intake_preflight",
+                "input_refs": [],
+                "authority_snapshot": {
+                    "actor": "user",
+                    "granted_operations": ["register_by_reference"],
+                    "captured_at": "2026-07-30T01:00:00Z",
+                },
+                "idempotency_key": "synthetic-cli-job",
+                "fixture_origin": "synthetic_from_scratch",
+            }
+        )
+    )
+
+    assert main([
+        "job", "create", "--workspace", str(layout.config.path),
+        "--request", str(create_request), "--actor", "user",
+    ]) == 0
+    created = json.loads(capsys.readouterr().out)
+    state = created["state"]
+    assert created["persistent_writes"] == 1
+
+    assert main([
+        "job", "list", "--workspace", str(layout.config.path), "--page-size", "1",
+    ]) == 0
+    listed = json.loads(capsys.readouterr().out)
+    assert listed["jobs"][0]["job_id"] == state["job_id"]
+
+    assert main([
+        "job", "show", "--workspace", str(layout.config.path), "--job-id", state["job_id"],
+    ]) == 0
+    shown = json.loads(capsys.readouterr().out)
+    assert shown["current_state"]["state_id"] == state["state_id"]
+
+    transition_request = tmp_path / "job-transition.json"
+    transition_request.write_bytes(
+        serialize_json(
+            {
+                "expected_state_id": state["state_id"],
+                "expected_state_digest": canonical_digest(state),
+                "status": "running",
+                "current_node": "registry",
+                "wait_reason": None,
+                "output_refs": [],
+                "retry_increment": 0,
+                "recovery_action": None,
+            }
+        )
+    )
+    assert main([
+        "job", "transition", "--workspace", str(layout.config.path),
+        "--job-id", state["job_id"], "--request", str(transition_request),
+        "--actor", "cli",
+    ]) == 0
+    transitioned = json.loads(capsys.readouterr().out)
+    assert transitioned["state"]["status"] == "running"
 
 
 def test_manuscript_inspect_cli_emits_one_read_only_docx_report(tmp_path, capsys) -> None:

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:guardian-finding-disposition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "disposition_id",
+    "workspace_id",
+    "guardian_report_id",
+    "finding_index",
+    "finding_digest",
+    "status",
+    "rationale",
+    "previous_disposition_id",
+    "actor",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "disposition_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/guardian_disposition_id"},
+    "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "guardian_report_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/guardian_id"},
+    "finding_index": {"type": "integer", "minimum": 0},
+    "finding_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "status": {
+      "enum": [
+        "acknowledged",
+        "accepted_risk",
+        "remediation_planned",
+        "resolved",
+        "false_positive",
+        "superseded"
+      ]
+    },
+    "rationale": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "previous_disposition_id": {
+      "anyOf": [
+        {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/guardian_disposition_id"},
+        {"type": "null"}
+      ]
+    },
+    "actor": {"enum": ["user", "cli"]},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}
+  }
+}

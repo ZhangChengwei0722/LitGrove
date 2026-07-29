@@ -79,6 +79,8 @@ class CapabilityService:
                     "discovery resolve",
                     "discovery show",
                     "guardian check",
+                    "job list",
+                    "job show",
                     "intake inspect",
                     "intake inspect-acquired",
                     "manuscript inspect",
@@ -93,6 +95,24 @@ class CapabilityService:
                     "step7 render",
                 )
             ),
+            "write_commands": sorted(
+                (
+                    "guardian disposition",
+                    "job cancel",
+                    "job create",
+                    "job recover",
+                    "job transition",
+                )
+            ),
+            "operational_record_kinds": sorted(
+                (
+                    "guardian-finding-disposition",
+                    "guardian-report",
+                    "pipeline-job-state",
+                    "process-event",
+                    "transaction-journal",
+                )
+            ),
             "features": {
                 "real_pdf_parse": True,
                 "stdin_json_handoff": True,
@@ -103,6 +123,7 @@ class CapabilityService:
                 "explicit_oa_acquisition": True,
                 "legal_oa_resolution": True,
                 "manuscript_projection": True,
+                "pipeline_jobs": True,
             },
         }
 

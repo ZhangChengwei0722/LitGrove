@@ -74,6 +74,7 @@ class TransactionManager:
         expected_before_sha256: str | None | object = _EXPECTED_BEFORE_UNSET,
         phase_hook: PhaseHook | None = None,
         event_id: str | None = None,
+        job_id: str | None = None,
     ) -> TransactionResult:
         resolved_target = self.layout.ensure_writable_target(target)
         with workspace_lock(self.layout.lock_path, timeout=self.lock_timeout):
@@ -89,6 +90,7 @@ class TransactionManager:
             journal = {
                 "schema_version": "1.0",
                 "event_id": event_id,
+                **({"job_id": job_id} if job_id is not None else {}),
                 "operation": operation,
                 "actor": actor,
                 "target_store": target_store,
@@ -148,6 +150,7 @@ class TransactionManager:
         actor: str,
         input_refs: list[str],
         event_id: str | None = None,
+        job_id: str | None = None,
     ) -> str:
         with workspace_lock(self.layout.lock_path, timeout=self.lock_timeout):
             resolved_event_id = event_id or self.event_id_factory()
@@ -160,6 +163,7 @@ class TransactionManager:
                 input_refs=input_refs,
                 output_refs=[],
                 created_at=timestamp(self.clock),
+                job_id=job_id,
             )
             append_process_event(self.layout.process_events_path, event, write_id=resolved_event_id)
             return resolved_event_id
@@ -298,4 +302,5 @@ def build_journal_event(journal: dict[str, Any], result: str) -> dict[str, Any]:
         input_refs=journal["input_refs"],
         output_refs=journal["output_refs"] if result == "success" else [],
         created_at=journal["created_at"],
+        job_id=journal.get("job_id"),
     )

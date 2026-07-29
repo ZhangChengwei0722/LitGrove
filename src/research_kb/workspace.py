@@ -49,8 +49,16 @@ class WorkspaceLayout:
         return self.knowledge_root / "process" / "events.jsonl"
 
     @property
+    def pipeline_jobs_path(self) -> Path:
+        return self.knowledge_root / "process" / "jobs.jsonl"
+
+    @property
     def guardian_reports_path(self) -> Path:
         return self.knowledge_root / "guardian" / "reports.jsonl"
+
+    @property
+    def guardian_finding_dispositions_path(self) -> Path:
+        return self.knowledge_root / "guardian" / "finding_dispositions.jsonl"
 
     @property
     def question_mappings_path(self) -> Path:
