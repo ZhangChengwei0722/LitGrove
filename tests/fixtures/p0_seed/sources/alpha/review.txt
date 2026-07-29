@@ -1,0 +1,4 @@
+Synthetic review source created from scratch for contract validation.
+This fabricated review separates studies by response timing and control completeness.
+The classification is background only and is not experimental evidence.
+This content is synthetic_from_scratch.

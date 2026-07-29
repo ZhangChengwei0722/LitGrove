@@ -1,0 +1,644 @@
+{
+  "fixture_origin": "synthetic_from_scratch",
+  "records": [
+    {
+      "kind": "workspace",
+      "record": {
+        "contract_version": "1.0",
+        "workspace": {
+          "id": "workspace_a0000001-0000-4000-8000-000000000001",
+          "knowledge_root": "./knowledge",
+          "source_roots": [
+            {
+              "root_id": "alpha-sources",
+              "path": "./sources",
+              "read_only_assets": true
+            }
+          ],
+          "local_inbox": "./inbox",
+          "domain_profile": "./domain-profile.yaml"
+        },
+        "runtime": {
+          "path_serialization": "workspace_relative_posix",
+          "default_encoding": "utf-8",
+          "line_ending": "lf"
+        }
+      }
+    },
+    {
+      "kind": "domain-profile",
+      "record": {
+        "contract_version": "1.0",
+        "domain_profile": {
+          "id": "domain-alpha",
+          "name": "Fictional Alpha Studies",
+          "version": "1.0"
+        },
+        "paper_card_sections": [
+          {
+            "section_id": "research_background_significance",
+            "label": "Research Background Significance"
+          },
+          {
+            "section_id": "research_problem",
+            "label": "Research Problem"
+          },
+          {
+            "section_id": "method_principle_advantages",
+            "label": "Method Principle Advantages"
+          },
+          {
+            "section_id": "conclusions_applications",
+            "label": "Conclusions Applications"
+          },
+          {
+            "section_id": "innovation",
+            "label": "Innovation"
+          },
+          {
+            "section_id": "limitations",
+            "label": "Limitations"
+          },
+          {
+            "section_id": "future_outlook",
+            "label": "Future Outlook"
+          }
+        ],
+        "evidence_axes": [
+          "input",
+          "process",
+          "outcome"
+        ],
+        "question_types": [
+          "mechanism",
+          "comparison"
+        ],
+        "terminology": {
+          "sample": "synthetic case"
+        },
+        "step7_extensions": {}
+      }
+    },
+    {
+      "kind": "registry-paper",
+      "record": {
+        "schema_version": "1.0",
+        "paper_id": "paper_a0000001-0000-4000-8000-000000000001",
+        "source_ref": {
+          "root_id": "alpha-sources",
+          "relative_path": "alpha/primary.txt"
+        },
+        "source_fingerprint": {
+          "algorithm": "sha256",
+          "value": "b6f190b29f33ec4134eca3c0c13fc2d88eb789ec936627e690796ab3a15b6aec"
+        },
+        "bibliography": {
+          "title": "Fabricated Alpha Primary Study",
+          "authors": [
+            "Synthetic Author"
+          ],
+          "year": 2026,
+          "doi": null
+        },
+        "screening_status": "candidate",
+        "duplicate_candidate_ids": [
+          "paper_a0000002-0000-4000-8000-000000000002"
+        ],
+        "review_status": "ai_checked",
+        "automation_status": "passed_auto_checks",
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "fixture_origin": "synthetic_from_scratch"
+      }
+    },
+    {
+      "kind": "registry-paper",
+      "record": {
+        "schema_version": "1.0",
+        "paper_id": "paper_a0000002-0000-4000-8000-000000000002",
+        "source_ref": {
+          "root_id": "alpha-sources",
+          "relative_path": "alpha/review.txt"
+        },
+        "source_fingerprint": {
+          "algorithm": "sha256",
+          "value": "7f3071f6eb756a15d86d69eb5362bddd947a4dc1cb41d8970ac301b5e6501667"
+        },
+        "bibliography": {
+          "title": "Fabricated Alpha Review",
+          "authors": [
+            "Synthetic Author"
+          ],
+          "year": 2026,
+          "doi": null
+        },
+        "screening_status": "candidate",
+        "duplicate_candidate_ids": [
+          "paper_a0000001-0000-4000-8000-000000000001"
+        ],
+        "review_status": "ai_checked",
+        "automation_status": "passed_auto_checks",
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "fixture_origin": "synthetic_from_scratch"
+      }
+    },
+    {
+      "kind": "parsed-page",
+      "record": {
+        "schema_version": "1.0",
+        "paper_id": "paper_a0000001-0000-4000-8000-000000000001",
+        "parse_run_id": "event_a0000001-0000-4000-8000-000000000001",
+        "parser": {
+          "adapter": "synthetic-text",
+          "version": "1.0"
+        },
+        "pdf_page": 1,
+        "printed_page": null,
+        "text": "Synthetic primary source created from scratch for contract validation.\nThe fabricated intervention increased the measured signal in the represented test.\nA matched fabricated control was used for the procedure.\nThis content is synthetic_from_scratch.",
+        "locator": "page:1:block:1",
+        "created_at": "2026-01-01T00:00:00Z",
+        "fixture_origin": "synthetic_from_scratch"
+      }
+    },
+    {
+      "kind": "parsed-page",
+      "record": {
+        "schema_version": "1.0",
+        "paper_id": "paper_a0000002-0000-4000-8000-000000000002",
+        "parse_run_id": "event_a0000001-0000-4000-8000-000000000001",
+        "parser": {
+          "adapter": "synthetic-text",
+          "version": "1.0"
+        },
+        "pdf_page": 1,
+        "printed_page": null,
+        "text": "Synthetic review source created from scratch for contract validation.\nThis fabricated review separates studies by response timing and control completeness.\nThe classification is background only and is not experimental evidence.\nThis content is synthetic_from_scratch.",
+        "locator": "page:1:block:1",
+        "created_at": "2026-01-01T00:00:00Z",
+        "fixture_origin": "synthetic_from_scratch"
+      }
+    },
+    {
+      "kind": "evidence",
+      "record": {
+        "schema_version": "1.0",
+        "evidence_id": "evidence_a0000001-0000-4000-8000-000000000001",
+        "paper_id": "paper_a0000001-0000-4000-8000-000000000001",
+        "claim": "The fabricated intervention increased the measured signal in the represented test.",
+        "evidence_type": "reported_result",
+        "quote": "The fabricated intervention increased the measured signal in the represented test.",
+        "source_page": {
+          "pdf_page": 1,
+          "printed_page": null,
+          "section": "Synthetic results",
+          "figure_or_table": null
+        },
+        "locator": "page:1:block:1",
+        "support_scope": "The fabricated comparison and stated response only.",
+        "what_it_does_not_support": [
+          "Universal generalization",
+          "Unmeasured mechanisms"
+        ],
+        "source_type": "primary",
+        "canonical": true,
+        "source_fingerprint": {
+          "algorithm": "sha256",
+          "value": "b6f190b29f33ec4134eca3c0c13fc2d88eb789ec936627e690796ab3a15b6aec"
+        },
+        "review_status": "ai_checked",
+        "automation_status": "passed_auto_checks",
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "fixture_origin": "synthetic_from_scratch"
+      }
+    },
+    {
+      "kind": "evidence",
+      "record": {
+        "schema_version": "1.0",
+        "evidence_id": "evidence_a0000002-0000-4000-8000-000000000002",
+        "paper_id": "paper_a0000001-0000-4000-8000-000000000001",
+        "claim": "The synthetic procedure used a matched fabricated control.",
+        "evidence_type": "control",
+        "quote": "A matched fabricated control was used for the procedure.",
+        "source_page": {
+          "pdf_page": 1,
+          "printed_page": null,
+          "section": "Synthetic results",
+          "figure_or_table": null
+        },
+        "locator": "page:1:block:1",
+        "support_scope": "The fabricated comparison and stated response only.",
+        "what_it_does_not_support": [
+          "Universal generalization",
+          "Unmeasured mechanisms"
+        ],
+        "source_type": "primary",
+        "canonical": true,
+        "source_fingerprint": {
+          "algorithm": "sha256",
+          "value": "b6f190b29f33ec4134eca3c0c13fc2d88eb789ec936627e690796ab3a15b6aec"
+        },
+        "review_status": "ai_checked",
+        "automation_status": "passed_auto_checks",
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "fixture_origin": "synthetic_from_scratch"
+      }
+    },
+    {
+      "kind": "review-queue",
+      "record": {
+        "schema_version": "1.0",
+        "queue_id": "queue_a0000001-0000-4000-8000-000000000001",
+        "paper_id": "paper_a0000001-0000-4000-8000-000000000001",
+        "issue_type": "overclaim",
+        "claim_candidate": "The response applies to every setting.",
+        "reason": "The synthetic record covers one setting only.",
+        "source_page": {
+          "pdf_page": 1,
+          "printed_page": null,
+          "section": "Synthetic discussion",
+          "figure_or_table": null
+        },
+        "locator": "page:1:block:2",
+        "resolution_status": "needs_resolution",
+        "not_evidence": true,
+        "review_status": "ai_checked",
+        "automation_status": "passed_auto_checks",
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "fixture_origin": "synthetic_from_scratch"
+      }
+    },
+    {
+      "kind": "review-queue",
+      "record": {
+        "schema_version": "1.0",
+        "queue_id": "queue_a0000003-0000-4000-8000-000000000003",
+        "paper_id": "paper_a0000001-0000-4000-8000-000000000001",
+        "issue_type": "overclaim",
+        "claim_candidate": "The matched control resolves every alternative explanation.",
+        "reason": "The synthetic control narrows but does not eliminate alternative explanations.",
+        "source_page": {
+          "pdf_page": 1,
+          "printed_page": null,
+          "section": "Synthetic discussion",
+          "figure_or_table": null
+        },
+        "locator": "page:1:block:2",
+        "resolution_status": "needs_resolution",
+        "not_evidence": true,
+        "review_status": "ai_checked",
+        "automation_status": "passed_auto_checks",
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "fixture_origin": "synthetic_from_scratch"
+      }
+    },
+    {
+      "kind": "paper-card",
+      "record": {
+        "schema_version": "1.0",
+        "paper_id": "paper_a0000001-0000-4000-8000-000000000001",
+        "domain_profile_id": "domain-alpha",
+        "card_status": "calibrated",
+        "review_status": "ai_checked",
+        "automation_status": "passed_auto_checks",
+        "sections": [
+          {
+            "section_id": "research_background_significance",
+            "units": []
+          },
+          {
+            "section_id": "research_problem",
+            "units": [
+              {
+                "unit_id": "unit_a0000001-0000-4000-8000-000000000001",
+                "section_id": "research_problem",
+                "statement": "The study asks whether the synthetic intervention changes the response.",
+                "statement_type": "reported_result",
+                "grounding_status": "grounded",
+                "evidence_ids": [
+                  "evidence_a0000001-0000-4000-8000-000000000001"
+                ],
+                "boundary_refs": [],
+                "source_page": {
+                  "pdf_page": 1,
+                  "printed_page": null,
+                  "section": "Synthetic section",
+                  "figure_or_table": null
+                },
+                "confidence": "medium"
+              }
+            ]
+          },
+          {
+            "section_id": "method_principle_advantages",
+            "units": [
+              {
+                "unit_id": "unit_a0000002-0000-4000-8000-000000000002",
+                "section_id": "method_principle_advantages",
+                "statement": "The design uses a matched control for the fabricated procedure.",
+                "statement_type": "method_description",
+                "grounding_status": "revised",
+                "evidence_ids": [
+                  "evidence_a0000002-0000-4000-8000-000000000002"
+                ],
+                "boundary_refs": [],
+                "source_page": {
+                  "pdf_page": 1,
+                  "printed_page": null,
+                  "section": "Synthetic section",
+                  "figure_or_table": null
+                },
+                "confidence": "medium"
+              }
+            ]
+          },
+          {
+            "section_id": "conclusions_applications",
+            "units": []
+          },
+          {
+            "section_id": "innovation",
+            "units": [
+              {
+                "unit_id": "unit_a0000003-0000-4000-8000-000000000003",
+                "section_id": "innovation",
+                "statement": "The pattern may reflect an unmeasured intermediate process.",
+                "statement_type": "interpretation",
+                "grounding_status": "interpretive",
+                "evidence_ids": [],
+                "boundary_refs": [],
+                "source_page": {
+                  "pdf_page": 1,
+                  "printed_page": null,
+                  "section": "Synthetic section",
+                  "figure_or_table": null
+                },
+                "confidence": "medium"
+              }
+            ]
+          },
+          {
+            "section_id": "limitations",
+            "units": []
+          },
+          {
+            "section_id": "future_outlook",
+            "units": []
+          }
+        ],
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "fixture_origin": "synthetic_from_scratch"
+      }
+    },
+    {
+      "kind": "review-memory",
+      "record": {
+        "schema_version": "1.0",
+        "review_memory_id": "reviewmem_a0000002-0000-4000-8000-000000000002",
+        "paper_id": "paper_a0000002-0000-4000-8000-000000000002",
+        "source_type": "review",
+        "review_subtype": "narrative_review",
+        "review_subtype_source": "agent_high_confidence",
+        "review_subtype_reason": "The synthetic document explicitly presents a secondary synthesis.",
+        "read_status": "targeted_read",
+        "scope_tags": [
+          "synthetic_review"
+        ],
+        "one_sentence_reuse_value": "Provides a fabricated background taxonomy for later primary-paper reading.",
+        "memory_value": {
+          "status": "reusable",
+          "reason": "One actionable taxonomy is retained."
+        },
+        "coverage_limits": {
+          "unread_sections": [
+            "Synthetic appendix"
+          ],
+          "weakly_read_sections": [],
+          "reason": "The appendix was outside the targeted read."
+        },
+        "sections": [
+          {
+            "section_id": "review_objective_scope",
+            "units": []
+          },
+          {
+            "section_id": "review_question_search_boundaries",
+            "units": []
+          },
+          {
+            "section_id": "taxonomy_field_structure",
+            "units": [
+              {
+                "review_unit_id": "reviewunit_a0000002-0000-4000-8000-000000000002",
+                "section_id": "taxonomy_field_structure",
+                "unit_type": "field_axis",
+                "content": "The fabricated review separates studies by response timing and control completeness.",
+                "source_notes": [
+                  {
+                    "pdf_page": 1,
+                    "printed_page": null,
+                    "section": "Synthetic taxonomy",
+                    "figure_or_table": null,
+                    "note_type": "paraphrase",
+                    "text": "The synthetic review groups studies using timing and control completeness.",
+                    "locator": null,
+                    "reopen_priority": "high"
+                  }
+                ],
+                "workflow_impacts": [
+                  {
+                    "target": "primary_paper_reading",
+                    "action": "Separate the two fabricated response classes during later reading."
+                  }
+                ],
+                "evidence_use": {
+                  "can_support_canonical_evidence": false,
+                  "can_guide_primary_grounding": true,
+                  "primary_grounding_required_before": [
+                    "comparative_claim"
+                  ]
+                },
+                "reuse_quality": {
+                  "reuse_confidence": "medium",
+                  "staleness_risk": "low",
+                  "reason": "The taxonomy is explicit in the synthetic source."
+                },
+                "primary_paper_lead": null,
+                "background_only": true,
+                "can_enter_canonical_evidence": false,
+                "not_fact": true
+              }
+            ]
+          },
+          {
+            "section_id": "major_synthesis",
+            "units": []
+          },
+          {
+            "section_id": "methods_metrics_guardrails",
+            "units": []
+          },
+          {
+            "section_id": "gaps_frontiers",
+            "units": []
+          },
+          {
+            "section_id": "primary_leads_reuse",
+            "units": []
+          }
+        ],
+        "non_reusable_notes": [
+          {
+            "content": "A broad promotional sentence was omitted.",
+            "reason": "promotional"
+          }
+        ],
+        "source_fingerprint": {
+          "algorithm": "sha256",
+          "value": "7f3071f6eb756a15d86d69eb5362bddd947a4dc1cb41d8970ac301b5e6501667"
+        },
+        "parse_snapshot": {
+          "parse_run_id": "event_a0000001-0000-4000-8000-000000000001",
+          "adapter": "synthetic-text",
+          "version": "1.0"
+        },
+        "background_only": true,
+        "can_enter_canonical_evidence": false,
+        "not_fact": true,
+        "review_status": "ai_checked",
+        "automation_status": "passed_auto_checks",
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "fixture_origin": "synthetic_from_scratch"
+      }
+    },
+    {
+      "kind": "question-mapping",
+      "record": {
+        "schema_version": "1.0",
+        "question_id": "question_a0000002-0000-4000-8000-000000000002",
+        "question_text": "Which design features limit interpretation?",
+        "scope": "The fabricated fixture records only.",
+        "domain_profile_id": "domain-alpha",
+        "paper_links": [
+          {
+            "question_link_id": "qlink_a0000003-0000-4000-8000-000000000003",
+            "paper_id": "paper_a0000001-0000-4000-8000-000000000001",
+            "selected_card_unit_ids": [
+              "unit_a0000002-0000-4000-8000-000000000002"
+            ],
+            "role_in_question": "comparison",
+            "relevance_rationale": "The synthetic unit addresses the fixture question.",
+            "evidence_ids": [
+              "evidence_a0000002-0000-4000-8000-000000000002"
+            ],
+            "boundary_refs": [
+              "queue_a0000003-0000-4000-8000-000000000003"
+            ]
+          }
+        ],
+        "mapping_status": "ai_checked",
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "fixture_origin": "synthetic_from_scratch"
+      }
+    },
+    {
+      "kind": "step7-insight",
+      "record": {
+        "schema_version": "1.0",
+        "candidate_id": "insight_a0000001-0000-4000-8000-000000000001",
+        "type": "insight",
+        "question_id": "question_a0000002-0000-4000-8000-000000000002",
+        "title": "Synthetic insight candidate",
+        "candidate_status": "keep",
+        "analysis_operator": "experiment_design",
+        "paper_card_base": [
+          {
+            "paper_id": "paper_a0000001-0000-4000-8000-000000000001",
+            "card_unit_ids": [
+              "unit_a0000002-0000-4000-8000-000000000002"
+            ]
+          }
+        ],
+        "evidence_base": [
+          "evidence_a0000002-0000-4000-8000-000000000002"
+        ],
+        "review_queue_refs": [],
+        "missing_evidence": [
+          "Independent fabricated replication"
+        ],
+        "assumptions": [
+          "The synthetic records are comparable on the stated dimension"
+        ],
+        "risk": [
+          "The fixture does not represent external validity"
+        ],
+        "testability": "Add one fabricated discriminating observation.",
+        "next_action": "Retain as a contract-validation candidate.",
+        "trace_status": "traceable",
+        "input_snapshot": {
+          "domain_profile_version": "1.0",
+          "card_unit_ids": [
+            "unit_a0000002-0000-4000-8000-000000000002"
+          ],
+          "evidence_ids": [
+            "evidence_a0000002-0000-4000-8000-000000000002"
+          ],
+          "review_queue_ids": []
+        },
+        "not_fact": true,
+        "review_status": "ai_draft",
+        "automation_status": "pending",
+        "rejection_rationale": null,
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "fixture_origin": "synthetic_from_scratch",
+        "insight_type": "experimental_idea",
+        "hypothesis_or_idea": "Adding the missing synthetic control may distinguish two explanations.",
+        "rationale": "The current fixture records the control gap without resolving it.",
+        "falsification_condition": "Both explanations remain indistinguishable after the added control.",
+        "minimum_test": "Run the fabricated comparison with one added control arm."
+      }
+    },
+    {
+      "kind": "process-event",
+      "record": {
+        "schema_version": "1.0",
+        "event_id": "event_a0000001-0000-4000-8000-000000000001",
+        "operation": "synthetic_seed_validation",
+        "actor": "cli",
+        "result": "success",
+        "input_refs": [
+          "paper_a0000001-0000-4000-8000-000000000001",
+          "paper_a0000002-0000-4000-8000-000000000002"
+        ],
+        "output_refs": [
+          "evidence_a0000001-0000-4000-8000-000000000001",
+          "evidence_a0000002-0000-4000-8000-000000000002",
+          "reviewmem_a0000002-0000-4000-8000-000000000002"
+        ],
+        "created_at": "2026-01-01T00:00:00Z",
+        "fixture_origin": "synthetic_from_scratch"
+      }
+    },
+    {
+      "kind": "guardian-report",
+      "record": {
+        "schema_version": "1.0",
+        "guardian_report_id": "guardian_a0000001-0000-4000-8000-000000000001",
+        "workspace_id": "workspace_a0000001-0000-4000-8000-000000000001",
+        "status": "success",
+        "findings": [],
+        "created_at": "2026-01-01T00:00:00Z",
+        "fixture_origin": "synthetic_from_scratch"
+      }
+    }
+  ]
+}
