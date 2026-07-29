@@ -153,3 +153,20 @@ host input
 Expected validation findings return a typed result and exit classification. Exceptional authority, version, path, integrity and unresolved-reference failures raise `ResearchKBError` with one `Diagnostic`. Mutation services continue to return transaction receipts, and rendering returns final bytes. This is a host boundary only; it does not grant a browser or Agent additional filesystem or write authority.
 
 The CLI compatibility surface remains unchanged. A future App backend must use these services through a Core-controlled workspace session and may not duplicate bundle validation, parse adapter selection, recovery classification or Question filtering.
+
+## P2-A App Catalog Workflow
+
+The localhost App backend uses the public Core interface directly; the browser never submits a filesystem path:
+
+```text
+configured option ID
+-> WorkspaceSessionService.open
+-> CatalogProjectionService.status
+-> explicit rebuild or incremental update when needed
+-> CatalogQueryService.search
+-> CatalogQueryService.detail
+```
+
+`status` reports `missing`, `current`, `stale`, `corrupt` or `incompatible`. Only `current` and explicitly labeled `stale` projections are queryable. Rebuild and update may write under the confined disposable App state root only. Session opening, status, search and detail create no workspace record, event, journal or canonical scientific write.
+
+Catalog snippets are search projections. A detail response is usable as current record data only when `current_record_status` is `current`; `changed` and `missing` require projection maintenance or upstream inspection. Parsed-page text remains available only through the existing explicit paper-scoped Parse read surface and is not a catalog fallback.

@@ -889,6 +889,21 @@ def main() -> int:
             cwd=temporary,
             check=True,
         )
+        subprocess.run(
+            [
+                str(python),
+                "-c",
+                (
+                    "from research_kb.application import APPLICATION_SERVICE_INTERFACE_VERSION; "
+                    "from research_kb.services import CatalogCapabilityService, "
+                    "CatalogProjectionService, CatalogQueryService, WorkspaceSession, "
+                    "WorkspaceSessionService; "
+                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.0'"
+                ),
+            ],
+            cwd=temporary,
+            check=True,
+        )
     print("wheel_smoke=success")
     return 0
 

@@ -3,6 +3,7 @@
 from research_kb.services.acquired_candidate_intake import AcquiredCandidateIntakeService
 from research_kb.services.application_validation import ContractValidationService, JsonlValidationService
 from research_kb.services.bootstrap import WorkspaceBootstrapService
+from research_kb.services.catalog import CatalogCapabilityService, CatalogProjectionService, CatalogQueryService
 from research_kb.services.capability import CapabilityService
 from research_kb.services.compatibility import CompatibilityAdapterRegistry, CompatibilityInspectionService
 from research_kb.services.discovery import DiscoveryConnectorRegistry, DiscoveryService
@@ -27,6 +28,7 @@ from research_kb.services.step7_candidate import Step7CandidateService
 from research_kb.services.step7_context import Step7ContextService
 from research_kb.services.step7_render import WorkspaceStep7ReadingViewService
 from research_kb.services.step7_view import Step7ReadingViewService
+from research_kb.services.workspace_session import WorkspaceSession, WorkspaceSessionService
 from research_kb.services.question_mapping import QuestionMappingService
 from research_kb.services.question_view import QuestionReadingViewService
 from research_kb.services.records import RecordService
@@ -35,6 +37,9 @@ from research_kb.services.registry import RegistryService
 __all__ = [
     "AcquiredCandidateIntakeService",
     "CapabilityService",
+    "CatalogCapabilityService",
+    "CatalogProjectionService",
+    "CatalogQueryService",
     "CompatibilityAdapterRegistry",
     "CompatibilityInspectionService",
     "ContractValidationService",
@@ -67,6 +72,8 @@ __all__ = [
     "RecordService",
     "RegistryService",
     "WorkspaceBootstrapService",
+    "WorkspaceSession",
+    "WorkspaceSessionService",
     "WorkspaceQuestionReadingViewService",
     "WorkspaceStep7ReadingViewService",
 ]

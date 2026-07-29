@@ -10,6 +10,27 @@ Shared Core + CLI
 
 Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, Guardian checks, real-PDF page extraction, Step 7/discovery candidate persistence, and bounded stdout read surfaces including manuscript projection. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Persisted Markdown and additional derived views remain deferred.
 
+## P2-A Read-Only Artifact Catalog Boundary
+
+```text
+trusted configured workspace option
+-> Core workspace session
+-> versioned current-record adapters
+-> disposable SQLite/FTS projection outside workspace and source roots
+-> bounded cursor search
+-> authoritative current-record detail
+```
+
+`WorkspaceSessionService` accepts only backend-configured option IDs and returns redacted workspace/profile display metadata. Absolute workspace paths stay inside the trusted backend process. `CatalogProjectionService` derives every projection path under one marker-owned App state root that must not overlap the workspace root, knowledge root, local inbox or any source root. Existing state, marker, workspace projection and database paths fail closed when they are links, reparse points or the wrong filesystem type.
+
+The catalog adapter registry covers current Registry papers, Paper Card Units, Evidence, Review Memories and Units, Question Mappings, Step 7 candidates, process events and Guardian reports. Raw parsed pages, review queue content and discovery candidates are deliberately excluded. Unknown future kinds are reported and included in the source watermark without schema guessing.
+
+SQLite/FTS is a disposable projection, never canonical or operational authority. Full rebuild uses a temporary sibling plus atomic replacement. Incremental update removes and recreates only changed or removed source projections in one transaction, verifies source/item/FTS counts and foreign keys, and must converge to a full rebuild. The watermark binds the adapter registry version and indexed durable-record digests; upstream change makes the projection `stale` without rewriting the upstream record.
+
+Search uses a maximum page size of 100 and an opaque cursor bound to the normalized query, filters, ordering and an existing final tuple. Results label projection freshness. Detail lookup reloads the authoritative current structured record, compares its digest with the projected row and returns `current`, `changed` or `missing`; SQLite-only scientific content is never promoted as current detail.
+
+The public App-facing interface is `research_kb.application` version `1.0` plus services exported from `research_kb.services`. P2-A adds no CLI command, canonical schema, workspace layout, scientific mutation or Agent runtime.
+
 ## Knowledge Flow
 
 ```text
