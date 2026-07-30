@@ -1,8 +1,10 @@
 # P3-C Source Adequacy And Deterministic Trunk Closure Manifest
 
-- status: `implementation_committed_ready_for_remote_review`
+- status: `remote_review_open`
 - validated_at: `2026-07-31T00:04:03+08:00`
 - implementation_commit: `e32f9132194263bf1a2eb4cc074d06d6f6db943c`
+- closure_commit: `f137d357664b613ceac9f8ecee7b46c8f4d68e17`
+- review_pr: `https://github.com/ZhangChengwei0722/research-kb-core/pull/34`
 - branch: `feature/p3c-source-adequacy`
 - baseline: `main@1a504b60d07e9cfa40442de42f475adba4fcddc1`
 - package: `research-kb-core==0.1.0`
@@ -90,5 +92,6 @@ or rule dependency is stale.
   migration or protected legacy cutover;
 - merge or post-merge validation.
 
-The next gate is P3-C remote review and integration closure. P3-D must then begin from
-its own bounded implementation plan and may not absorb P4 semantic or Agent Task scope.
+PR #34 is open and GitHub reports the branch mergeable with a clean merge state. The next
+gate is explicit integration and post-merge validation. P3-D must then begin from its own
+bounded implementation plan and may not absorb P4 semantic or Agent Task scope.
