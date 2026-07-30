@@ -94,7 +94,7 @@ def main() -> int:
             raise SystemExit("PDF wheel capability report lacks Source Adequacy writes")
         if capability["discovery_connectors"] != [{"connector": "europe-pmc", "availability": "available", "network_required": True}]:
             raise SystemExit("PDF wheel capability report lacks the Europe PMC connector")
-        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["manuscript_projection"] is not True or capability["features"]["pipeline_jobs"] is not True or capability["features"]["source_asset_runtime"] is not True or capability["features"]["registry_identity_correction"] is not True or capability["features"]["source_adequacy"] is not True or capability["features"]["deterministic_trunk"] is not True:
+        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["manuscript_projection"] is not True or capability["features"]["pipeline_jobs"] is not True or capability["features"]["source_asset_runtime"] is not True or capability["features"]["registry_identity_correction"] is not True or capability["features"]["source_adequacy"] is not True or capability["features"]["deterministic_trunk"] is not True or capability["features"]["deterministic_intake_application"] is not True:
             raise SystemExit("PDF wheel capability report lacks Review Memory, Step 7 or discovery runtime")
         for command in ("context", "render"):
             subprocess.run(
@@ -144,7 +144,7 @@ def main() -> int:
                 "source_roots": [
                     {"root_id": "pdf-wheel-sources", "path": "./sources", "read_only_assets": True}
                 ],
-                "local_inbox": "./inbox",
+                "local_inbox": "./sources/inbox",
                 "domain_profile": "./domain-profile.json",
             },
             "runtime": {
@@ -452,6 +452,47 @@ def main() -> int:
             raise SystemExit("PDF wheel paper context changed managed workspace files")
         if _sha256(source) != source_before:
             raise SystemExit("PDF wheel parse changed the generated source PDF")
+
+        facade_source = write_synthetic_pdf(
+            sources / "wheel-facade-primary.pdf",
+            ["Synthetic installed-wheel facade intake."],
+        )
+        (sources / "inbox").mkdir()
+        facade_request = {
+            "idempotency_key": "pdf-wheel-facade-1",
+            "requested_operation": "basic_paper_card",
+            "document_route": "primary",
+            "route_reason": None,
+            "bibliography": {
+                "title": "Synthetic installed-wheel facade intake",
+                "authors": ["Fixture Author"],
+                "year": 2026,
+                "doi": None,
+            },
+            "expected_sha256": _sha256(facade_source),
+            "expected_size_bytes": facade_source.stat().st_size,
+        }
+        subprocess.run(
+            [
+                str(python),
+                "-c",
+                (
+                    "from pathlib import Path; "
+                    "from research_kb.services import DeterministicIntakeApplicationService, WorkspaceSessionService; "
+                    f"session = WorkspaceSessionService({{'wheel': Path({str(config_path)!r})}}).open('wheel'); "
+                    f"source = Path({str(facade_source)!r}); request = {facade_request!r}; "
+                    "stream = source.open('rb'); "
+                    "result = DeterministicIntakeApplicationService().start_upload(session, stream, request); "
+                    "stream.close(); "
+                    "assert result['pipeline']['status'] == 'completed'; "
+                    "assert result['pipeline']['current_node'] == 'primary_semantic_gate'; "
+                    "assert result['source_adequacy']['gate_status'] == 'allowed'; "
+                    "assert result['persistent_writes'] > 0"
+                ),
+            ],
+            cwd=temporary_root,
+            check=True,
+        )
 
     print("wheel_pdf_smoke=success")
     return 0

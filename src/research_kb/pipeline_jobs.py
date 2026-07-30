@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import datetime
 from typing import Any
 
@@ -45,6 +45,7 @@ ALLOWED_TRANSITIONS = {
     ),
     "running": frozenset(
         {
+            "running",
             "waiting_user",
             "waiting_agent",
             "waiting_source",
@@ -108,6 +109,41 @@ def validate_transition(previous_status: str, status: str) -> None:
         raise _job_error(
             f"invalid Pipeline Job transition from {previous_status} to {status}",
             "/status",
+        )
+
+
+def validate_running_progress(
+    previous: Mapping[str, Any],
+    current: Mapping[str, Any],
+) -> None:
+    if previous.get("status") != "running" or current.get("status") != "running":
+        return
+    if current.get("current_node") == previous.get("current_node"):
+        raise _job_error(
+            "running progress must advance the current node",
+            "/current_node",
+        )
+    previous_outputs = set(previous.get("output_refs", []))
+    current_outputs = set(current.get("output_refs", []))
+    if not previous_outputs < current_outputs:
+        raise _job_error(
+            "running progress must append at least one committed output ref",
+            "/output_refs",
+        )
+    if current.get("retry_count") != previous.get("retry_count"):
+        raise _job_error(
+            "running progress cannot change the retry count",
+            "/retry_count",
+        )
+    if current.get("wait_reason") is not None:
+        raise _job_error(
+            "running progress cannot set a wait reason",
+            "/wait_reason",
+        )
+    if current.get("recovery_action") is not None:
+        raise _job_error(
+            "running progress cannot set a recovery action",
+            "/recovery_action",
         )
 
 
@@ -222,6 +258,7 @@ def pipeline_job_chain_diagnostics(states: Iterable[dict[str, Any]]) -> list[Dia
                     state.get("wait_reason"),
                     state.get("recovery_action"),
                 )
+                validate_running_progress(previous, state)
             except ResearchKBError as error:
                 diagnostics.append(_from_error(state, error))
             if state.get("retry_count", -1) < previous.get("retry_count", 0):
@@ -304,6 +341,7 @@ __all__ = [
     "WAIT_REASONS_BY_STATUS",
     "current_pipeline_states",
     "pipeline_job_chain_diagnostics",
+    "validate_running_progress",
     "validate_transition",
     "validate_wait_state",
 ]

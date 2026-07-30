@@ -22,6 +22,7 @@ from research_kb.pipeline_jobs import (
     TERMINAL_STATUSES,
     current_pipeline_states,
     pipeline_job_chain_diagnostics,
+    validate_running_progress,
     validate_transition,
     validate_wait_state,
 )
@@ -217,6 +218,7 @@ class PipelineJobService:
             raise _cas_error(expected_state_id, "Pipeline Job current state changed before transition")
 
         validate_transition(head["status"], status)
+        validate_running_progress(head, intended)
         state_id = self.id_allocator(Namespace.JOB_STATE)
         validate_id(state_id, Namespace.JOB_STATE)
         if state_id in {item["state_id"] for item in states}:

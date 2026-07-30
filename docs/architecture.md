@@ -516,3 +516,34 @@ An allowed use stops at `route_ambiguous` until an explicit user decision select
 `primary` or `review`; `mixed_document` is preserved as a review-route reason. P3-C creates
 no Paper Card, Evidence, Review Memory, scientific review queue or Agent Task. Those
 semantic and App-preview responsibilities remain in P4 and P3-D respectively.
+
+## P3-D0 Session-Bound Deterministic Intake Facade
+
+`DeterministicIntakeApplicationService` is the sole Core-owned composition boundary for
+the first App intake workflow. It accepts an opaque `WorkspaceSession`; only Core reads
+the session layout. The facade supports bounded inbox scan, upload-stream start,
+watched-inbox start, resume, cancel, list, detail and authoritative limits. It adds no
+CLI command, browser transport, schema or App workflow database.
+
+One start request creates or exactly replays a `local_source / semantic_gate` Pipeline
+Job with a closed authority set for its ingress mode. Upload requires a backend-computed
+size and SHA-256 and uses the existing create-only local-inbox stream boundary. Watched
+inbox requires both candidate selection and reference-registration authority. Browser
+inputs cannot add operations or submit a server filesystem path.
+
+Recovery is receipt-based. The facade requires exactly one mode-matching Source Asset
+root and exactly one correlated success event containing that root and state ID. Registry
+and association steps likewise reuse one correlated receipt. A crash after any committed
+substep appends only the missing Job transition; it never repeats Registry identity
+creation or moves the deterministic intake node backwards.
+
+P3-D0 permits `running -> running` only as deterministic progress: `current_node` must
+change, committed outputs must be a strict superset, and wait, retry and recovery state
+must remain unchanged. The same rule validates stored history so tampered chains fail
+closed. Public results omit source refs, paths, fingerprints, idempotency keys, authority
+snapshots, raw parsed text and user-authored reason text.
+
+The facade stops at an explicit wait or completed primary/review semantic gate. It creates
+no Paper Card, Evidence, Review Memory, scientific review queue, Agent Task or staging
+record. P3-D1 owns the secure localhost backend and operation coordinator; P3-D2 owns the
+browser UI; P3-D3 owns integrated browser acceptance.

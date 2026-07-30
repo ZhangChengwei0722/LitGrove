@@ -123,7 +123,7 @@ def main() -> int:
             raise SystemExit("base wheel capability report lacks Source Adequacy writes")
         if capability["discovery_connectors"] != [{"connector": "europe-pmc", "availability": "available", "network_required": True}]:
             raise SystemExit("base wheel capability report lacks the Europe PMC connector")
-        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["approved_discovery_candidate_handoff"] is not True or capability["features"]["legal_oa_resolution"] is not True or capability["features"]["explicit_oa_acquisition"] is not True or capability["features"]["manuscript_projection"] is not True or capability["features"]["pipeline_jobs"] is not True or capability["features"]["source_asset_runtime"] is not True or capability["features"]["registry_identity_correction"] is not True or capability["features"]["source_adequacy"] is not True or capability["features"]["deterministic_trunk"] is not True:
+        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["approved_discovery_candidate_handoff"] is not True or capability["features"]["legal_oa_resolution"] is not True or capability["features"]["explicit_oa_acquisition"] is not True or capability["features"]["manuscript_projection"] is not True or capability["features"]["pipeline_jobs"] is not True or capability["features"]["source_asset_runtime"] is not True or capability["features"]["registry_identity_correction"] is not True or capability["features"]["source_adequacy"] is not True or capability["features"]["deterministic_trunk"] is not True or capability["features"]["deterministic_intake_application"] is not True:
             raise SystemExit("base wheel capability report lacks Review Memory, Step 7 or discovery runtime")
         subprocess.run(
             [
@@ -939,11 +939,17 @@ def main() -> int:
                 str(python),
                 "-c",
                 (
+                    "from pathlib import Path; "
                     "from research_kb.application import APPLICATION_SERVICE_INTERFACE_VERSION; "
                     "from research_kb.services import CatalogCapabilityService, "
                     "CatalogProjectionService, CatalogQueryService, WorkspaceSession, "
-                    "WorkspaceSessionService, SourceAssetService, RegistryIdentityCorrectionService; "
-                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.0'"
+                    "WorkspaceSessionService, SourceAssetService, RegistryIdentityCorrectionService, "
+                    "DeterministicIntakeApplicationService; "
+                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.1'; "
+                    f"session = WorkspaceSessionService({{'wheel': Path({str(config_path)!r})}}).open('wheel'); "
+                    "limits = DeterministicIntakeApplicationService().limits(session); "
+                    "assert limits['interface_version'] == '1.1'; "
+                    "assert limits['ingress_modes'] == ['upload', 'watched_inbox']"
                 ),
             ],
             cwd=temporary,

@@ -10,6 +10,7 @@ from research_kb.contracts.validator import validate_record
 from research_kb.errors import ResearchKBError
 from research_kb.guardian import GuardianService
 from research_kb.identifiers import Namespace, allocate_id
+from research_kb.pipeline_jobs import pipeline_job_chain_diagnostics
 from research_kb.services.pipeline_job import PipelineJobService
 from research_kb.storage.json_io import read_json_document, read_jsonl, serialize_jsonl
 from research_kb.storage.transactions import TransactionManager
@@ -501,3 +502,126 @@ def test_pipeline_job_transaction_recovery_converges(
     if state_exists:
         assert PipelineJobService(layout).show(JOB_ID)["current_state"]["state_id"] == STATE_IDS[0]
     assert GuardianService(layout).check().report["status"] == "success"
+
+
+def test_running_progress_transition_retains_outputs_without_changing_wait_semantics(tmp_path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    service = PipelineJobService(layout)
+    created = create_job(service).state
+    running = service.transition(
+        created["job_id"],
+        expected_state_id=created["state_id"],
+        expected_state_digest=canonical_digest(created),
+        status="running",
+        current_node="registry",
+        wait_reason=None,
+        output_refs=[created["state_id"]],
+        retry_increment=0,
+        recovery_action=None,
+        actor="cli",
+    ).state
+
+    progressed = service.transition(
+        running["job_id"],
+        expected_state_id=running["state_id"],
+        expected_state_digest=canonical_digest(running),
+        status="running",
+        current_node="source_association",
+        wait_reason=None,
+        output_refs=[running["state_id"]],
+        retry_increment=0,
+        recovery_action=None,
+        actor="cli",
+    ).state
+
+    assert progressed["status"] == "running"
+    assert progressed["wait_reason"] is None
+    assert progressed["retry_count"] == running["retry_count"]
+    assert set(progressed["output_refs"]) == {
+        created["state_id"],
+        running["state_id"],
+    }
+
+
+@pytest.mark.parametrize(
+    ("current_node", "include_new_output", "retry_increment", "expected_path"),
+    [
+        ("registry", True, 0, "/current_node"),
+        ("source_association", False, 0, "/output_refs"),
+        ("source_association", True, 1, "/retry_count"),
+    ],
+)
+def test_running_progress_rejects_non_progress_or_retry_changes(
+    tmp_path,
+    current_node,
+    include_new_output,
+    retry_increment,
+    expected_path,
+) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    service = PipelineJobService(layout)
+    created = create_job(service).state
+    running = service.transition(
+        created["job_id"],
+        expected_state_id=created["state_id"],
+        expected_state_digest=canonical_digest(created),
+        status="running",
+        current_node="registry",
+        wait_reason=None,
+        output_refs=[created["state_id"]],
+        retry_increment=0,
+        recovery_action=None,
+        actor="cli",
+    ).state
+
+    with pytest.raises(ResearchKBError) as rejected:
+        service.transition(
+            running["job_id"],
+            expected_state_id=running["state_id"],
+            expected_state_digest=canonical_digest(running),
+            status="running",
+            current_node=current_node,
+            wait_reason=None,
+            output_refs=[running["state_id"]] if include_new_output else [],
+            retry_increment=retry_increment,
+            recovery_action=None,
+            actor="cli",
+        )
+
+    assert rejected.value.diagnostic.json_path == expected_path
+
+
+def test_pipeline_job_chain_diagnostics_rejects_tampered_running_progress(tmp_path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    service = PipelineJobService(layout)
+    created = create_job(service).state
+    running = service.transition(
+        created["job_id"],
+        expected_state_id=created["state_id"],
+        expected_state_digest=canonical_digest(created),
+        status="running",
+        current_node="registry",
+        wait_reason=None,
+        output_refs=[created["state_id"]],
+        retry_increment=0,
+        recovery_action=None,
+        actor="cli",
+    ).state
+    progressed = service.transition(
+        running["job_id"],
+        expected_state_id=running["state_id"],
+        expected_state_digest=canonical_digest(running),
+        status="running",
+        current_node="source_association",
+        wait_reason=None,
+        output_refs=[running["state_id"]],
+        retry_increment=0,
+        recovery_action=None,
+        actor="cli",
+    ).state
+    history = PipelineJobService(layout).show(created["job_id"])["history"]
+    history[-1] = {**progressed, "current_node": running["current_node"]}
+
+    diagnostics = pipeline_job_chain_diagnostics(history)
+
+    assert any(item.json_path == "/current_node" for item in diagnostics)

@@ -145,6 +145,7 @@ class CapabilityService:
                 "registry_identity_correction": True,
                 "source_adequacy": True,
                 "deterministic_trunk": True,
+                "deterministic_intake_application": True,
             },
         }
 
