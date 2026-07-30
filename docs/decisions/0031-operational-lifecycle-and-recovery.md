@@ -22,7 +22,7 @@ At tens-of-thousands catalog scale, Jobs, Tasks, events, reports and staging pay
 | Failure | Responsible record/output |
 |---|---|
 | missing file, parse failure or inadequate/stale source capability | Pipeline Job waiting for source or reparse |
-| document route ambiguity | user decision in P3; versioned Agent Task after P4 |
+| document route ambiguity | P4-A versioned Agent Task for external classification; user preview and approval remain authoritative |
 | unsupported Primary Card Unit | scientific `review_queue` |
 | schema, reference, transaction, projection or integrity fault | Guardian finding |
 | suspected cross-review disagreement | conflict-check report scoped to the current task |

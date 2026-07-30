@@ -1,6 +1,6 @@
 # 0030 Agent Task Privacy, Staging And Untrusted Content
 
-Status: accepted
+Status: accepted; P4-A route-resolution runtime implemented
 
 ## Context
 
@@ -78,6 +78,8 @@ The App renders escaped text and sanitized Markdown under CSP. Allowed links use
 
 ## Consequences
 
-- P4 owns the first task schema/runtime and must materialize the registry only after separate approval.
+- P4-A materializes registry `p4a-v1`, append-only Task state, bounded embedded staging,
+  external handoff and explicit route-result approval for `document_route_resolution`.
+  Other registered task kinds remain fail-closed and deferred to their owning phases.
 - Deterministic adapter conformance is CI; bounded live Agent smoke is optional/non-deterministic and cannot gate CI on login, network, cost or model drift.
 - P0 creates no Agent Task, prompt bundle or staging runtime.
