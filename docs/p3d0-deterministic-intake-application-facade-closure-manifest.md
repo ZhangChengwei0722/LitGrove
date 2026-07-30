@@ -1,11 +1,12 @@
 # P3-D0 Deterministic Intake Application Facade Closure Manifest
 
-- status: `review_open`
+- status: `merged_post_merge_validated`
 - validated_at: `2026-07-31T02:05:02+08:00`
+- post_merge_validated_at: `2026-07-31T02:22:57+08:00`
 - implementation_commit: `bb439ef9fce565de7bde50c28ac3e3275a39618f`
 - closure_commit: `aa9ee3049f258dd45364e84ec568e455efe3f498`
 - review_pr: `https://github.com/ZhangChengwei0722/research-kb-core/pull/36`
-- merge_commit: `pending`
+- merge_commit: `9309560357f064e63356e6921a737eafc8d80246`
 - branch: `feature/p3d0-intake-facade`
 - baseline: `main@0c961b2143686b19ffbb07a9ac5e20c70f5ae2f2`
 - package: `research-kb-core==0.1.0`
@@ -74,8 +75,12 @@ canonical scientific schema or semantic record writer.
 - package version: `research-kb 0.1.0`;
 - privacy scan: `7 expected, 0 unexpected`;
 - `git diff --check`: passed;
-- synthetic source assets only; Q001, private workspaces, real PDFs and protected sources:
+- synthetic source assets only; private workspaces, real PDFs and protected sources:
   not accessed.
+- post-merge validation at `9309560357f064e63356e6921a737eafc8d80246`
+  repeated `compileall`, the full Windows suite, package build, both installed-wheel
+  smokes, version, privacy scan and diff checks with the same passing results after the
+  closure manifest privacy correction.
 
 ## Review Notes
 
@@ -84,6 +89,9 @@ canonical scientific schema or semantic record writer.
 - Installed-wheel smoke exposed and corrected the synthetic fixture requirement that an
   existing `local_inbox` be addressable through exactly one declared source root. Core
   correctly failed closed in both invalid fixture states.
+- Initial post-merge privacy validation found one private-domain marker in this closure
+  document. The marker was removed on the dedicated closure branch before the validation
+  matrix was repeated; no runtime or scientific record was affected.
 - The 840-line facade is comparable to existing focused Catalog and Source Asset services.
   Its normalization, receipt reconciliation and redacted projection helpers remain one
   application-use-case boundary; splitting them now would distribute recovery invariants
@@ -94,8 +102,9 @@ canonical scientific schema or semantic record writer.
 - repository audiences are synchronized through `README.md`, `docs/architecture.md`,
   `docs/workflow.md`, `docs/contributor-guide.md` and this manifest;
 - external final design, overall plan, product roadmap and App compatibility state remain
-  pending until remote merge and post-merge validation;
-- `neat-freak` milestone reconciliation remains pending until the merge commit is durable.
+  pending until this closure correction is merged;
+- `neat-freak` milestone reconciliation remains pending until the closure commit is
+  durable on `main`.
 
 ## Explicitly Not Delivered
 
