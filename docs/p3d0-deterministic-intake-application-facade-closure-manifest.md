@@ -1,10 +1,10 @@
 # P3-D0 Deterministic Intake Application Facade Closure Manifest
 
-- status: `validated_pre_merge`
+- status: `review_open`
 - validated_at: `2026-07-31T02:05:02+08:00`
 - implementation_commit: `bb439ef9fce565de7bde50c28ac3e3275a39618f`
-- closure_commit: `pending`
-- review_pr: `pending`
+- closure_commit: `aa9ee3049f258dd45364e84ec568e455efe3f498`
+- review_pr: `https://github.com/ZhangChengwei0722/research-kb-core/pull/36`
 - merge_commit: `pending`
 - branch: `feature/p3d0-intake-facade`
 - baseline: `main@0c961b2143686b19ffbb07a9ac5e20c70f5ae2f2`
