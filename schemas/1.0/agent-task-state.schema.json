@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:agent-task-state",
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "predecessor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state_id", "state_digest"],
+      "properties": {
+        "state_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/agent_task_state_id"},
+        "state_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "input_basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paper_id", "paper_record_digest", "job_id", "job_state_id", "job_state_digest", "source_digest", "parse_run_id", "parse_output_digest", "adequacy_profile_id", "adequacy_profile_digest", "requested_operation"],
+      "properties": {
+        "paper_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+        "paper_record_digest": {"$ref": "#/$defs/digest"},
+        "job_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/job_id"},
+        "job_state_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/job_state_id"},
+        "job_state_digest": {"$ref": "#/$defs/digest"},
+        "source_digest": {"$ref": "#/$defs/digest"},
+        "parse_run_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/event_id"},
+        "parse_output_digest": {"$ref": "#/$defs/digest"},
+        "adequacy_profile_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_adequacy_id"},
+        "adequacy_profile_digest": {"$ref": "#/$defs/digest"},
+        "requested_operation": {"enum": ["basic_paper_card", "basic_review_memory"]}
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["predecessor_task_id", "predecessor_result_digest", "feedback"],
+      "properties": {
+        "predecessor_task_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/agent_task_id"},
+        "predecessor_result_digest": {"$ref": "#/$defs/digest"},
+        "feedback": {"type": "string", "minLength": 1, "maxLength": 4000}
+      }
+    },
+    "lease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lease_id", "handoff_digest", "issued_at"],
+      "properties": {
+        "lease_id": {"$ref": "#/$defs/digest"},
+        "handoff_digest": {"$ref": "#/$defs/digest"},
+        "issued_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "reason_code", "feedback", "successor_task_id", "applied_job_state_id", "decided_at"],
+      "properties": {
+        "action": {"enum": ["revision_requested", "rejected", "approved"]},
+        "reason_code": {"type": ["string", "null"], "enum": [null, "user_rejected", "route_confirmed"]},
+        "feedback": {"type": ["string", "null"], "maxLength": 4000},
+        "successor_task_id": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/agent_task_id"}, {"type": "null"}]},
+        "applied_job_state_id": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/job_state_id"}, {"type": "null"}]},
+        "decided_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "state_id", "task_id", "workspace_id", "revision", "predecessor", "task_kind", "result_contract", "privacy_registry_version", "executor_id", "execution_scope", "effective_content_classes", "input_basis", "input_basis_digest", "idempotency_key", "lineage", "status", "lease", "staged_result", "decision", "terminal_receipt", "created_at", "updated_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "state_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/agent_task_state_id"},
+    "task_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/agent_task_id"},
+    "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "revision": {"type": "integer", "minimum": 1},
+    "predecessor": {"anyOf": [{"$ref": "#/$defs/predecessor"}, {"type": "null"}]},
+    "task_kind": {"const": "document_route_resolution"},
+    "result_contract": {"const": "p4a-document-route-decision@1.0"},
+    "privacy_registry_version": {"const": "p4a-v1"},
+    "executor_id": {"enum": ["codex_cli", "claude_code_cli"]},
+    "execution_scope": {"const": "cloud_allowed"},
+    "effective_content_classes": {
+      "type": "array",
+      "minItems": 3,
+      "uniqueItems": true,
+      "items": {"enum": ["metadata", "parsed_excerpt", "operational_context"]}
+    },
+    "input_basis": {"$ref": "#/$defs/input_basis"},
+    "input_basis_digest": {"$ref": "#/$defs/digest"},
+    "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 200},
+    "lineage": {"anyOf": [{"$ref": "#/$defs/lineage"}, {"type": "null"}]},
+    "status": {"enum": ["created", "leased", "submitted", "revision_requested", "rejected", "approved", "cancelled"]},
+    "lease": {"anyOf": [{"$ref": "#/$defs/lease"}, {"type": "null"}]},
+    "staged_result": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:document-route-decision"}, {"type": "null"}]},
+    "decision": {"anyOf": [{"$ref": "#/$defs/decision"}, {"type": "null"}]},
+    "terminal_receipt": {"type": "boolean"},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "updated_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}
+  }
+}

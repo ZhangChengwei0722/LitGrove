@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:document-route-decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "task_id", "input_basis_digest", "document_route", "route_reason", "confidence", "rationale"],
+  "properties": {
+    "contract_version": {"const": "p4a-document-route-decision@1.0"},
+    "task_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/agent_task_id"},
+    "input_basis_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "document_route": {"enum": ["primary", "review"]},
+    "route_reason": {"type": ["string", "null"], "enum": [null, "mixed_document"]},
+    "confidence": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/confidence"},
+    "rationale": {"type": "string", "minLength": 1, "maxLength": 2000}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"route_reason": {"const": "mixed_document"}}, "required": ["route_reason"]},
+      "then": {"properties": {"document_route": {"const": "review"}}}
+    }
+  ]
+}

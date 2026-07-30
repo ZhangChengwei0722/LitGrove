@@ -2,6 +2,7 @@
 
 from research_kb.services.acquired_candidate_intake import AcquiredCandidateIntakeService
 from research_kb.services.application_validation import ContractValidationService, JsonlValidationService
+from research_kb.services.agent_task_application import AgentTaskApplicationService
 from research_kb.services.bootstrap import WorkspaceBootstrapService
 from research_kb.services.catalog import CatalogCapabilityService, CatalogProjectionService, CatalogQueryService
 from research_kb.services.capability import CapabilityService
@@ -44,6 +45,7 @@ from research_kb.services.source_adequacy import SourceAdequacyMutationResult, S
 
 __all__ = [
     "AcquiredCandidateIntakeService",
+    "AgentTaskApplicationService",
     "CapabilityService",
     "CatalogCapabilityService",
     "CatalogProjectionService",

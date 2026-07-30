@@ -129,7 +129,13 @@ def _scan_bytes(content: bytes, path: str) -> list[PrivacyFinding]:
     home_count = text.count(slash + "Users" + slash) + text.count(slash + "home" + slash)
     for _ in range(home_count):
         findings.append(PrivacyFinding(path, "posix_home_path", "user-home-shaped path detected"))
-    credential_count = text.count("sk" + "-")
+    credential_count = sum(
+        1
+        for _ in re.finditer(
+            r"(?<![A-Za-z0-9])" + re.escape("sk" + "-") + r"[A-Za-z0-9_-]{8,}",
+            text,
+        )
+    )
     credential_count += sum(1 for _ in re.finditer(r"(?i)(?:token|password|secret)\s*[=:]\s*[^\s\"']{8,}", text))
     for _ in range(credential_count):
         findings.append(PrivacyFinding(path, "credential_like", "credential-like value detected"))

@@ -344,6 +344,7 @@ class WorkspaceBootstrapService:
             "registry/papers.jsonl",
             "review_queue/items.jsonl",
             "process/events.jsonl",
+            "process/agent_tasks.jsonl",
             "guardian/reports.jsonl",
             "questions/mappings.jsonl",
             "discovery/candidates.jsonl",
@@ -609,6 +610,7 @@ def _journal_target_matches_store(target_store: str, relative_path: str) -> bool
         "step7_review_angles": "step7/review_angles.jsonl",
         "step7_insights": "step7/insights.jsonl",
         "step7_cross_views": "step7/cross_views.jsonl",
+        "agent_tasks": "process/agent_tasks.jsonl",
     }
     if target_store in exact:
         return relative_path == exact[target_store]

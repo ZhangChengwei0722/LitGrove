@@ -38,6 +38,8 @@ SCHEMA_FILES: dict[str, str] = {
     "source-asset-state": "source-asset-state.schema.json",
     "registry-identity-correction": "registry-identity-correction.schema.json",
     "source-adequacy-profile": "source-adequacy-profile.schema.json",
+    "agent-task-state": "agent-task-state.schema.json",
+    "document-route-decision": "document-route-decision.schema.json",
     "mutation-request": "mutation-request.schema.json",
     "transaction-journal": "transaction-journal.schema.json",
 }

@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from research_kb.acquisition_paths import acquisition_destination, local_inbox_destination
+from research_kb.agent_tasks import agent_task_chain_diagnostics, current_agent_task_states
 from research_kb.bundle import BundleEntry, load_workspace_entries, records_of_kind
+from research_kb.catalog.models import canonical_digest
 from research_kb.contracts.validator import validate_bundle, validate_record
 from research_kb.errors import (
     GROUNDING_MISMATCH,
@@ -92,6 +94,7 @@ class GuardianService:
         diagnostics.extend(self._adequacy_diagnostics(entries, process_events))
         diagnostics.extend(self._transaction_diagnostics(process_events))
         diagnostics.extend(self._job_event_diagnostics(entries, process_events))
+        diagnostics.extend(self._agent_task_diagnostics(entries, process_events))
         diagnostics.extend(self._source_event_diagnostics(entries, process_events))
         diagnostics = _deduplicate(diagnostics)
         defined_ids = _defined_ids(entries)
@@ -472,6 +475,7 @@ class GuardianService:
             self.layout.review_queue_path,
             self.layout.process_events_path,
             self.layout.pipeline_jobs_path,
+            self.layout.agent_tasks_path,
             self.layout.guardian_reports_path,
             self.layout.guardian_finding_dispositions_path,
             self.layout.question_mappings_path,
@@ -494,6 +498,110 @@ class GuardianService:
             except ResearchKBError:
                 diagnostics.append(
                     Diagnostic(PATH_ESCAPE, "workspace", self.layout.workspace_id, str(path), "canonical target resolves outside knowledge_root")
+                )
+        return diagnostics
+
+    def _agent_task_diagnostics(
+        self,
+        entries: list[BundleEntry],
+        process_events: list[dict[str, Any]],
+    ) -> list[Diagnostic]:
+        diagnostics: list[Diagnostic] = []
+        states = [record for kind, record in entries if kind == "agent-task-state"]
+        chain = agent_task_chain_diagnostics(states)
+        diagnostics.extend(chain)
+        if chain:
+            return diagnostics
+        state_ids = {state["state_id"] for state in states}
+        for state in states:
+            matching = [
+                event
+                for event in process_events
+                if event.get("operation", "").startswith("agent_task_")
+                and event.get("result") == "success"
+                and state["state_id"] in event.get("output_refs", [])
+            ]
+            if len(matching) != 1:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "agent-task-state",
+                        state["state_id"],
+                        "/state_id",
+                        f"Agent Task state must have exactly one correlated success event; found {len(matching)}",
+                    )
+                )
+        for event in process_events:
+            if not event.get("operation", "").startswith("agent_task_") or event.get("result") != "success":
+                continue
+            correlated = set(event.get("output_refs", [])) & state_ids
+            if not correlated:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "process-event",
+                        event["event_id"],
+                        "/output_refs",
+                        "Agent Task success event does not reference an Agent Task state",
+                    )
+                )
+        job_states = [record for kind, record in entries if kind == "pipeline-job-state"]
+        job_by_state = {state["state_id"]: state for state in job_states}
+        pipeline_chain = pipeline_job_chain_diagnostics(job_states)
+        job_heads = (
+            {state["job_id"]: state for state in current_pipeline_states(job_states)}
+            if job_states and not pipeline_chain
+            else {}
+        )
+        for task in current_agent_task_states(states):
+            basis = task["input_basis"]
+            basis_job = job_by_state.get(basis["job_state_id"])
+            if basis_job is not None and canonical_digest(basis_job) != basis["job_state_digest"]:
+                diagnostics.append(
+                    Diagnostic(
+                        GROUNDING_MISMATCH,
+                        "agent-task-state",
+                        task["state_id"],
+                        "/input_basis/job_state_digest",
+                        "Agent Task Job basis digest does not match the retained Job state",
+                    )
+                )
+            if task["status"] == "approved":
+                applied = job_by_state.get(task["decision"]["applied_job_state_id"])
+                staged = task["staged_result"]
+                expected_node = (
+                    "review_semantic_gate_mixed_document"
+                    if staged["document_route"] == "review" and staged["route_reason"] == "mixed_document"
+                    else "primary_semantic_gate"
+                    if staged["document_route"] == "primary"
+                    else "review_semantic_gate"
+                )
+                if applied is not None and (
+                    applied.get("status") != "completed" or applied.get("current_node") != expected_node
+                ):
+                    diagnostics.append(
+                        Diagnostic(
+                            GROUNDING_MISMATCH,
+                            "agent-task-state",
+                            task["state_id"],
+                            "/decision/applied_job_state_id",
+                            "approved Agent Task does not reference a matching completed semantic-route Job state",
+                        )
+                    )
+            job_head = job_heads.get(basis["job_id"])
+            if not pipeline_chain and task["status"] not in {"revision_requested", "rejected", "approved", "cancelled"} and (
+                job_head is None
+                or job_head.get("status") != "waiting_agent"
+                or job_head.get("current_node") != "document_route_resolution"
+            ):
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "agent-task-state",
+                        task["state_id"],
+                        "/input_basis/job_id",
+                        "non-terminal Agent Task is not owned by a waiting_agent route-resolution Job",
+                    )
                 )
         return diagnostics
 
@@ -792,6 +900,8 @@ def _finding_from_diagnostic(diagnostic: Diagnostic, defined_ids: set[str]) -> d
         remediation = "Inspect the append-only operational chain and transaction journal; recover by digest or append an explicit disposition without rewriting history."
     elif diagnostic.record_kind == "source-adequacy-profile":
         remediation = "Re-run the exact requested-use assessment or resume its owning Pipeline Job; do not edit or delete the historical profile."
+    elif diagnostic.record_kind == "agent-task-state":
+        remediation = "Inspect the Agent Task chain, its exact input basis and correlated transaction event; do not promote staged output automatically."
     return {
         "code": diagnostic.code,
         "severity": diagnostic.severity,
@@ -815,6 +925,7 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
         "source-asset-state": "source_asset_state_id",
         "registry-identity-correction": "correction_id",
         "source-adequacy-profile": "profile_id",
+        "agent-task-state": "state_id",
         "question-mapping": "question_id",
         "discovery-candidate": "candidate_id",
         "step7-synthesis": "candidate_id",
@@ -841,6 +952,8 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
                 result.add(value)
             if kind == "pipeline-job-state" and isinstance(record.get("job_id"), str):
                 result.add(record["job_id"])
+            elif kind == "agent-task-state" and isinstance(record.get("task_id"), str):
+                result.add(record["task_id"])
             elif kind == "source-asset-state" and isinstance(record.get("source_asset_id"), str):
                 result.add(record["source_asset_id"])
     return result

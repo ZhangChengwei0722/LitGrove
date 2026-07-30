@@ -11,6 +11,7 @@ from urllib.parse import urldefrag
 from jsonschema import Draft202012Validator, FormatChecker
 
 from research_kb.catalog.models import canonical_digest
+from research_kb.agent_tasks import agent_task_chain_diagnostics
 from research_kb.contracts.registry import SchemaRegistry
 from research_kb.contracts.versions import require_supported
 from research_kb.errors import (
@@ -55,6 +56,7 @@ from research_kb.source_assets import (
 
 
 CONFIG_KINDS = {"workspace", "domain-profile", "mutation-request"}
+RESULT_CONTRACT_KINDS = {"document-route-decision"}
 HUMAN_ONLY_REVIEW_STATES = {"human_checked", "verified"}
 NON_SUPPORTING_UNIT_STATES = {"interpretive", "background_only", "needs_resolution"}
 
@@ -88,20 +90,21 @@ class RecordValidationSession:
 
     def validate(self, record: dict[str, Any]) -> list[Diagnostic]:
         version_field = "contract_version" if self.kind in CONFIG_KINDS else "schema_version"
-        try:
-            require_supported(record.get(version_field))
-        except ResearchKBError as error:
-            diagnostic = error.diagnostic
-            return [
-                Diagnostic(
-                    diagnostic.code,
-                    self.kind,
-                    _record_id(self.kind, record),
-                    f"/{version_field}",
-                    diagnostic.message,
-                    diagnostic.severity,
-                )
-            ]
+        if self.kind not in RESULT_CONTRACT_KINDS:
+            try:
+                require_supported(record.get(version_field))
+            except ResearchKBError as error:
+                diagnostic = error.diagnostic
+                return [
+                    Diagnostic(
+                        diagnostic.code,
+                        self.kind,
+                        _record_id(self.kind, record),
+                        f"/{version_field}",
+                        diagnostic.message,
+                        diagnostic.severity,
+                    )
+                ]
 
         diagnostics = [
             Diagnostic(
@@ -547,6 +550,8 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
     adequacy_profiles: dict[str, dict[str, Any]] = {}
     parse_run_papers: dict[str, set[str]] = defaultdict(set)
     parse_run_pages: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    agent_task_states: list[dict[str, Any]] = []
+    agent_tasks: set[str] = set()
 
     page_index, provenance_failures = index_active_pages(
         record for kind, record in entries if kind == "parsed-page"
@@ -729,6 +734,10 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
             pipeline_states.append(record)
             jobs.add(record.get("job_id", ""))
             defined["jobstate"].append(record.get("state_id", ""))
+        elif kind == "agent-task-state":
+            agent_task_states.append(record)
+            agent_tasks.add(record.get("task_id", ""))
+            defined["taskstate"].append(record.get("state_id", ""))
         elif kind == "guardian-report":
             guardian_reports.append(record)
             defined["guardian"].append(record.get("guardian_report_id", ""))
@@ -737,10 +746,13 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
             defined["gdisp"].append(record.get("disposition_id", ""))
 
     defined["job"].extend(sorted(filter(None, jobs)))
+    defined["task"].extend(sorted(filter(None, agent_tasks)))
     defined["sourceasset"].extend(sorted(filter(None, source_assets)))
     pipeline_diagnostics = pipeline_job_chain_diagnostics(pipeline_states)
+    agent_task_diagnostics = agent_task_chain_diagnostics(agent_task_states)
     source_diagnostics = source_asset_chain_diagnostics(source_asset_states)
     diagnostics.extend(pipeline_diagnostics)
+    diagnostics.extend(agent_task_diagnostics)
     diagnostics.extend(source_diagnostics)
     if not pipeline_diagnostics and not source_diagnostics:
         job_heads = {
@@ -1470,6 +1482,82 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
             for field in ("input_refs", "output_refs"):
                 for value in record.get(field, []):
                     _require_ref(diagnostics, kind, record_id, f"/{field}", value, all_object_ids, "record")
+        elif kind == "agent-task-state":
+            _require_ref(diagnostics, kind, record_id, "/workspace_id", record.get("workspace_id"), workspaces, "workspace")
+            basis = record.get("input_basis", {})
+            _require_ref(diagnostics, kind, record_id, "/input_basis/paper_id", basis.get("paper_id"), papers, "paper")
+            _require_ref(diagnostics, kind, record_id, "/input_basis/job_id", basis.get("job_id"), jobs, "Pipeline Job")
+            _require_ref(
+                diagnostics,
+                kind,
+                record_id,
+                "/input_basis/job_state_id",
+                basis.get("job_state_id"),
+                set(defined["jobstate"]),
+                "Pipeline Job state",
+            )
+            _require_ref(
+                diagnostics,
+                kind,
+                record_id,
+                "/input_basis/parse_run_id",
+                basis.get("parse_run_id"),
+                events,
+                "parse process event",
+            )
+            _require_ref(
+                diagnostics,
+                kind,
+                record_id,
+                "/input_basis/adequacy_profile_id",
+                basis.get("adequacy_profile_id"),
+                set(adequacy_profiles),
+                "Source Adequacy profile",
+            )
+            predecessor = record.get("predecessor")
+            if isinstance(predecessor, dict):
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    "/predecessor/state_id",
+                    predecessor.get("state_id"),
+                    set(defined["taskstate"]),
+                    "Agent Task state",
+                )
+            lineage = record.get("lineage")
+            if isinstance(lineage, dict):
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    "/lineage/predecessor_task_id",
+                    lineage.get("predecessor_task_id"),
+                    agent_tasks,
+                    "Agent Task",
+                )
+            decision = record.get("decision")
+            if isinstance(decision, dict):
+                if decision.get("successor_task_id") is not None:
+                    _require_ref(
+                        diagnostics,
+                        kind,
+                        record_id,
+                        "/decision/successor_task_id",
+                        decision.get("successor_task_id"),
+                        agent_tasks,
+                        "Agent Task",
+                    )
+                if decision.get("applied_job_state_id") is not None:
+                    _require_ref(
+                        diagnostics,
+                        kind,
+                        record_id,
+                        "/decision/applied_job_state_id",
+                        decision.get("applied_job_state_id"),
+                        set(defined["jobstate"]),
+                        "Pipeline Job state",
+                    )
         elif kind == "guardian-report":
             _require_ref(diagnostics, kind, record_id, "/workspace_id", record.get("workspace_id"), workspaces, "workspace")
             for index, finding in enumerate(record.get("findings", [])):
@@ -1527,6 +1615,7 @@ def _record_id(kind: str, record: dict[str, Any]) -> str | None:
         "source-asset-state": "source_asset_state_id",
         "registry-identity-correction": "correction_id",
         "source-adequacy-profile": "profile_id",
+        "agent-task-state": "state_id",
     }
     field = fields.get(kind)
     value = record.get(field) if field else None

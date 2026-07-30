@@ -97,6 +97,11 @@ def load_workspace_entries(
         "source-adequacy-profile",
         "profile_id",
     )
+    add_jsonl(
+        layout.agent_tasks_path,
+        "agent-task-state",
+        "state_id",
+    )
     add_jsonl(layout.guardian_reports_path, "guardian-report", "guardian_report_id")
     add_jsonl(
         layout.guardian_finding_dispositions_path,

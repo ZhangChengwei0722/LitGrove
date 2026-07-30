@@ -36,6 +36,7 @@ WAIT_REASONS_BY_STATUS = {
             "source_adequacy_stale",
         }
     ),
+    "waiting_agent": frozenset({None}),
     "paused": frozenset({"user_paused"}),
     "recovering": frozenset({"transaction_recovery"}),
 }
@@ -57,7 +58,7 @@ ALLOWED_TRANSITIONS = {
             "cancelled",
         }
     ),
-    "waiting_user": frozenset({"running", "paused", "recovering", "failed", "cancelled"}),
+    "waiting_user": frozenset({"running", "waiting_agent", "paused", "recovering", "failed", "cancelled"}),
     "waiting_agent": frozenset({"running", "paused", "recovering", "failed", "cancelled"}),
     "waiting_source": frozenset({"running", "paused", "recovering", "failed", "cancelled"}),
     "paused": frozenset({"running", "recovering", "failed", "cancelled"}),

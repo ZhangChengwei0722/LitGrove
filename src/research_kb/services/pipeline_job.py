@@ -162,16 +162,6 @@ class PipelineJobService:
     ) -> PipelineJobMutationResult:
         job_id = validate_id(job_id, Namespace.JOB)
         expected_state_id = validate_id(expected_state_id, Namespace.JOB_STATE)
-        if status == "waiting_agent":
-            raise ResearchKBError(
-                Diagnostic(
-                    SCHEMA_VALIDATION_FAILED,
-                    "pipeline-job-state",
-                    expected_state_id,
-                    "/status",
-                    "waiting_agent is reserved until P4 Agent Task support",
-                )
-            )
         if actor not in {"cli", "user"}:
             raise ResearchKBError(
                 Diagnostic(INVALID_AUTHORITY, "pipeline-job-state", expected_state_id, "/actor", "Pipeline Job transition actor is invalid")

@@ -547,3 +547,25 @@ The facade stops at an explicit wait or completed primary/review semantic gate. 
 no Paper Card, Evidence, Review Memory, scientific review queue, Agent Task or staging
 record. P3-D1 owns the secure localhost backend and operation coordinator; P3-D2 owns the
 browser UI; P3-D3 owns integrated browser acceptance.
+
+## P4-A External Agent Task And Semantic Preview Kernel
+
+Application Service interface `1.2` adds a versioned, deny-by-default Agent Task boundary
+without embedding an Agent runtime. The App selects an external executor, explicitly
+approves content classes, exports a portable prompt manifest and imports one bounded JSON
+result. Core does not locate executables, manage credentials, spawn a process or call a
+model API.
+
+`document_route_resolution` is the only available task kind. Every Task binds the exact
+paper, Pipeline Job state, live source digest, Parse output and current Source Adequacy
+profile. Prompt preparation issues a CAS lease; a changed input basis rejects late
+submission. Submitted output remains untrusted non-canonical staging until the App shows
+an escaped preview and the user revises, rejects or approves it. Approval advances only
+the deterministic primary/review gate and creates no scientific record.
+
+Task states are append-only and transactionally correlated with process events. Revision
+creates a successor Task with reciprocal lineage, prior result digest, user feedback and
+fresh inputs. Privacy classes are explicit sets rather than an implied hierarchy; workspace
+policy, task-kind policy, user approval and executor capability must all admit every
+required class. Guardian validates state chains, event ownership and route-approval
+receipts.

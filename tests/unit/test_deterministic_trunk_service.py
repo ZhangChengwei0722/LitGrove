@@ -83,6 +83,7 @@ def test_trunk_reaches_route_wait_then_records_explicit_mixed_review_route(tmp_p
         service,
         job,
         paper,
+        requested_operation="basic_review_memory",
         actor="user",
         document_route="review",
         route_reason="mixed_document",
@@ -91,6 +92,7 @@ def test_trunk_reaches_route_wait_then_records_explicit_mixed_review_route(tmp_p
         service,
         job,
         paper,
+        requested_operation="basic_review_memory",
         actor="user",
         document_route="review",
         route_reason="mixed_document",
@@ -112,8 +114,12 @@ def test_trunk_reaches_route_wait_then_records_explicit_mixed_review_route(tmp_p
         event = next(item for item in events if item["operation"] == operation)
         assert event["job_id"] == job["job_id"]
     status = PaperStatusService(layout).show(paper_id=paper["paper_id"])
-    assert status["source_adequacy"]["count"] == 1
-    assert status["source_adequacy"]["items"][0]["allowed"] is True
+    assert status["source_adequacy"]["count"] == 2
+    assert {item["requested_operation"] for item in status["source_adequacy"]["items"]} == {
+        "basic_paper_card",
+        "basic_review_memory",
+    }
+    assert all(item["allowed"] is True for item in status["source_adequacy"]["items"])
     assert GuardianService(layout).check().report["status"] == "success"
 
 

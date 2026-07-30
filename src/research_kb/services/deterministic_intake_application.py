@@ -440,8 +440,8 @@ def _normalize_semantic_request(request: Mapping[str, Any]) -> dict[str, Any]:
     if reason not in {None, "mixed_document"}:
         raise _request_error("route reason is not registered", "/route_reason")
     if reason == "mixed_document":
-        if route != "review" or operation != "basic_paper_card":
-            raise _request_error("mixed document must use review route with basic Paper Card operation", "/route_reason")
+        if route != "review" or operation != "basic_review_memory":
+            raise _request_error("mixed document must use review route with basic Review Memory operation", "/route_reason")
     elif route == "primary" and operation != "basic_paper_card":
         raise _request_error("primary route requires basic Paper Card operation", "/requested_operation")
     elif route == "review" and operation != "basic_review_memory":

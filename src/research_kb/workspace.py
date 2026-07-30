@@ -65,6 +65,10 @@ class WorkspaceLayout:
         return self.knowledge_root / "process" / "source_adequacy.jsonl"
 
     @property
+    def agent_tasks_path(self) -> Path:
+        return self.knowledge_root / "process" / "agent_tasks.jsonl"
+
+    @property
     def guardian_reports_path(self) -> Path:
         return self.knowledge_root / "guardian" / "reports.jsonl"
 
