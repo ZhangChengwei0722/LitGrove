@@ -161,29 +161,23 @@ class DeterministicTrunkService:
                     None,
                     0,
                 )
-            if profile is None:
-                raise _trunk_error(
-                    UNRESOLVED_REFERENCE,
-                    job_id,
-                    "/output_refs",
-                    "route decision is missing its Source Adequacy profile",
-                )
-            route_gate = self.adequacy.gate(
-                paper_id=paper_id,
-                requested_operation=requested_operation,
-            )
-            if (
-                route_gate["status"] == "allowed"
-                and route_gate["profile_id"] == profile["profile_id"]
-            ):
-                return self._complete_route(
-                    head,
+            if profile is not None:
+                route_gate = self.adequacy.gate(
                     paper_id=paper_id,
                     requested_operation=requested_operation,
-                    profile=profile,
-                    document_route=document_route,
-                    route_reason=route_reason,
                 )
+                if (
+                    route_gate["status"] == "allowed"
+                    and route_gate["profile_id"] == profile["profile_id"]
+                ):
+                    return self._complete_route(
+                        head,
+                        paper_id=paper_id,
+                        requested_operation=requested_operation,
+                        profile=profile,
+                        document_route=document_route,
+                        route_reason=route_reason,
+                    )
 
         writes = 0
         if head["status"] != "running":
