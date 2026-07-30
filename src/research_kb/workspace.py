@@ -41,6 +41,14 @@ class WorkspaceLayout:
         return self.knowledge_root / "registry" / "papers.jsonl"
 
     @property
+    def source_assets_path(self) -> Path:
+        return self.knowledge_root / "registry" / "source_assets.jsonl"
+
+    @property
+    def identity_corrections_path(self) -> Path:
+        return self.knowledge_root / "registry" / "identity_corrections.jsonl"
+
+    @property
     def review_queue_path(self) -> Path:
         return self.knowledge_root / "review_queue" / "items.jsonl"
 

@@ -11,7 +11,7 @@ from research_kb.review_memory_provenance import (
     lead_registry_matches,
     review_memory_freshness,
 )
-from research_kb.storage.json_io import file_sha256
+from research_kb.source_resolution import observe_paper_source
 from research_kb.workspace import WorkspaceLayout
 
 
@@ -41,13 +41,9 @@ class ReviewContextService:
                     "paper is not registered",
                 )
             )
-        _, source = self.layout.resolve_source(
-            paper["source_ref"]["root_id"],
-            paper["source_ref"]["relative_path"],
-        )
-        before_hash = _source_hash(source, paper_id)
-        if before_hash != paper["source_fingerprint"]["value"]:
-            raise _stale_source(paper_id, "registered source fingerprint is stale")
+        before = observe_paper_source(self.layout, entries, paper)
+        if before.state != "current":
+            raise _stale_source(paper_id, "current source manifestation is not reusable")
 
         memories = [
             item
@@ -96,19 +92,9 @@ class ReviewContextService:
             "freshness": freshness,
             "lead_registry_matches": matches,
         }
-        if _source_hash(source, paper_id) != before_hash:
-            raise _stale_source(paper_id, "registered source changed during Review Memory context read")
+        if observe_paper_source(self.layout, entries, paper) != before:
+            raise _stale_source(paper_id, "current source manifestation changed during Review Memory context read")
         return result
-
-
-def _source_hash(source: Path, paper_id: str) -> str | None:
-    try:
-        value = file_sha256(source)
-    except OSError as error:
-        raise _stale_source(paper_id, "registered source could not be read") from error
-    if value is None:
-        raise _stale_source(paper_id, "registered source is missing or is not a regular file")
-    return value
 
 
 def _stale_source(paper_id: str, message: str) -> ResearchKBError:

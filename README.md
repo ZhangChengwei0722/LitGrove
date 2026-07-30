@@ -43,6 +43,9 @@ Milestone 1B through the M3D-1 repository slice provide:
 - a read-only acquired-candidate intake projection and Portable Skill continuation into the existing primary/review workflow through Guardian.
 - a bounded, stdout-only DOCX/PDF manuscript projection with source fingerprints, stable paragraph/page locators and explicit coverage limits.
 - a Portable Skill-only explicit-criteria manuscript audit route over transient projection and existing knowledge reads, with scope-limited findings and zero persistence.
+- append-only Pipeline Jobs with captured authority, bounded current-state listing, cooperative cancellation, recovery transitions, correlated events and Guardian checks;
+- append-only Source Asset manifestations for reference, create-only local-inbox copy, bounded inbox selection, observation and same-digest relink;
+- user-authorized Registry identity corrections for duplicate merge, mistaken-merge split, alias, archive and tombstone without rewriting paper IDs or historical records.
 
 The installed CLI contains no private adapter and performs no adapter or connector discovery. The CLI never calls an LLM or makes scientific judgments. M3D-1 audit semantics remain Agent-owned in the Portable Skill; Core still only projects manuscripts and exposes existing reads. OCR, manuscript rewriting, subtype-specific review runtime, persisted Markdown or additional derived views, Field Map integration, Review Unit Question Mapping, institutional/browser acquisition and migration remain later milestones.
 
@@ -102,6 +105,22 @@ research-kb manuscript inspect --workspace <workspace.yaml> --source <absolute.d
 research-kb compatibility inspect --workspace <workspace.yaml> --adapter <adapter_id>
 research-kb registry add --workspace <workspace.yaml> --root-id <root> --relative-path <path> --metadata <metadata.json>
 research-kb registry add --workspace <workspace.yaml> --root-id <root> --relative-path <path> --metadata -
+research-kb job create --workspace <workspace.yaml> --request <request.json> --actor <agent|cli|user>
+research-kb job list --workspace <workspace.yaml> [--page-size <n>] [--cursor <opaque-cursor>]
+research-kb job show --workspace <workspace.yaml> --job-id <job_id>
+research-kb job transition --workspace <workspace.yaml> --job-id <job_id> --request <request.json> --actor <agent|cli|user>
+research-kb job cancel --workspace <workspace.yaml> --job-id <job_id> --request <request.json> --actor <agent|cli|user>
+research-kb job recover --workspace <workspace.yaml> --job-id <job_id> --request <request.json> --actor <agent|cli|user>
+research-kb source list --workspace <workspace.yaml>
+research-kb source scan --workspace <workspace.yaml> [--max-entries <n>] [--min-stable-age-seconds <n>]
+research-kb source reference --workspace <workspace.yaml> --request <request.json> --actor <cli|user>
+research-kb source copy --workspace <workspace.yaml> --request <request.json> --actor user
+research-kb source select --workspace <workspace.yaml> --request <request.json> --actor <cli|user>
+research-kb source associate --workspace <workspace.yaml> --request <request.json> --actor <cli|user>
+research-kb source observe --workspace <workspace.yaml> --request <request.json> --actor <cli|user>
+research-kb source relink --workspace <workspace.yaml> --request <request.json> --actor <cli|user>
+research-kb identity list --workspace <workspace.yaml>
+research-kb identity correct --workspace <workspace.yaml> --request <request.json> --actor user
 research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapter synthetic-text
 research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapter pdfplumber
 research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapter pdfplumber-text-flow
@@ -120,7 +139,7 @@ research-kb guardian check --workspace <workspace.yaml> [--write-report]
 research-kb transaction recover --workspace <workspace.yaml> [--dry-run]
 ```
 
-Existing source assets remain immutable. The only source-write exception is exact-user-authority `discovery acquire`, which may create one previously absent PDF under the configured `local_inbox`. Canonical writes stay under `knowledge_root` and emit a process event only after a validated atomic replacement.
+Existing source assets remain immutable. The source-write exceptions are exact-user-authority `discovery acquire` and `source copy`; each may create only one previously absent PDF under the configured, uniquely addressable `local_inbox`. Neither may overwrite, move, rename or delete a user source. Canonical writes stay under `knowledge_root` and emit a process event only after a validated atomic replacement.
 
 `capability show`, `discovery search`, `discovery list`, `discovery show`, `discovery resolve`, `intake inspect`, `intake inspect-acquired`, `manuscript inspect`, `parse show`, `paper status`, `paper context`, `review context`, and `step7 context` emit bounded JSON and write no workspace state. Capability output distinguishes installed adapters and built-in connectors without calling the network. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
 
@@ -145,6 +164,14 @@ The Portable Skill's separate `manuscript_audit` mode requires criteria and exac
 `review context` returns one complete Review Memory or `null`, `absent/current/stale_parse` freshness, and transient exact local DOI matches for primary-paper leads. Review Memory remains `background_only`, `can_enter_canonical_evidence: false`, and `not_fact: true`; stale notes are never rebound to a newer parse automatically.
 
 Stdin accepts one UTF-8 JSON object only. Discovery requests and Registry metadata are capped at 64 KiB; mutation requests are capped at 4 MiB. YAML remains file-only. Invalid input never reaches its service, and no temporary request file is created.
+
+Pipeline Job mutation requests are capped at 64 KiB and bind each state transition to a captured authority snapshot. Source mutations require a current Job with the exact operation authority. `source scan` is bounded, transient and non-daemon; selection revalidates the opaque candidate against current bytes. Reference, copy or selection may first create an unassociated Source Asset; after `registry add`, `source associate` binds that exact current asset state to the new paper through CAS. A Job cannot end as `completed` or `completed_with_findings` while a Source Asset it created remains unassociated. Failed or cancelled work retains the source receipt and exposes the incomplete association through Guardian. Source and identity list responses expose only current projections, never absolute paths or source fingerprints.
+
+The Core copy handoff is `LocalSourceIntakeService.copy_stream`, which consumes a bounded binary stream and never requires a browser to submit a server path. `source copy` is the local CLI adapter: it opens one exact absolute PDF, binds its size/digest/file identity, and delegates to the same stream service. The operation stages bytes, commits the Source Asset receipt, then publishes one absent inbox target create-only. The same Job can resume a matching staged partial, a receipted-but-missing target, or an already published target without duplicating the file or asset. Partial recovery requires the original expected digest. A bounded inbox scan rejects a directory with more than 1,000 entries rather than traversing an unbounded listing.
+
+Source Asset revisions preserve every manifestation. Same-digest relink changes only the portable location and keeps Parse reusable. Changed, missing, inaccessible, hard-linked or reparse-point sources become explicit non-current states; historical Parse remains present but cannot be reused as current. Registry identity correction is user-only and append-only: aliases and merges affect projections, split supersedes an earlier merge, and archive/tombstone affects active-library visibility without deleting Registry rows or source files.
+
+An explicit `main_pdf` may bind a known Registry paper only when its SHA-256 equals that paper's registered fingerprint; a Source Asset cannot silently replace Registry source identity. Public inbox scan excludes every Registry or Source Asset ref. The only registered-file replay is an exact `source select` retry for the same Job, revision-one intent, paper argument and role. Source state reasons are a closed vocabulary: only `paper_associated` adds a paper ID, only `same_digest_relink` changes the portable ref, and observation transitions cannot rewrite either identity.
 
 Both PDF adapters record exact `pdfplumber` package version identity and emit `page:<n>:text` page locators. Their distinct adapter names preserve extraction-profile identity: `pdfplumber` is the legacy spatial profile, while `pdfplumber-text-flow` uses `x_tolerance=1` and content-stream order for new scientific intake. Text-flow is not layout verification; unresolved columns, spacing, tables or OCR remain stop conditions. Real-PDF Evidence must use `page:<n>:char:<start>-<end>` with an exact zero-based, end-exclusive slice of stored page text. Missing PDF dependencies and unsupported PDF sources fail explicitly; there is no OCR or synthetic fallback.
 

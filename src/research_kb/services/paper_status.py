@@ -9,6 +9,7 @@ from research_kb.errors import GROUNDING_MISMATCH, UNRESOLVED_REFERENCE, Diagnos
 from research_kb.guardian import GuardianService
 from research_kb.identifiers import Namespace, validate_id
 from research_kb.services.question_mapping import mapping_freshness_diagnostics
+from research_kb.source_resolution import observe_paper_source
 from research_kb.storage.json_io import file_sha256, read_json_document
 from research_kb.workspace import WorkspaceLayout
 
@@ -109,17 +110,9 @@ class PaperStatusService:
         return result
 
     def _observe_source(self, paper: dict[str, Any]) -> tuple[str, str | None]:
-        _, source = self.layout.resolve_source(
-            paper["source_ref"]["root_id"],
-            paper["source_ref"]["relative_path"],
-        )
-        if not source.exists():
-            return "missing", None
-        if not source.is_file():
-            return "not_regular_file", None
-        digest = file_sha256(source)
-        state = "current" if digest == paper["source_fingerprint"]["value"] else "fingerprint_mismatch"
-        return state, digest
+        entries = load_workspace_entries(self.layout)
+        observation = observe_paper_source(self.layout, entries, paper)
+        return observation.state, observation.live_sha256
 
 
 def _parse_projection(pages: list[dict[str, Any]], source_state: str) -> dict[str, Any]:
@@ -132,7 +125,7 @@ def _parse_projection(pages: list[dict[str, Any]], source_state: str) -> dict[st
             "page_count": 0,
         }
     return {
-        "state": "current" if source_state == "current" else "source_stale",
+        "state": "current" if source_state == "current" else "stale_source",
         "parse_run_id": pages[0]["parse_run_id"],
         "adapter": pages[0]["parser"]["adapter"],
         "version": pages[0]["parser"]["version"],

@@ -108,7 +108,7 @@ def test_parse_read_rejects_stale_or_changing_source(tmp_path: Path, monkeypatch
     source.write_text("Invented page one.\fInvented page two.", encoding="utf-8", newline="\n")
     expected = paper["source_fingerprint"]["value"]
     calls = iter((expected, "f" * 64))
-    monkeypatch.setattr("research_kb.services.parse_read.file_sha256", lambda _: next(calls))
+    monkeypatch.setattr("research_kb.source_resolution.file_sha256", lambda _: next(calls))
     with pytest.raises(ResearchKBError) as caught:
         ParseReadService(layout).show(paper_id=paper["paper_id"])
     assert caught.value.diagnostic.code == "RKBC-009"

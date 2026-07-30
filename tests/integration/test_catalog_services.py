@@ -15,7 +15,9 @@ from research_kb.services import (
     CatalogCapabilityService,
     CatalogProjectionService,
     CatalogQueryService,
+    RegistryIdentityCorrectionService,
     RegistryService,
+    SourceAssetService,
     WorkspaceSessionService,
 )
 from research_kb.services.pipeline_job import PipelineJobService
@@ -131,6 +133,87 @@ def test_catalog_projects_only_current_pipeline_job_heads_with_stable_pagination
         second.state["state_id"],
     }
     assert query.detail(items[0]["item_id"])["detail"]["revision"] in {1, 2}
+
+
+def test_source_and_identity_catalog_details_resolve_current_derived_records(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    papers = []
+    for ordinal in range(2):
+        source = layout.source_roots["alpha-sources"] / f"identity-{ordinal}.pdf"
+        source.write_bytes(bytes((37, 80, 68, 70, 45)) + b"1.4\nsynthetic catalog identity\n%%EOF\n")
+        paper, _ = RegistryService(layout).add(
+            root_id="alpha-sources",
+            relative_path=source.name,
+            metadata={
+                "bibliography": {"title": f"Identity paper {ordinal}"},
+                "fixture_origin": "synthetic_from_scratch",
+            },
+        )
+        papers.append(paper)
+    jobs = PipelineJobService(layout)
+    source_job = jobs.create(
+        requested_route="local_source",
+        requested_depth="registry_only",
+        current_node="source_intake",
+        input_refs=[],
+        authority_snapshot={
+            "actor": "user",
+            "granted_operations": ["register_by_reference"],
+            "captured_at": "2026-07-30T01:00:00Z",
+        },
+        idempotency_key="catalog-source-detail",
+        actor="user",
+        fixture_origin="synthetic_from_scratch",
+    ).state
+    SourceAssetService(layout).register_reference(
+        job_id=source_job["job_id"],
+        paper_id=papers[0]["paper_id"],
+        asset_role="main_pdf",
+        root_id="alpha-sources",
+        relative_path="identity-0.pdf",
+        actor="cli",
+        fixture_origin="synthetic_from_scratch",
+    )
+    identity_job = jobs.create(
+        requested_route="local_source",
+        requested_depth="registry_only",
+        current_node="identity_correction",
+        input_refs=[paper["paper_id"] for paper in papers],
+        authority_snapshot={
+            "actor": "user",
+            "granted_operations": ["registry_identity_correction"],
+            "captured_at": "2026-07-30T01:00:00Z",
+        },
+        idempotency_key="catalog-identity-detail",
+        actor="user",
+        fixture_origin="synthetic_from_scratch",
+    ).state
+    RegistryIdentityCorrectionService(layout).record(
+        job_id=identity_job["job_id"],
+        operation="paper_alias",
+        subject_paper_ids=[papers[1]["paper_id"]],
+        retained_paper_id=papers[0]["paper_id"],
+        supersedes_correction_id=None,
+        rationale="Synthetic catalog identity projection.",
+        expected_previous_correction_id=None,
+        expected_previous_correction_digest=None,
+        actor="user",
+        fixture_origin="synthetic_from_scratch",
+    )
+
+    session = WorkspaceSessionService({"alpha": layout.config.path}).open("alpha")
+    projection = CatalogProjectionService(session, tmp_path / "app-state")
+    projection.rebuild()
+    query = CatalogQueryService(projection)
+    source_item = query.search(item_kinds=("source_asset",))["items"][0]
+    identity_item = query.search(item_kinds=("paper_identity",))["items"][0]
+
+    source_detail = query.detail(source_item["item_id"])
+    identity_detail = query.detail(identity_item["item_id"])
+    assert source_detail["current_record_status"] == "current"
+    assert source_detail["detail"]["paper_id"] == papers[0]["paper_id"]
+    assert identity_detail["current_record_status"] == "current"
+    assert identity_detail["detail"]["canonical_paper_id"] == papers[0]["paper_id"]
 
 
 def test_workspace_session_rejects_relative_duplicate_and_invalid_options(tmp_path: Path) -> None:

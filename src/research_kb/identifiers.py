@@ -28,6 +28,9 @@ class Namespace(StrEnum):
     JOB = "job"
     JOB_STATE = "jobstate"
     GUARDIAN_DISPOSITION = "gdisp"
+    SOURCE_ASSET = "sourceasset"
+    SOURCE_ASSET_STATE = "sourceassetstate"
+    IDENTITY_CORRECTION = "identitycorr"
 
 
 UUID4_PATTERN = r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
@@ -43,14 +46,14 @@ def allocate_id(namespace: Namespace | str, uuid_factory: Callable[[], uuid.UUID
 
 
 def validate_id(value: str, namespace: Namespace | str | None = None) -> str:
-    match = ID_PATTERN.fullmatch(value)
+    match = ID_PATTERN.fullmatch(value) if isinstance(value, str) else None
     expected = Namespace(namespace).value if namespace is not None else None
     if match is None or (expected is not None and match.group("namespace") != expected):
         raise ResearchKBError(
             Diagnostic(
                 code=SCHEMA_VALIDATION_FAILED,
                 record_kind="identifier",
-                record_id=value,
+                record_id=value if isinstance(value, str) else None,
                 json_path="",
                 message=f"invalid identifier for namespace {expected or 'any'}",
             )

@@ -11,7 +11,7 @@ from research_kb.errors import (
     ResearchKBError,
 )
 from research_kb.identifiers import Namespace, validate_id
-from research_kb.storage.json_io import file_sha256
+from research_kb.source_resolution import observe_paper_source
 from research_kb.workspace import WorkspaceLayout
 
 
@@ -30,14 +30,9 @@ class ParseReadService:
         )
         if paper is None:
             raise _unresolved(paper_id, "/paper_id", "paper is not registered")
-        _, source = self.layout.resolve_source(
-            paper["source_ref"]["root_id"],
-            paper["source_ref"]["relative_path"],
-        )
-        expected_hash = paper["source_fingerprint"]["value"]
-        before_hash = file_sha256(source)
-        if before_hash != expected_hash:
-            raise _stale(paper_id, "registered source fingerprint is stale")
+        before = observe_paper_source(self.layout, entries, paper)
+        if before.state != "current":
+            raise _stale(paper_id, "current source manifestation is not reusable")
 
         pages = sorted(
             (
@@ -65,8 +60,8 @@ class ParseReadService:
             "returned_page_count": len(selected),
             "pages": selected,
         }
-        if file_sha256(source) != before_hash:
-            raise _stale(paper_id, "registered source changed during parsed-content read")
+        if observe_paper_source(self.layout, entries, paper) != before:
+            raise _stale(paper_id, "current source manifestation changed during parsed-content read")
         return result
 
 

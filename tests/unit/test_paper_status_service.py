@@ -196,7 +196,7 @@ def test_status_reports_stable_non_current_source(
     status = PaperStatusService(layout).show(paper_id=paper["paper_id"])
 
     assert status["source"]["state"] == expected_state
-    assert status["parse"]["state"] == "source_stale"
+    assert status["parse"]["state"] == "stale_source"
     assert status["integrity"]["guardian_status"] == "failure"
     assert "RKBC-009" in status["integrity"]["paper_finding_codes"]
     assert status["integrity"]["mutation_safe"] is False

@@ -37,6 +37,9 @@ from research_kb.services.application_validation import ContractValidationServic
 from research_kb.services.capability import CapabilityService
 from research_kb.services.guardian_disposition import GuardianFindingDispositionService
 from research_kb.services.pipeline_job import PipelineJobService
+from research_kb.services.local_source_intake import LocalSourceIntakeService
+from research_kb.services.registry_identity import RegistryIdentityCorrectionService
+from research_kb.services.source_asset import SourceAssetService
 from research_kb.services.records import RecordService
 from research_kb.services.parse_read import ParseReadService
 from research_kb.services.paper_status import PaperStatusService
@@ -70,6 +73,8 @@ MUTATION_REQUEST_STDIN_LIMIT = 4 * 1024 * 1024
 DISCOVERY_REQUEST_INPUT_LIMIT = 64 * 1024
 PIPELINE_JOB_REQUEST_INPUT_LIMIT = 64 * 1024
 GUARDIAN_DISPOSITION_REQUEST_INPUT_LIMIT = 64 * 1024
+SOURCE_REQUEST_INPUT_LIMIT = 64 * 1024
+IDENTITY_REQUEST_INPUT_LIMIT = 64 * 1024
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -180,6 +185,36 @@ def build_parser() -> argparse.ArgumentParser:
     registry_add.add_argument("--root-id", required=True)
     registry_add.add_argument("--relative-path", required=True)
     registry_add.add_argument("--metadata", required=True, type=Path)
+
+    source = commands.add_parser("source", help="manage source manifestations and local inbox handoff")
+    source_commands = source.add_subparsers(dest="source_command", required=True)
+    source_list = source_commands.add_parser("list", help="list current redacted Source Asset projections")
+    source_list.add_argument("--workspace", required=True, type=Path)
+    source_scan = source_commands.add_parser("scan", help="scan a bounded stable local_inbox snapshot")
+    source_scan.add_argument("--workspace", required=True, type=Path)
+    source_scan.add_argument("--max-entries", type=int, default=100)
+    source_scan.add_argument("--min-stable-age-seconds", type=int, default=5)
+    for command_name, command_help in (
+        ("reference", "register one existing source reference"),
+        ("copy", "copy one exact user-authorized PDF create-only into local_inbox"),
+        ("select", "revalidate and select one transient inbox candidate"),
+        ("associate", "append one Registry paper association"),
+        ("observe", "append one current source observation"),
+        ("relink", "append one same-digest source relink"),
+    ):
+        source_mutation = source_commands.add_parser(command_name, help=command_help)
+        source_mutation.add_argument("--workspace", required=True, type=Path)
+        source_mutation.add_argument("--request", required=True, type=Path)
+        source_mutation.add_argument("--actor", choices=("agent", "cli", "user"), required=True)
+
+    identity = commands.add_parser("identity", help="inspect or append Registry identity corrections")
+    identity_commands = identity.add_subparsers(dest="identity_command", required=True)
+    identity_list = identity_commands.add_parser("list", help="list current Registry identity projection")
+    identity_list.add_argument("--workspace", required=True, type=Path)
+    identity_correct = identity_commands.add_parser("correct", help="append one user-authorized identity correction")
+    identity_correct.add_argument("--workspace", required=True, type=Path)
+    identity_correct.add_argument("--request", required=True, type=Path)
+    identity_correct.add_argument("--actor", choices=("agent", "cli", "user"), required=True)
 
     parse = commands.add_parser("parse", help="run deterministic parse adapters")
     parse_commands = parse.add_subparsers(dest="parse_command", required=True)
@@ -330,6 +365,16 @@ def main(
             return _record_promote(args)
         if args.command == "registry" and args.registry_command == "add":
             return _registry_add(args)
+        if args.command == "source" and args.source_command == "list":
+            return _source_list(args)
+        if args.command == "source" and args.source_command == "scan":
+            return _source_scan(args)
+        if args.command == "source" and args.source_command in {"reference", "copy", "select", "associate", "observe", "relink"}:
+            return _source_mutation(args)
+        if args.command == "identity" and args.identity_command == "list":
+            return _identity_list(args)
+        if args.command == "identity" and args.identity_command == "correct":
+            return _identity_correct(args)
         if args.command == "parse" and args.parse_command == "run":
             return _parse_run(args)
         if args.command == "parse" and args.parse_command == "show":
@@ -598,6 +643,199 @@ def _registry_add(args: argparse.Namespace) -> int:
         "event_id": transaction.event_id,
         "target": layout.target_relative_path(transaction.target),
     })
+    return 0
+
+
+def _source_list(args: argparse.Namespace) -> int:
+    _write_json_once(SourceAssetService(WorkspaceLayout.load(args.workspace)).list())
+    return 0
+
+
+def _source_scan(args: argparse.Namespace) -> int:
+    result = LocalSourceIntakeService(WorkspaceLayout.load(args.workspace)).scan(
+        max_entries=args.max_entries,
+        min_stable_age_seconds=args.min_stable_age_seconds,
+    )
+    _write_json_once(result)
+    return 0
+
+
+def _source_mutation(args: argparse.Namespace) -> int:
+    request = _read_bounded_request(
+        args.request,
+        limit=SOURCE_REQUEST_INPUT_LIMIT,
+        record_kind=f"source-{args.source_command}-request",
+    )
+    layout = WorkspaceLayout.load(args.workspace)
+    if args.source_command == "copy":
+        _require_request_fields(
+            request,
+            required={"source", "job_id", "paper_id", "asset_role"},
+            optional={"fixture_origin"},
+            record_kind="source-copy-request",
+        )
+        if not isinstance(request["source"], str):
+            raise ResearchKBError(
+                Diagnostic(
+                    SCHEMA_VALIDATION_FAILED,
+                    "source-copy-request",
+                    None,
+                    "/source",
+                    "copy source must be an absolute path string",
+                )
+            )
+        result = LocalSourceIntakeService(layout).copy(
+            source=Path(request["source"]),
+            job_id=request["job_id"],
+            paper_id=request["paper_id"],
+            asset_role=request["asset_role"],
+            actor=args.actor,
+            fixture_origin=request.get("fixture_origin"),
+        )
+        _write_json_once(result)
+        return 0
+    if args.source_command == "select":
+        _require_request_fields(
+            request,
+            required={"candidate_token", "job_id", "paper_id", "asset_role"},
+            optional={"min_stable_age_seconds"},
+            record_kind="source-select-request",
+        )
+        result = LocalSourceIntakeService(layout).select(
+            candidate_handle=request["candidate_token"],
+            job_id=request["job_id"],
+            paper_id=request["paper_id"],
+            asset_role=request["asset_role"],
+            actor=args.actor,
+            min_stable_age_seconds=request.get("min_stable_age_seconds", 5),
+        )
+        _write_json_once(result)
+        return 0
+
+    service = SourceAssetService(layout)
+    if args.source_command == "reference":
+        _require_request_fields(
+            request,
+            required={"job_id", "paper_id", "asset_role", "root_id", "relative_path"},
+            optional={"fixture_origin"},
+            record_kind="source-reference-request",
+        )
+        mutation = service.register_reference(
+            job_id=request["job_id"],
+            paper_id=request["paper_id"],
+            asset_role=request["asset_role"],
+            root_id=request["root_id"],
+            relative_path=request["relative_path"],
+            actor=args.actor,
+            fixture_origin=request.get("fixture_origin"),
+        )
+    elif args.source_command == "associate":
+        _require_request_fields(
+            request,
+            required={"source_asset_id", "job_id", "paper_id", "expected_state_id", "expected_state_digest"},
+            optional=set(),
+            record_kind="source-associate-request",
+        )
+        mutation = service.associate(
+            source_asset_id=request["source_asset_id"],
+            job_id=request["job_id"],
+            paper_id=request["paper_id"],
+            expected_state_id=request["expected_state_id"],
+            expected_state_digest=request["expected_state_digest"],
+            actor=args.actor,
+        )
+    elif args.source_command == "observe":
+        _require_request_fields(
+            request,
+            required={"source_asset_id", "job_id", "expected_state_id", "expected_state_digest"},
+            optional=set(),
+            record_kind="source-observe-request",
+        )
+        mutation = service.observe(
+            source_asset_id=request["source_asset_id"],
+            job_id=request["job_id"],
+            expected_state_id=request["expected_state_id"],
+            expected_state_digest=request["expected_state_digest"],
+            actor=args.actor,
+        )
+    else:
+        _require_request_fields(
+            request,
+            required={"source_asset_id", "job_id", "root_id", "relative_path", "expected_state_id", "expected_state_digest"},
+            optional=set(),
+            record_kind="source-relink-request",
+        )
+        mutation = service.relink(
+            source_asset_id=request["source_asset_id"],
+            job_id=request["job_id"],
+            root_id=request["root_id"],
+            relative_path=request["relative_path"],
+            expected_state_id=request["expected_state_id"],
+            expected_state_digest=request["expected_state_digest"],
+            actor=args.actor,
+        )
+    _write_json_once(
+        {
+            "status": "success",
+            "result": "updated" if mutation.transaction is not None else "no_change",
+            "source_asset_id": mutation.state["source_asset_id"],
+            "source_asset_state_id": mutation.state["source_asset_state_id"],
+            "paper_id": mutation.state["paper_id"],
+            "source_ref": mutation.state["source_ref"],
+            "persistent_writes": 1 if mutation.transaction is not None else 0,
+            "event_id": None if mutation.transaction is None else mutation.transaction.event_id,
+        }
+    )
+    return 0
+
+
+def _identity_list(args: argparse.Namespace) -> int:
+    _write_json_once(RegistryIdentityCorrectionService(WorkspaceLayout.load(args.workspace)).list())
+    return 0
+
+
+def _identity_correct(args: argparse.Namespace) -> int:
+    request = _read_bounded_request(
+        args.request,
+        limit=IDENTITY_REQUEST_INPUT_LIMIT,
+        record_kind="identity-correction-request",
+    )
+    _require_request_fields(
+        request,
+        required={
+            "job_id",
+            "operation",
+            "subject_paper_ids",
+            "retained_paper_id",
+            "supersedes_correction_id",
+            "rationale",
+            "expected_previous_correction_id",
+            "expected_previous_correction_digest",
+        },
+        optional={"fixture_origin"},
+        record_kind="identity-correction-request",
+    )
+    result = RegistryIdentityCorrectionService(WorkspaceLayout.load(args.workspace)).record(
+        job_id=request["job_id"],
+        operation=request["operation"],
+        subject_paper_ids=request["subject_paper_ids"],
+        retained_paper_id=request["retained_paper_id"],
+        supersedes_correction_id=request["supersedes_correction_id"],
+        rationale=request["rationale"],
+        expected_previous_correction_id=request["expected_previous_correction_id"],
+        expected_previous_correction_digest=request["expected_previous_correction_digest"],
+        actor=args.actor,
+        fixture_origin=request.get("fixture_origin"),
+    )
+    _write_json_once(
+        {
+            "status": "success",
+            "result": "updated" if result.transaction is not None else "no_change",
+            "correction_id": result.correction["correction_id"],
+            "persistent_writes": 1 if result.transaction is not None else 0,
+            "event_id": None if result.transaction is None else result.transaction.event_id,
+        }
+    )
     return 0
 
 

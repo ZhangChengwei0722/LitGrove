@@ -405,3 +405,80 @@ CLI or future host
 The CLI owns only argument parsing, bounded stdin/file decoding, JSON/byte output, diagnostic redaction and process exit projection. Workspace-aware render services load and validate structured entries before invoking the existing pure renderers. The named Parse registry contains only explicit factories and never auto-detects, substitutes or falls back.
 
 P1 changes no public CLI arguments or payloads, schema, layout, source-write authority or scientific semantics. It creates no App, Pipeline Job, Source Adequacy or Agent Task runtime.
+
+## P3-A Pipeline Job Kernel
+
+Pipeline Jobs are append-only operational state, not scientific records and not a
+workflow engine. A root state captures route, depth, current node, input refs and an
+authority snapshot. Transitions bind their predecessor ID and digest, preserve the
+captured authority, and correlate exactly one successful process event. Current state is
+a projection over the revision chain; list uses stable ordering and an opaque cursor.
+
+Waiting, cooperative cancellation and recovery are explicit transitions. A recovery
+never guesses through a stale head or changes the requested route. Guardian checks chain,
+event and transaction consistency. Job state and event summaries contain no paper text,
+source path, source fingerprint or Agent payload.
+
+## P3-B Source Assets And Registry Identity
+
+The optional `registry/source_assets.jsonl` store records append-only Source Asset state
+revisions. A legacy Registry source remains the implicit main manifestation until a
+current explicit `main_pdf` Source Asset exists. Current source resolution is:
+
+```text
+current explicit main Source Asset
+-> otherwise legacy Registry source
+-> live portable-ref and digest observation
+```
+
+Reference, local-inbox copy, bounded scan selection, observation and same-digest relink
+all require a current Pipeline Job with matching authority. Copy additionally requires
+the exact user actor. Core accepts a bounded binary stream; the local CLI path is only a
+thin adapter that binds source identity before opening that stream. Copy stages bytes,
+commits the append-only Source Asset receipt, and then publishes an operation-owned absent
+target create-only. The same Job resumes a digest-bound partial, a receipt with a missing
+target, or an already published target without duplicating either node. Scan is transient,
+rejects an inbox larger than its inspection budget, and revalidates selected bytes through
+an opaque handle. Source-path checks reject root escape, symlink/junction/reparse traversal
+and detectable hard-link ambiguity, including links introduced after initial inspection.
+
+Reference, copy and selection may append an unassociated Source Asset before Registry
+identity exists. Its revision-one Job remains the owning Job. After Registry creation,
+`source associate` requires exact `associate_source_asset` authority, current asset CAS,
+an existing paper and a still-current available manifestation. Association appends a
+revision and never rewrites the intake receipt. The owning Job cannot enter a successful
+terminal state while that asset remains unassociated. `failed` and `cancelled` remain
+valid terminal outcomes: they preserve committed source history and leave the incomplete
+association visible to Guardian rather than undoing it.
+
+When a paper is already known, `main_pdf` intake and later association require the exact
+Registry source fingerprint. Supplements and source data do not replace that identity.
+Public scan excludes every existing Registry or Source Asset ref; only selection replay
+for the same Job and exact revision-one intent may reconsider a registered ref. An
+unassociated asset remains owned by its revision-one Job: another Job cannot re-register
+or re-select it as a new intake receipt. A separately authorized association Job may append
+`paper_associated`, but that does not change revision-one ownership.
+
+Same-digest relink retains manifestation identity and Parse currentness. Changed bytes
+append a `change_candidate`; missing, inaccessible or unsafe paths append an availability
+state. These states preserve historical Parse and scientific records while projecting
+automatic reuse as `stale_source` or unavailable. Source list, Catalog and event outputs
+omit absolute paths and source fingerprints.
+
+Transition reasons are closed. Roots are `reference_registered` or
+`copied_into_local_inbox`; only `paper_associated` adds a paper; only
+`same_digest_relink` changes a portable ref while retaining the active digest;
+`changed_bytes_observed` creates a candidate manifestation; and
+`source_available|source_missing|source_inaccessible|source_relink_required` record
+observations without rewriting identity.
+
+The optional `registry/identity_corrections.jsonl` store records exact user decisions for
+duplicate merge, mistaken-merge split, alias, archive and tombstone. Events form one
+digest-bound chain and never rewrite Registry rows, paper IDs or historical references.
+Current canonical-paper and active-library status are projections. Catalog indexes only
+affected current identity projections and current Source Asset heads, never raw correction
+events or historical source revisions.
+
+P3-B does not create Source Adequacy, Agent Task, semantic routing or App write controls.
+Those later consumers must use the current source projection rather than silently binding
+historical provenance to the active parse.

@@ -226,3 +226,76 @@ seeks and validates the exact canonical bytes at the stored locator before retur
 The final R0 workload and receipts are synthetic and path-redacted. Cleanup remains a
 separate explicitly authorized lifecycle operation; benchmark completion alone deletes
 nothing.
+
+## P3 Source Intake Workflow
+
+Create one Pipeline Job before a deterministic source mutation. The Job authority must
+name the exact operation; an Agent or CLI actor cannot enlarge captured user authority.
+
+```text
+job create
+-> source reference | source copy | source scan + source select
+-> optional unassociated Source Asset
+-> Registry add when paper identity does not yet exist
+-> source associate
+-> current associated Source Asset projection
+-> source observe or same-digest source relink as needed
+-> job transition / wait / recover / cancel
+-> Guardian
+```
+
+`source reference` reads one declared portable source and writes no source bytes. The Core
+copy service consumes a bounded binary stream. `source copy` is its separate
+exact-user-authority local CLI adapter: it verifies and opens the declared absolute PDF,
+then delegates to the same stream route. Copy stages bytes, commits the Source Asset
+receipt and creates one absent target under the exact configured inbox. A retry under the
+same Job resumes a digest-bound partial, a receipted missing target or an already published
+target. It cannot overwrite, move, rename or delete a source. A failed operation may remove
+only its own still-matching temporary identity.
+
+`source scan` reads a bounded stable snapshot of `local_inbox` and writes nothing. It
+rejects an inbox with more than 1,000 entries, and returns redacted display metadata plus
+an opaque candidate handle. `source select`
+re-scans and rejects changed, recent, unsafe, already-associated or ineligible entries
+before appending a reference state. It is not a daemon and does not infer document type or
+start Parse.
+
+The public scan excludes every portable ref already present in Registry or Source Asset
+history. A registered ref is reconsidered only for an exact `source select` replay whose
+Job, revision-one receipt, paper argument and role match. That replay cannot adopt another
+Job's unassociated asset.
+
+Reference, copy or selection can receive a known `paper_id`; otherwise it creates an
+unassociated Source Asset owned by the Job that created revision one. `source associate`
+is the only direct follow-up: it consumes exact `associate_source_asset` authority, the
+current state ID and digest, an existing Registry paper and a still-current available
+manifestation. That authority may belong to a later recovery Job, but the appended state
+does not transfer revision-one ownership. A successful Job terminal receipt is rejected until each owned Source
+Asset is associated. Cancelling or failing the Job does not delete or rewrite the source
+receipt; Guardian continues to show the unassociated state.
+
+For `main_pdf`, known-paper intake and later association require the exact Registry
+fingerprint. This prevents a Source Asset operation from silently changing the paper's
+registered identity. Source transition reasons are finite and validated: association is
+the only paper-ID transition, relink is the only portable-ref transition, and observation
+states cannot rewrite either.
+
+`source observe` compares the current portable ref to its stored manifestation. Same
+bytes are a no-op. Changed bytes append a candidate manifestation and make Parse reads
+`stale_source`; missing, inaccessible or unsafe paths preserve historical records while
+making current trace-back unavailable. `source relink` accepts only the active digest at a
+new safe portable ref and does not stale Parse.
+
+Registry identity correction is a separate user decision:
+
+```text
+identity list
+-> user confirms merge | split | alias | archive | tombstone
+-> identity correct
+-> current identity projection / Catalog / Guardian
+```
+
+Merge and alias redirect current identity without rewriting references. Split must
+supersede an earlier duplicate merge. Archive and tombstone change active-library
+projection only. Every Registry row, paper ID, source and scientific record remains
+resolvable. P3-B ends here; Source Adequacy and semantic routes are later phases.

@@ -51,6 +51,13 @@ def test_namespace_mismatch_is_rejected() -> None:
         validate_id("paper_550e8400-e29b-41d4-a716-446655440000", Namespace.EVIDENCE)
 
 
+@pytest.mark.parametrize("value", [None, [], {}])
+def test_non_string_identifier_is_rejected_with_controlled_diagnostic(value) -> None:
+    with pytest.raises(ResearchKBError) as caught:
+        validate_id(value, Namespace.PAPER)
+    assert caught.value.diagnostic.code == "RKBC-002"
+
+
 def test_duplicate_id_is_rejected() -> None:
     with pytest.raises(ResearchKBError) as caught:
         ensure_unique(["value", "value"])

@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:source-asset-state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_asset_state_id",
+    "source_asset_id",
+    "workspace_id",
+    "revision",
+    "predecessor",
+    "paper_id",
+    "asset_role",
+    "source_ref",
+    "source_fingerprint",
+    "manifestation_id",
+    "manifestation_status",
+    "availability",
+    "reason",
+    "job_id",
+    "actor",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "source_asset_state_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_asset_state_id"},
+    "source_asset_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_asset_id"},
+    "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "revision": {"type": "integer", "minimum": 1},
+    "predecessor": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state_id", "state_digest"],
+          "properties": {
+            "state_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_asset_state_id"},
+            "state_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
+      ]
+    },
+    "paper_id": {
+      "anyOf": [
+        {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+        {"type": "null"}
+      ]
+    },
+    "asset_role": {"enum": ["main_pdf", "supplement", "source_data"]},
+    "source_ref": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_ref"},
+    "source_fingerprint": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_fingerprint"},
+    "manifestation_id": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "manifestation_status": {"enum": ["active", "change_candidate"]},
+    "availability": {"enum": ["available", "missing", "inaccessible", "relink_required"]},
+    "reason": {
+      "enum": [
+        "reference_registered",
+        "copied_into_local_inbox",
+        "paper_associated",
+        "same_digest_relink",
+        "changed_bytes_observed",
+        "source_available",
+        "source_missing",
+        "source_inaccessible",
+        "source_relink_required"
+      ]
+    },
+    "job_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/job_id"},
+    "actor": {"enum": ["cli", "user"]},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "updated_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"revision": {"const": 1}}, "required": ["revision"]},
+      "then": {"properties": {"predecessor": {"type": "null"}}},
+      "else": {"properties": {"predecessor": {"type": "object"}}}
+    }
+  ]
+}

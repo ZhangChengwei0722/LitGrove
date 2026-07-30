@@ -15,6 +15,7 @@ from research_kb.services.discovery_acquisition import (
 from research_kb.services.discovery_resolution import DiscoveryResolutionService, DiscoveryResolverRegistry
 from research_kb.services.intake_inspect import IntakeInspectService
 from research_kb.services.guardian_disposition import GuardianFindingDispositionService
+from research_kb.services.local_source_intake import LocalSourceIntakeService
 from research_kb.services.manuscript_projection import ManuscriptProjectionService
 from research_kb.services.parse import ParseService
 from research_kb.services.parse_application import ParseAdapterRegistry, ParseApplicationService
@@ -35,6 +36,8 @@ from research_kb.services.question_mapping import QuestionMappingService
 from research_kb.services.question_view import QuestionReadingViewService
 from research_kb.services.records import RecordService
 from research_kb.services.registry import RegistryService
+from research_kb.services.registry_identity import RegistryIdentityCorrectionService
+from research_kb.services.source_asset import SourceAssetService
 
 __all__ = [
     "AcquiredCandidateIntakeService",
@@ -56,6 +59,7 @@ __all__ = [
     "IntakeInspectService",
     "GuardianFindingDispositionService",
     "JsonlValidationService",
+    "LocalSourceIntakeService",
     "ManuscriptProjectionService",
     "ParseService",
     "ParseAdapterRegistry",
@@ -75,6 +79,8 @@ __all__ = [
     "QuestionReadingViewService",
     "RecordService",
     "RegistryService",
+    "RegistryIdentityCorrectionService",
+    "SourceAssetService",
     "WorkspaceBootstrapService",
     "WorkspaceSession",
     "WorkspaceSessionService",

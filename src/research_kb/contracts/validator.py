@@ -17,6 +17,7 @@ from research_kb.errors import (
     DUPLICATE_PAPER_CARD,
     DUPLICATE_REVIEW_MEMORY,
     GROUNDING_MISMATCH,
+    INCOMPLETE_TRANSACTION,
     INVALID_AUTHORITY,
     PATH_ESCAPE,
     QUEUE_AS_EVIDENCE,
@@ -32,12 +33,22 @@ from research_kb.errors import (
 )
 from research_kb.evidence_provenance import index_active_pages, parse_locator, validate_evidence_against_pages
 from research_kb.guardian_dispositions import guardian_disposition_diagnostics
+from research_kb.identity_corrections import identity_correction_diagnostics
 from research_kb.paths import normalize_relative_path, validate_config_relative_path
-from research_kb.pipeline_jobs import pipeline_job_chain_diagnostics, validate_wait_state
+from research_kb.pipeline_jobs import (
+    TERMINAL_STATUSES,
+    current_pipeline_states,
+    pipeline_job_chain_diagnostics,
+    validate_wait_state,
+)
 from research_kb.review_memory_provenance import (
     build_active_parse_index,
     review_memory_freshness,
     validate_review_memory_provenance,
+)
+from research_kb.source_assets import (
+    current_source_asset_heads,
+    source_asset_chain_diagnostics,
 )
 
 
@@ -238,7 +249,7 @@ def _local_semantic_diagnostics(kind: str, record: dict[str, Any]) -> list[Diagn
                 diagnostics.append(
                     Diagnostic(source.code, kind, _record_id(kind, record), f"/workspace/{field}", source.message)
                 )
-    elif kind == "registry-paper" and isinstance(record.get("source_ref"), dict):
+    elif kind in {"registry-paper", "source-asset-state"} and isinstance(record.get("source_ref"), dict):
         value = record["source_ref"].get("relative_path")
         if isinstance(value, str):
             try:
@@ -522,9 +533,12 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
     paper_cards: dict[str, int] = defaultdict(int)
     review_memories: dict[str, int] = defaultdict(int)
     jobs: set[str] = set()
+    source_assets: set[str] = set()
     pipeline_states: list[dict[str, Any]] = []
     guardian_reports: list[dict[str, Any]] = []
     guardian_dispositions: list[dict[str, Any]] = []
+    source_asset_states: list[dict[str, Any]] = []
+    identity_corrections: list[dict[str, Any]] = []
 
     page_index, provenance_failures = index_active_pages(
         record for kind, record in entries if kind == "parsed-page"
@@ -599,6 +613,13 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
             papers.add(paper_id)
             defined["paper"].append(paper_id)
             paper_fingerprint[paper_id] = record.get("source_fingerprint", {})
+        elif kind == "source-asset-state":
+            source_asset_states.append(record)
+            source_assets.add(record.get("source_asset_id", ""))
+            defined["sourceassetstate"].append(record.get("source_asset_state_id", ""))
+        elif kind == "registry-identity-correction":
+            identity_corrections.append(record)
+            defined["identitycorr"].append(record.get("correction_id", ""))
         elif kind == "paper-card":
             paper_id = record.get("paper_id", "")
             paper_cards[paper_id] += 1
@@ -696,7 +717,78 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
             defined["gdisp"].append(record.get("disposition_id", ""))
 
     defined["job"].extend(sorted(filter(None, jobs)))
-    diagnostics.extend(pipeline_job_chain_diagnostics(pipeline_states))
+    defined["sourceasset"].extend(sorted(filter(None, source_assets)))
+    pipeline_diagnostics = pipeline_job_chain_diagnostics(pipeline_states)
+    source_diagnostics = source_asset_chain_diagnostics(source_asset_states)
+    diagnostics.extend(pipeline_diagnostics)
+    diagnostics.extend(source_diagnostics)
+    if not pipeline_diagnostics and not source_diagnostics:
+        job_heads = {
+            item["job_id"]: item for item in current_pipeline_states(pipeline_states)
+        }
+        source_asset_roots = {
+            item["source_asset_id"]: item
+            for item in source_asset_states
+            if item.get("revision") == 1
+        }
+        successful_terminal_statuses = TERMINAL_STATUSES - {"failed", "cancelled"}
+        source_heads = current_source_asset_heads(source_asset_states)
+        for head in source_heads:
+            if head.get("paper_id") is not None:
+                continue
+            root = source_asset_roots.get(head["source_asset_id"])
+            owning_job = None if root is None else job_heads.get(root.get("job_id"))
+            if owning_job is not None and owning_job.get("status") in successful_terminal_statuses:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "source-asset-state",
+                        head["source_asset_state_id"],
+                        "/paper_id",
+                        "successfully completed source intake still has an unassociated Source Asset",
+                    )
+                )
+        for head in source_heads:
+            paper_id = head.get("paper_id")
+            registered_fingerprint = paper_fingerprint.get(paper_id)
+            active_state = next(
+                (
+                    state
+                    for state in reversed(
+                        sorted(
+                            (
+                                item
+                                for item in source_asset_states
+                                if item["source_asset_id"] == head["source_asset_id"]
+                            ),
+                            key=lambda item: item["revision"],
+                        )
+                    )
+                    if state["manifestation_status"] == "active"
+                ),
+                None,
+            )
+            if (
+                head.get("asset_role") == "main_pdf"
+                and registered_fingerprint is not None
+                and active_state is not None
+                and active_state.get("source_fingerprint") != registered_fingerprint
+            ):
+                diagnostics.append(
+                    Diagnostic(
+                        GROUNDING_MISMATCH,
+                        "source-asset-state",
+                        head["source_asset_state_id"],
+                        "/source_fingerprint",
+                        "main PDF manifestation does not match the Registry paper fingerprint",
+                    )
+                )
+    diagnostics.extend(
+        identity_correction_diagnostics(
+            identity_corrections,
+            [record for kind, record in entries if kind == "registry-paper"],
+        )
+    )
     diagnostics.extend(
         guardian_disposition_diagnostics(guardian_dispositions, guardian_reports)
     )
@@ -748,6 +840,19 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                 )
             for value in record.get("duplicate_candidate_ids", []):
                 _require_ref(diagnostics, kind, record_id, "/duplicate_candidate_ids", value, papers, "paper")
+        elif kind == "source-asset-state":
+            _require_ref(diagnostics, kind, record_id, "/workspace_id", record.get("workspace_id"), workspaces, "workspace")
+            if record.get("paper_id") is not None:
+                _require_ref(diagnostics, kind, record_id, "/paper_id", record.get("paper_id"), papers, "paper")
+            root_id = record.get("source_ref", {}).get("root_id")
+            if isinstance(root_id, str) and root_id and root_id not in source_roots:
+                diagnostics.append(
+                    Diagnostic(PATH_ESCAPE, kind, record_id, "/source_ref/root_id", "source_ref root_id is not declared by the workspace")
+                )
+            _require_ref(diagnostics, kind, record_id, "/job_id", record.get("job_id"), jobs, "Pipeline Job")
+        elif kind == "registry-identity-correction":
+            _require_ref(diagnostics, kind, record_id, "/workspace_id", record.get("workspace_id"), workspaces, "workspace")
+            _require_ref(diagnostics, kind, record_id, "/job_id", record.get("job_id"), jobs, "Pipeline Job")
         elif kind == "parsed-page":
             _require_ref(diagnostics, kind, record_id, "/parse_run_id", record.get("parse_run_id"), events, "process event")
         elif kind == "evidence":
@@ -1106,6 +1211,8 @@ def _record_id(kind: str, record: dict[str, Any]) -> str | None:
         "guardian-report": "guardian_report_id",
         "pipeline-job-state": "state_id",
         "guardian-finding-disposition": "disposition_id",
+        "source-asset-state": "source_asset_state_id",
+        "registry-identity-correction": "correction_id",
     }
     field = fields.get(kind)
     value = record.get(field) if field else None

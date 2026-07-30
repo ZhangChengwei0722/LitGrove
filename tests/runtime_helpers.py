@@ -60,6 +60,10 @@ def make_runtime_workspace(
         encoding="utf-8",
         newline="\n",
     )
+    for item in source_roots or []:
+        declared = Path(str(item["path"]))
+        if not declared.is_absolute():
+            (root / declared).mkdir(parents=True, exist_ok=True)
     if create_local_inbox:
         (root / local_inbox).mkdir(parents=True)
     result = WorkspaceBootstrapService(config_path).run()

@@ -152,7 +152,7 @@ def test_review_context_rejects_source_change_during_projection(
         calls += 1
         return expected if calls == 1 else "f" * 64
 
-    monkeypatch.setattr("research_kb.services.review_context.file_sha256", changing_hash)
+    monkeypatch.setattr("research_kb.source_resolution.file_sha256", changing_hash)
 
     with pytest.raises(ResearchKBError) as caught:
         ReviewContextService(layout).show(paper_id=paper["paper_id"])

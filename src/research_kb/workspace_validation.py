@@ -456,6 +456,8 @@ def _recognized_descendant(
         return True
     exact = {
         "registry/papers.jsonl",
+        "registry/source_assets.jsonl",
+        "registry/identity_corrections.jsonl",
         "review_queue/items.jsonl",
         "process/events.jsonl",
         "process/jobs.jsonl",
