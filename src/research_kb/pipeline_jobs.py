@@ -14,7 +14,15 @@ TERMINAL_STATUSES = frozenset(
 )
 WAIT_REASONS_BY_STATUS = {
     "waiting_user": frozenset(
-        {"authority_required", "route_ambiguous", "source_selection_required"}
+        {
+            "authority_required",
+            "route_ambiguous",
+            "source_selection_required",
+            "ocr_required",
+            "layout_parse_required",
+            "reparse_required",
+            "source_adequacy_uncertain",
+        }
     ),
     "waiting_source": frozenset(
         {
@@ -22,6 +30,8 @@ WAIT_REASONS_BY_STATUS = {
             "source_inaccessible",
             "source_changed",
             "parse_failed",
+            "source_incomplete",
+            "supplement_missing",
             "source_adequacy_inadequate",
             "source_adequacy_stale",
         }

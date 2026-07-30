@@ -10,6 +10,7 @@ from urllib.parse import urldefrag
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from research_kb.catalog.models import canonical_digest
 from research_kb.contracts.registry import SchemaRegistry
 from research_kb.contracts.versions import require_supported
 from research_kb.errors import (
@@ -34,6 +35,7 @@ from research_kb.errors import (
 from research_kb.evidence_provenance import index_active_pages, parse_locator, validate_evidence_against_pages
 from research_kb.guardian_dispositions import guardian_disposition_diagnostics
 from research_kb.identity_corrections import identity_correction_diagnostics
+from research_kb.parser_profiles import parser_profile_descriptor
 from research_kb.paths import normalize_relative_path, validate_config_relative_path
 from research_kb.pipeline_jobs import (
     TERMINAL_STATUSES,
@@ -513,6 +515,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
     questions: set[str] = set()
     candidates: set[str] = set()
     events: set[str] = set()
+    process_event_records: dict[str, dict[str, Any]] = {}
     source_roots: set[str] = set()
     unit_paper: dict[str, str] = {}
     unit_evidence: dict[str, set[str]] = {}
@@ -524,6 +527,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
     queue_paper: dict[str, str] = {}
     queue_updated_at: dict[str, str] = {}
     paper_fingerprint: dict[str, dict[str, Any]] = {}
+    registry_papers: dict[str, dict[str, Any]] = {}
     profile_sections: dict[str, list[str]] = {}
     question_records: dict[str, dict[str, Any]] = {}
     candidate_records: dict[str, dict[str, Any]] = {}
@@ -538,7 +542,11 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
     guardian_reports: list[dict[str, Any]] = []
     guardian_dispositions: list[dict[str, Any]] = []
     source_asset_states: list[dict[str, Any]] = []
+    source_asset_state_records: dict[str, dict[str, Any]] = {}
     identity_corrections: list[dict[str, Any]] = []
+    adequacy_profiles: dict[str, dict[str, Any]] = {}
+    parse_run_papers: dict[str, set[str]] = defaultdict(set)
+    parse_run_pages: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
     page_index, provenance_failures = index_active_pages(
         record for kind, record in entries if kind == "parsed-page"
@@ -613,13 +621,24 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
             papers.add(paper_id)
             defined["paper"].append(paper_id)
             paper_fingerprint[paper_id] = record.get("source_fingerprint", {})
+            registry_papers[paper_id] = record
         elif kind == "source-asset-state":
             source_asset_states.append(record)
             source_assets.add(record.get("source_asset_id", ""))
-            defined["sourceassetstate"].append(record.get("source_asset_state_id", ""))
+            source_asset_state_id = record.get("source_asset_state_id", "")
+            source_asset_state_records[source_asset_state_id] = record
+            defined["sourceassetstate"].append(source_asset_state_id)
         elif kind == "registry-identity-correction":
             identity_corrections.append(record)
             defined["identitycorr"].append(record.get("correction_id", ""))
+        elif kind == "parsed-page":
+            parse_run_id = record.get("parse_run_id", "")
+            parse_run_papers[parse_run_id].add(record.get("paper_id", ""))
+            parse_run_pages[parse_run_id].append(record)
+        elif kind == "source-adequacy-profile":
+            profile_id = record.get("profile_id", "")
+            adequacy_profiles[profile_id] = record
+            defined["adequacy"].append(profile_id)
         elif kind == "paper-card":
             paper_id = record.get("paper_id", "")
             paper_cards[paper_id] += 1
@@ -704,6 +723,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
         elif kind == "process-event":
             event_id = record.get("event_id", "")
             events.add(event_id)
+            process_event_records[event_id] = record
             defined["event"].append(event_id)
         elif kind == "pipeline-job-state":
             pipeline_states.append(record)
@@ -822,7 +842,14 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
 
     for kind, record in entries:
         record_id = _record_id(kind, record)
-        if kind in {"parsed-page", "paper-card", "evidence", "review-queue", "review-memory"}:
+        if kind in {
+            "parsed-page",
+            "paper-card",
+            "evidence",
+            "review-queue",
+            "review-memory",
+            "source-adequacy-profile",
+        }:
             _require_ref(diagnostics, kind, record_id, "/paper_id", record.get("paper_id"), papers, "paper")
         if kind == "workspace":
             roots = [item.get("root_id", "") for item in record.get("workspace", {}).get("source_roots", [])]
@@ -853,6 +880,292 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
         elif kind == "registry-identity-correction":
             _require_ref(diagnostics, kind, record_id, "/workspace_id", record.get("workspace_id"), workspaces, "workspace")
             _require_ref(diagnostics, kind, record_id, "/job_id", record.get("job_id"), jobs, "Pipeline Job")
+        elif kind == "source-adequacy-profile":
+            _require_ref(
+                diagnostics,
+                kind,
+                record_id,
+                "/workspace_id",
+                record.get("workspace_id"),
+                workspaces,
+                "workspace",
+            )
+            _require_ref(
+                diagnostics,
+                kind,
+                record_id,
+                "/job_id",
+                record.get("job_id"),
+                jobs,
+                "Pipeline Job",
+            )
+            basis = record.get("basis_profile")
+            if isinstance(basis, dict):
+                basis_id = basis.get("profile_id")
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    "/basis_profile/profile_id",
+                    basis_id,
+                    set(adequacy_profiles),
+                    "Source Adequacy profile",
+                )
+                if basis_id == record_id:
+                    diagnostics.append(
+                        Diagnostic(
+                            GROUNDING_MISMATCH,
+                            kind,
+                            record_id,
+                            "/basis_profile/profile_id",
+                            "Source Adequacy profile cannot reference itself as its basis",
+                        )
+                    )
+                predecessor = adequacy_profiles.get(basis_id)
+                if predecessor is not None:
+                    if basis.get("profile_digest") != canonical_digest(predecessor):
+                        diagnostics.append(
+                            Diagnostic(
+                                SNAPSHOT_MISMATCH,
+                                kind,
+                                record_id,
+                                "/basis_profile/profile_digest",
+                                "basis profile digest does not match the referenced profile",
+                            )
+                        )
+                    for field in (
+                        "workspace_id",
+                        "paper_id",
+                        "requested_operation",
+                        "source_snapshots",
+                        "parse_snapshot",
+                    ):
+                        if record.get(field) != predecessor.get(field):
+                            diagnostics.append(
+                                Diagnostic(
+                                    GROUNDING_MISMATCH,
+                                    kind,
+                                    record_id,
+                                    f"/{field}",
+                                    f"successor {field} does not match its basis profile",
+                                )
+                            )
+            source_state_ids = set(source_asset_state_records)
+            for index, snapshot in enumerate(record.get("source_snapshots", [])):
+                if not isinstance(snapshot, dict):
+                    continue
+                base = f"/source_snapshots/{index}"
+                root_id = snapshot.get("source_ref", {}).get("root_id")
+                if isinstance(root_id, str) and root_id and root_id not in source_roots:
+                    diagnostics.append(
+                        Diagnostic(
+                            PATH_ESCAPE,
+                            kind,
+                            record_id,
+                            base + "/source_ref/root_id",
+                            "source snapshot root_id is not declared by the workspace",
+                        )
+                    )
+                source_asset_id = snapshot.get("source_asset_id")
+                source_asset_state_id = snapshot.get("source_asset_state_id")
+                if source_asset_id is None:
+                    paper = registry_papers.get(record.get("paper_id"))
+                    if paper is None:
+                        continue
+                    expected_manifestation = f"sha256:{paper.get('source_fingerprint', {}).get('value', '')}"
+                    expected_fields = {
+                        "source_asset_state_id": None,
+                        "role": "main_pdf",
+                        "source_ref": paper.get("source_ref"),
+                        "manifestation_id": expected_manifestation,
+                    }
+                    for field, expected in expected_fields.items():
+                        if snapshot.get(field) != expected:
+                            diagnostics.append(
+                                Diagnostic(
+                                    SNAPSHOT_MISMATCH,
+                                    kind,
+                                    record_id,
+                                    base + f"/{field}",
+                                    f"implicit main source snapshot {field} does not match the Registry paper",
+                                )
+                            )
+                    continue
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    base + "/source_asset_id",
+                    source_asset_id,
+                    source_assets,
+                    "Source Asset",
+                )
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    base + "/source_asset_state_id",
+                    source_asset_state_id,
+                    source_state_ids,
+                    "Source Asset state",
+                )
+                source_state = source_asset_state_records.get(source_asset_state_id)
+                if source_state is None:
+                    continue
+                expected_fields = {
+                    "source_asset_id": "source_asset_id",
+                    "paper_id": "paper_id",
+                    "role": "asset_role",
+                    "source_ref": "source_ref",
+                    "manifestation_id": "manifestation_id",
+                    "availability": "availability",
+                }
+                for snapshot_field, state_field in expected_fields.items():
+                    expected = record.get("paper_id") if snapshot_field == "paper_id" else snapshot.get(snapshot_field)
+                    if expected != source_state.get(state_field):
+                        diagnostics.append(
+                            Diagnostic(
+                                SNAPSHOT_MISMATCH,
+                                kind,
+                                record_id,
+                                base + f"/{snapshot_field}",
+                                f"source snapshot {snapshot_field} does not match the referenced Source Asset state",
+                            )
+                        )
+            parse_ref = record.get("parse_snapshot", {}).get("active_parse_ref")
+            _require_ref(
+                diagnostics,
+                kind,
+                record_id,
+                "/parse_snapshot/active_parse_ref",
+                parse_ref,
+                events,
+                "parse event",
+            )
+            parse_event = process_event_records.get(parse_ref)
+            if parse_event is not None and (
+                parse_event.get("operation") != "parse_run"
+                or parse_event.get("result") != "success"
+            ):
+                diagnostics.append(
+                    Diagnostic(
+                        GROUNDING_MISMATCH,
+                        kind,
+                        record_id,
+                        "/parse_snapshot/active_parse_ref",
+                        "parse snapshot must reference a successful parse_run event",
+                    )
+                )
+            referenced_pages = parse_run_pages.get(parse_ref, [])
+            if referenced_pages:
+                if record.get("paper_id") not in parse_run_papers.get(parse_ref, set()):
+                    diagnostics.append(
+                        Diagnostic(
+                            GROUNDING_MISMATCH,
+                            kind,
+                            record_id,
+                            "/parse_snapshot/active_parse_ref",
+                            "active parse belongs to another paper",
+                        )
+                    )
+                else:
+                    paper_pages = [
+                        item for item in referenced_pages if item.get("paper_id") == record.get("paper_id")
+                    ]
+                    parse_snapshot = record.get("parse_snapshot", {})
+                    if parse_snapshot.get("page_count") != len(paper_pages):
+                        diagnostics.append(
+                            Diagnostic(
+                                SNAPSHOT_MISMATCH,
+                                kind,
+                                record_id,
+                                "/parse_snapshot/page_count",
+                                "parse snapshot page count does not match the referenced parsed pages",
+                            )
+                        )
+                    parser_identity = parse_snapshot.get("parser_identity", {})
+                    actual_parsers = {
+                        (item.get("parser", {}).get("adapter"), item.get("parser", {}).get("version"))
+                        for item in paper_pages
+                    }
+                    expected_parser = (
+                        parser_identity.get("adapter_id"),
+                        parser_identity.get("version"),
+                    )
+                    if actual_parsers != {expected_parser}:
+                        diagnostics.append(
+                            Diagnostic(
+                                SNAPSHOT_MISMATCH,
+                                kind,
+                                record_id,
+                                "/parse_snapshot/parser_identity",
+                                "parse snapshot parser identity does not match the referenced parsed pages",
+                            )
+                        )
+            parser_identity = record.get("parse_snapshot", {}).get("parser_identity", {})
+            expected_profile_digest = canonical_digest(
+                parser_profile_descriptor(
+                    str(parser_identity.get("adapter_id", "")),
+                    str(parser_identity.get("version", "")),
+                )
+            )
+            if parser_identity.get("profile_digest") != expected_profile_digest:
+                diagnostics.append(
+                    Diagnostic(
+                        SNAPSHOT_MISMATCH,
+                        kind,
+                        record_id,
+                        "/parse_snapshot/parser_identity/profile_digest",
+                        "parser profile digest does not match the registered adapter descriptor",
+                    )
+                )
+            for observation_index, observation in enumerate(record.get("machine_observations", [])):
+                if not isinstance(observation, dict) or not (
+                    observation.get("hard_failure") and observation.get("status") == "fail"
+                ):
+                    continue
+                for capability in observation.get("affected_capabilities", []):
+                    if record.get("capabilities", {}).get(capability, {}).get("status") == "yes":
+                        diagnostics.append(
+                            Diagnostic(
+                                GROUNDING_MISMATCH,
+                                kind,
+                                record_id,
+                                f"/capabilities/{capability}/status",
+                                f"hard machine failure at observation {observation_index} cannot produce an adequate capability",
+                            )
+                        )
+            if record.get("agent_assessment") is not None:
+                diagnostics.append(
+                    Diagnostic(
+                        INVALID_AUTHORITY,
+                        kind,
+                        record_id,
+                        "/agent_assessment",
+                        "P3 Source Adequacy profiles cannot contain an Agent assessment",
+                    )
+                )
+            user_decision = record.get("user_decision")
+            if (user_decision is None) != (record.get("assessed_by") == "cli"):
+                diagnostics.append(
+                    Diagnostic(
+                        INVALID_AUTHORITY,
+                        kind,
+                        record_id,
+                        "/assessed_by",
+                        "assessed_by must be user exactly when a user decision is present",
+                    )
+                )
+            if user_decision is not None and not isinstance(basis, dict):
+                diagnostics.append(
+                    Diagnostic(
+                        GROUNDING_MISMATCH,
+                        kind,
+                        record_id,
+                        "/basis_profile",
+                        "a user decision requires a predecessor Source Adequacy profile",
+                    )
+                )
         elif kind == "parsed-page":
             _require_ref(diagnostics, kind, record_id, "/parse_run_id", record.get("parse_run_id"), events, "process event")
         elif kind == "evidence":
@@ -1213,6 +1526,7 @@ def _record_id(kind: str, record: dict[str, Any]) -> str | None:
         "guardian-finding-disposition": "disposition_id",
         "source-asset-state": "source_asset_state_id",
         "registry-identity-correction": "correction_id",
+        "source-adequacy-profile": "profile_id",
     }
     field = fields.get(kind)
     value = record.get(field) if field else None

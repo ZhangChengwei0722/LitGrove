@@ -23,6 +23,7 @@ def test_identifier_has_no_domain_or_order_semantics() -> None:
     [
         (Namespace.REVIEW_MEMORY, "reviewmem_550e8400-e29b-41d4-a716-446655440000"),
         (Namespace.REVIEW_UNIT, "reviewunit_550e8400-e29b-41d4-a716-446655440000"),
+        (Namespace.SOURCE_ADEQUACY, "adequacy_550e8400-e29b-41d4-a716-446655440000"),
     ],
 )
 def test_review_memory_namespaces_are_cli_owned(namespace: Namespace, expected: str) -> None:

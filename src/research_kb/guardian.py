@@ -21,7 +21,7 @@ from research_kb.errors import (
     ResearchKBError,
 )
 from research_kb.identifiers import Namespace, allocate_id
-from research_kb.pipeline_jobs import current_pipeline_states
+from research_kb.pipeline_jobs import current_pipeline_states, pipeline_job_chain_diagnostics
 from research_kb.process_events import timestamp
 from research_kb.review_memory_provenance import build_active_parse_index, review_memory_freshness
 from research_kb.services.question_mapping import mapping_freshness_diagnostics
@@ -31,6 +31,7 @@ from research_kb.source_assets import (
     source_asset_projection,
 )
 from research_kb.source_resolution import inspect_source_ref, observe_paper_source
+from research_kb.source_adequacy import profile_freshness
 from research_kb.step7_support import STEP7_RECORD_KINDS, candidate_freshness
 from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl, serialize_jsonl
 from research_kb.storage.transactions import TransactionManager, TransactionResult, build_journal_event
@@ -88,6 +89,7 @@ class GuardianService:
                     diagnostics.extend(step7_freshness_diagnostics(kind, mapping, entries))
         diagnostics.extend(self._canonical_path_diagnostics())
         process_events = [record for kind, record in entries if kind == "process-event"]
+        diagnostics.extend(self._adequacy_diagnostics(entries, process_events))
         diagnostics.extend(self._transaction_diagnostics(process_events))
         diagnostics.extend(self._job_event_diagnostics(entries, process_events))
         diagnostics.extend(self._source_event_diagnostics(entries, process_events))
@@ -542,6 +544,94 @@ class GuardianService:
                 )
         return diagnostics
 
+    def _adequacy_diagnostics(
+        self,
+        entries: list[BundleEntry],
+        process_events: list[dict[str, Any]],
+    ) -> list[Diagnostic]:
+        diagnostics: list[Diagnostic] = []
+        profiles = [
+            record
+            for kind, record in entries
+            if kind == "source-adequacy-profile"
+            and not validate_record("source-adequacy-profile", record, actor="stored")
+        ]
+        if not profiles:
+            return diagnostics
+        job_states = [record for kind, record in entries if kind == "pipeline-job-state"]
+        if (
+            any(validate_record("pipeline-job-state", state, actor="stored") for state in job_states)
+            or pipeline_job_chain_diagnostics(job_states)
+        ):
+            return diagnostics
+        try:
+            job_heads = {item["job_id"]: item for item in current_pipeline_states(job_states)}
+        except ResearchKBError:
+            return diagnostics
+        latest: dict[tuple[str, str], dict[str, Any]] = {}
+        for profile in profiles:
+            key = (profile["paper_id"], profile["requested_operation"])
+            existing = latest.get(key)
+            if existing is None or (profile["assessed_at"], profile["profile_id"]) > (
+                existing["assessed_at"],
+                existing["profile_id"],
+            ):
+                latest[key] = profile
+            matching_events = [
+                event
+                for event in process_events
+                if event.get("operation") == "source_adequacy_assess"
+                and event.get("result") == "success"
+                and event.get("job_id") == profile["job_id"]
+                and profile["profile_id"] in event.get("output_refs", [])
+            ]
+            if len(matching_events) != 1:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "source-adequacy-profile",
+                        profile["profile_id"],
+                        "/job_id",
+                        f"Source Adequacy profile must have exactly one correlated success event; found {len(matching_events)}",
+                    )
+                )
+            job = job_heads.get(profile["job_id"])
+            if job is not None and "assess_source_adequacy" not in job["authority_snapshot"]["granted_operations"]:
+                diagnostics.append(
+                    Diagnostic(
+                        INVALID_AUTHORITY,
+                        "source-adequacy-profile",
+                        profile["profile_id"],
+                        "/job_id",
+                        "owning Pipeline Job does not grant Source Adequacy assessment",
+                    )
+                )
+            if job is not None and profile["profile_id"] not in job["output_refs"]:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "source-adequacy-profile",
+                        profile["profile_id"],
+                        "/profile_id",
+                        "Source Adequacy profile is committed but not yet consumed by its Pipeline Job",
+                        severity="warning",
+                    )
+                )
+        for profile in latest.values():
+            freshness = profile_freshness(self.layout, entries, profile)
+            if freshness["state"] == "stale_upstream":
+                diagnostics.append(
+                    Diagnostic(
+                        SNAPSHOT_MISMATCH,
+                        "source-adequacy-profile",
+                        profile["profile_id"],
+                        "/profile_id",
+                        "latest Source Adequacy profile is stale for its recorded source or parse snapshot",
+                        severity="warning",
+                    )
+                )
+        return diagnostics
+
     def _transaction_diagnostics(self, process_events: list[dict[str, Any]]) -> list[Diagnostic]:
         diagnostics: list[Diagnostic] = []
         if not self.layout.transactions_root.exists():
@@ -700,6 +790,8 @@ def _finding_from_diagnostic(diagnostic: Diagnostic, defined_ids: set[str]) -> d
         "guardian-finding-disposition",
     }:
         remediation = "Inspect the append-only operational chain and transaction journal; recover by digest or append an explicit disposition without rewriting history."
+    elif diagnostic.record_kind == "source-adequacy-profile":
+        remediation = "Re-run the exact requested-use assessment or resume its owning Pipeline Job; do not edit or delete the historical profile."
     return {
         "code": diagnostic.code,
         "severity": diagnostic.severity,
@@ -722,6 +814,7 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
         "guardian-finding-disposition": "disposition_id",
         "source-asset-state": "source_asset_state_id",
         "registry-identity-correction": "correction_id",
+        "source-adequacy-profile": "profile_id",
         "question-mapping": "question_id",
         "discovery-candidate": "candidate_id",
         "step7-synthesis": "candidate_id",

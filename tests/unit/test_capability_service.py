@@ -54,6 +54,8 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "step7-synthesis",
         ],
         "read_commands": [
+            "adequacy gate",
+            "adequacy show",
             "capability show",
             "discovery list",
             "discovery resolve",
@@ -79,6 +81,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "step7 render",
         ],
         "write_commands": [
+            "adequacy assess",
             "guardian disposition",
             "identity correct",
             "job cancel",
@@ -91,6 +94,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "source reference",
             "source relink",
             "source select",
+            "trunk advance",
         ],
         "operational_record_kinds": [
             "guardian-finding-disposition",
@@ -98,6 +102,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "pipeline-job-state",
             "process-event",
             "registry-identity-correction",
+            "source-adequacy-profile",
             "source-asset-state",
             "transaction-journal",
         ],
@@ -114,6 +119,8 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "pipeline_jobs": True,
             "registry_identity_correction": True,
             "source_asset_runtime": True,
+            "source_adequacy": True,
+            "deterministic_trunk": True,
         },
     }
 

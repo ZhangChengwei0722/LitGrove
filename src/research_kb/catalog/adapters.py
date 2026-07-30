@@ -231,6 +231,12 @@ def _default_adapters() -> tuple[CatalogRecordAdapter, ...]:
         _adapter("step7-cross-view", "candidate_id", _project_step7, _step7_detail),
         _adapter("process-event", "event_id", _project_event, _event_detail),
         _adapter("pipeline-job-state", "state_id", _project_job, _job_detail),
+        _adapter(
+            "source-adequacy-profile",
+            "profile_id",
+            _project_source_adequacy,
+            _source_adequacy_detail,
+        ),
         _adapter("source-asset-state", "source_asset_id", _project_source_asset, _source_asset_detail),
         _adapter("registry-identity-projection", "paper_id", _project_identity, _identity_detail),
         _adapter("guardian-report", "guardian_report_id", _project_guardian, _guardian_detail),
@@ -528,6 +534,38 @@ def _project_guardian(record: Record, workspace_id: str, digest: str) -> tuple[C
     )
 
 
+def _project_source_adequacy(record: Record, workspace_id: str, digest: str) -> tuple[CatalogDocument, ...]:
+    del workspace_id
+    operation = str(record["requested_operation"])
+    capability_statuses = tuple(
+        f"capability:{name}:{value['status']}"
+        for name, value in sorted(record["capabilities"].items())
+    )
+    return (
+        _document(
+            record_kind="source-adequacy-profile",
+            record_id=str(record["profile_id"]),
+            child_id=None,
+            item_kind="source_adequacy",
+            authority_layer="operational",
+            paper_id=str(record["paper_id"]),
+            question_id=None,
+            title=operation.replace("_", " "),
+            summary=f"{record['assessed_by']} / {record['assessment_rule_version']}",
+            statuses=(f"operation:{operation}", *capability_statuses),
+            search_text=_join(
+                [
+                    operation,
+                    record["assessed_by"],
+                    *record["known_limitations"],
+                    *record["recommended_actions"],
+                ]
+            ),
+            digest=digest,
+        ),
+    )
+
+
 def _project_source_asset(record: Record, workspace_id: str, digest: str) -> tuple[CatalogDocument, ...]:
     del workspace_id
     if record["availability"] != "available":
@@ -787,6 +825,25 @@ def _source_asset_detail(record: Record, child_id: str | None) -> dict[str, Any]
     }
 
 
+def _source_adequacy_detail(record: Record, child_id: str | None) -> dict[str, Any]:
+    del child_id
+    return {
+        "profile_id": record["profile_id"],
+        "basis_profile_id": (
+            None if record["basis_profile"] is None else record["basis_profile"]["profile_id"]
+        ),
+        "paper_id": record["paper_id"],
+        "job_id": record["job_id"],
+        "requested_operation": record["requested_operation"],
+        "assessment_rule_version": record["assessment_rule_version"],
+        "assessed_by": record["assessed_by"],
+        "assessed_at": record["assessed_at"],
+        "capabilities": record["capabilities"],
+        "known_limitations": record["known_limitations"],
+        "recommended_actions": record["recommended_actions"],
+    }
+
+
 def _identity_detail(record: Record, child_id: str | None) -> dict[str, Any]:
     del child_id
     return {
@@ -846,6 +903,26 @@ def _select_catalog_entries(
     ]
     source_states = [record for kind, record in entries if kind == "source-asset-state"]
     selected.extend(("source-asset-state", item) for item in current_source_asset_heads(source_states))
+    adequacy_profiles: dict[tuple[str, str], dict[str, Any]] = {}
+    for kind, record in entries:
+        if kind != "source-adequacy-profile":
+            continue
+        key = (record["paper_id"], record["requested_operation"])
+        existing = adequacy_profiles.get(key)
+        if existing is None or (record["assessed_at"], record["profile_id"]) > (
+            existing["assessed_at"],
+            existing["profile_id"],
+        ):
+            adequacy_profiles[key] = record
+    selected = [
+        (kind, record)
+        for kind, record in selected
+        if kind != "source-adequacy-profile"
+    ]
+    selected.extend(
+        ("source-adequacy-profile", record)
+        for _, record in sorted(adequacy_profiles.items())
+    )
     corrections = _ordered_identity_corrections(
         [record for kind, record in entries if kind == "registry-identity-correction"]
     )

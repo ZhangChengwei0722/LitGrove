@@ -45,7 +45,9 @@ Milestone 1B through the M3D-1 repository slice provide:
 - a Portable Skill-only explicit-criteria manuscript audit route over transient projection and existing knowledge reads, with scope-limited findings and zero persistence.
 - append-only Pipeline Jobs with captured authority, bounded current-state listing, cooperative cancellation, recovery transitions, correlated events and Guardian checks;
 - append-only Source Asset manifestations for reference, create-only local-inbox copy, bounded inbox selection, observation and same-digest relink;
-- user-authorized Registry identity corrections for duplicate merge, mistaken-merge split, alias, archive and tombstone without rewriting paper IDs or historical records.
+- user-authorized Registry identity corrections for duplicate merge, mistaken-merge split, alias, archive and tombstone without rewriting paper IDs or historical records;
+- use-specific Source Adequacy profiles bound to exact source and parse snapshots, with independent capability gates, stale projection and hard-failure precedence;
+- a resumable deterministic trunk from current source through Parse and Source Adequacy to an explicit user-selected primary/review semantic boundary, without creating scientific records.
 
 The installed CLI contains no private adapter and performs no adapter or connector discovery. The CLI never calls an LLM or makes scientific judgments. M3D-1 audit semantics remain Agent-owned in the Portable Skill; Core still only projects manuscripts and exposes existing reads. OCR, manuscript rewriting, subtype-specific review runtime, persisted Markdown or additional derived views, Field Map integration, Review Unit Question Mapping, institutional/browser acquisition and migration remain later milestones.
 
@@ -125,6 +127,10 @@ research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapt
 research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapter pdfplumber
 research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapter pdfplumber-text-flow
 research-kb parse show --workspace <workspace.yaml> --paper-id <paper_id> [--page <positive_integer>]
+research-kb adequacy assess --workspace <workspace.yaml> --request <request.json> --actor <cli|user>
+research-kb adequacy show --workspace <workspace.yaml> --paper-id <paper_id> [--operation <operation>]
+research-kb adequacy gate --workspace <workspace.yaml> --paper-id <paper_id> --operation <operation>
+research-kb trunk advance --workspace <workspace.yaml> --request <request.json> --actor <cli|user>
 research-kb paper status --workspace <workspace.yaml> --paper-id <paper_id>
 research-kb paper context --workspace <workspace.yaml> --paper-id <paper_id>
 research-kb review context --workspace <workspace.yaml> --paper-id <paper_id>
@@ -141,7 +147,7 @@ research-kb transaction recover --workspace <workspace.yaml> [--dry-run]
 
 Existing source assets remain immutable. The source-write exceptions are exact-user-authority `discovery acquire` and `source copy`; each may create only one previously absent PDF under the configured, uniquely addressable `local_inbox`. Neither may overwrite, move, rename or delete a user source. Canonical writes stay under `knowledge_root` and emit a process event only after a validated atomic replacement.
 
-`capability show`, `discovery search`, `discovery list`, `discovery show`, `discovery resolve`, `intake inspect`, `intake inspect-acquired`, `manuscript inspect`, `parse show`, `paper status`, `paper context`, `review context`, and `step7 context` emit bounded JSON and write no workspace state. Capability output distinguishes installed adapters and built-in connectors without calling the network. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
+`capability show`, `discovery search`, `discovery list`, `discovery show`, `discovery resolve`, `intake inspect`, `intake inspect-acquired`, `manuscript inspect`, `parse show`, `adequacy show`, `adequacy gate`, `paper status`, `paper context`, `review context`, and `step7 context` emit bounded JSON and write no workspace state. Capability output distinguishes installed adapters and built-in connectors without calling the network. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
 
 `discovery search` accepts an explicit date range, field-bound keywords, preprint choice and maximum of 1-15 results. It calls only the built-in fixed Europe PMC HTTPS endpoint, reapplies filters locally, merges exact DOI identity and marks possible title duplicates without merging them. It creates no workspace, candidate, event, report file or downloaded source. Public provider state is mutable; identical requests and provider page payloads produce identical normalized bytes.
 

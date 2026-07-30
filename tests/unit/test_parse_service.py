@@ -6,9 +6,76 @@ from research_kb.parse.synthetic_text import SyntheticTextAdapter
 from research_kb.process_events import read_process_events
 from research_kb.errors import ResearchKBError
 from research_kb.services.parse import ParseService
+from research_kb.services.pipeline_job import PipelineJobService
 from research_kb.services.registry import RegistryService
 from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl
 from tests.runtime_helpers import make_runtime_workspace
+
+
+def _parse_job(layout, paper_id: str, *, granted_operations: list[str], idempotency_key: str):
+    return PipelineJobService(layout).create(
+        requested_route="local_source",
+        requested_depth="parse_only",
+        current_node="parse",
+        input_refs=[paper_id],
+        authority_snapshot={
+            "actor": "user",
+            "granted_operations": granted_operations,
+            "captured_at": "2026-01-01T00:00:00Z",
+        },
+        idempotency_key=idempotency_key,
+        actor="user",
+        fixture_origin="synthetic_from_scratch",
+    ).state
+
+
+def test_parse_job_correlation_requires_authority_and_marks_event(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = layout.source_roots["alpha-sources"] / "job-parse.txt"
+    source.write_text("Invented Parse Job source.\n", encoding="utf-8", newline="\n")
+    paper, _ = RegistryService(layout).add(
+        root_id="alpha-sources",
+        relative_path=source.name,
+        metadata={"fixture_origin": "synthetic_from_scratch"},
+    )
+    allowed = _parse_job(
+        layout,
+        paper["paper_id"],
+        granted_operations=["parse_run"],
+        idempotency_key="parse-job-allowed",
+    )
+
+    ParseService(layout).run(
+        paper_id=paper["paper_id"],
+        adapter=SyntheticTextAdapter(),
+        actor="cli",
+        job_id=allowed["job_id"],
+    )
+
+    parse_events = [
+        item
+        for item in read_process_events(layout.process_events_path)
+        if item["operation"] == "parse_run"
+    ]
+    assert len(parse_events) == 1
+    assert parse_events[0]["job_id"] == allowed["job_id"]
+
+    denied = _parse_job(
+        layout,
+        paper["paper_id"],
+        granted_operations=[],
+        idempotency_key="parse-job-denied",
+    )
+    before = layout.parse_path(paper["paper_id"]).read_bytes()
+    with pytest.raises(ResearchKBError) as caught:
+        ParseService(layout).run(
+            paper_id=paper["paper_id"],
+            adapter=SyntheticTextAdapter(),
+            actor="cli",
+            job_id=denied["job_id"],
+        )
+    assert caught.value.diagnostic.code == "RKBC-006"
+    assert layout.parse_path(paper["paper_id"]).read_bytes() == before
 
 
 def test_parse_service_promotes_pages_and_preserves_source(tmp_path: Path) -> None:

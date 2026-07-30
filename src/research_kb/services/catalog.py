@@ -453,6 +453,12 @@ def _load_exact_workspace_record(layout, row: dict[str, Any]) -> dict[str, Any] 
         return _find_jsonl_record(layout.process_events_path, "event_id", row["record_id"])
     if kind == "pipeline-job-state":
         return _find_jsonl_record(layout.pipeline_jobs_path, "state_id", row["record_id"])
+    if kind == "source-adequacy-profile":
+        return _find_jsonl_record(
+            layout.source_adequacy_path,
+            "profile_id",
+            row["record_id"],
+        )
     if kind == "source-asset-state":
         states = read_jsonl(
             layout.source_assets_path,

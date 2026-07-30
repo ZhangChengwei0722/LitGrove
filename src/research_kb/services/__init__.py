@@ -13,6 +13,7 @@ from research_kb.services.discovery_acquisition import (
     DiscoveryAcquisitionTransportRegistry,
 )
 from research_kb.services.discovery_resolution import DiscoveryResolutionService, DiscoveryResolverRegistry
+from research_kb.services.deterministic_trunk import DeterministicTrunkResult, DeterministicTrunkService
 from research_kb.services.intake_inspect import IntakeInspectService
 from research_kb.services.guardian_disposition import GuardianFindingDispositionService
 from research_kb.services.local_source_intake import LocalSourceIntakeService
@@ -38,6 +39,7 @@ from research_kb.services.records import RecordService
 from research_kb.services.registry import RegistryService
 from research_kb.services.registry_identity import RegistryIdentityCorrectionService
 from research_kb.services.source_asset import SourceAssetService
+from research_kb.services.source_adequacy import SourceAdequacyMutationResult, SourceAdequacyService
 
 __all__ = [
     "AcquiredCandidateIntakeService",
@@ -56,6 +58,8 @@ __all__ = [
     "DiscoveryResolutionService",
     "DiscoveryResolverRegistry",
     "DiscoveryService",
+    "DeterministicTrunkResult",
+    "DeterministicTrunkService",
     "IntakeInspectService",
     "GuardianFindingDispositionService",
     "JsonlValidationService",
@@ -81,6 +85,8 @@ __all__ = [
     "RegistryService",
     "RegistryIdentityCorrectionService",
     "SourceAssetService",
+    "SourceAdequacyMutationResult",
+    "SourceAdequacyService",
     "WorkspaceBootstrapService",
     "WorkspaceSession",
     "WorkspaceSessionService",

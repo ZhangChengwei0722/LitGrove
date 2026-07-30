@@ -7,6 +7,7 @@ import pytest
 from research_kb.catalog import CatalogAdapterRegistry
 from research_kb.errors import ResearchKBError
 from tests.contract.test_review_memory_contract import review_memory_record
+from tests.contract.test_source_adequacy_contract import _profile as source_adequacy_profile
 from tests.fixture_factory import make_bundle
 
 
@@ -130,6 +131,44 @@ def test_catalog_detail_projection_returns_bounded_current_record_data() -> None
     assert detail["background_only"] is True
     assert detail["can_enter_canonical_evidence"] is False
     assert detail["not_fact"] is True
+
+
+def test_catalog_projects_only_latest_redacted_source_adequacy_profile() -> None:
+    earlier = source_adequacy_profile()
+    later = deepcopy(earlier)
+    later["profile_id"] = "adequacy_b0000002-0000-4000-8000-000000000002"
+    later["assessed_at"] = "2026-01-02T00:00:00Z"
+    later["known_limitations"] = ["A synthetic layout limitation remains."]
+    later["user_decision"] = {
+        "actor": "user",
+        "decision": "remediation_required",
+        "capabilities": ["basic_paper_understanding"],
+        "reason": "private-user-reason confidential-note",
+        "decided_at": "2026-01-02T00:00:00Z",
+    }
+    later["assessed_by"] = "user"
+
+    registry = CatalogAdapterRegistry()
+    snapshot = registry.project_entries(
+        [
+            ("source-adequacy-profile", earlier),
+            ("source-adequacy-profile", later),
+        ],
+        workspace_id=WORKSPACE_ID,
+    )
+
+    documents = [item for item in snapshot.documents if item.item_kind == "source_adequacy"]
+    assert len(documents) == 1
+    assert documents[0].record_id == later["profile_id"]
+    detail = registry.find_adapter("source-adequacy-profile").detail(later, None)
+    serialized = str(detail)
+    assert detail["requested_operation"] == "basic_paper_card"
+    assert "source_snapshots" not in detail
+    assert "parse_snapshot" not in detail
+    assert "paper.txt" not in serialized
+    assert "sha256:" not in serialized
+    assert "private-user-reason" not in serialized
+    assert "private-user-reason" not in documents[0].search_text
 
 
 def test_capability_reports_registered_ignored_and_unregistered_kinds() -> None:

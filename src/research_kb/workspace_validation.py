@@ -461,6 +461,7 @@ def _recognized_descendant(
         "review_queue/items.jsonl",
         "process/events.jsonl",
         "process/jobs.jsonl",
+        "process/source_adequacy.jsonl",
         "guardian/reports.jsonl",
         "guardian/finding_dispositions.jsonl",
         "questions/mappings.jsonl",

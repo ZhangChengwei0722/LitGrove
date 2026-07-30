@@ -479,6 +479,40 @@ Current canonical-paper and active-library status are projections. Catalog index
 affected current identity projections and current Source Asset heads, never raw correction
 events or historical source revisions.
 
-P3-B does not create Source Adequacy, Agent Task, semantic routing or App write controls.
-Those later consumers must use the current source projection rather than silently binding
+P3-B itself does not create Source Adequacy, Agent Task, semantic routing or App write
+controls. P3-C consumes its current source projection rather than silently binding
 historical provenance to the active parse.
+
+## P3-C Source Adequacy And Deterministic Trunk
+
+The optional `process/source_adequacy.jsonl` store is append-only operational history.
+Each Profile binds one registered paper and Pipeline Job to the exact source role set,
+manifestation IDs, parse run, parser adapter/version/profile digest, authoritative parsed
+page bundle digest, requested operation and rule versions. A legacy Registry source is an
+implicit `main_pdf`; its ref, fingerprint-derived manifestation and role must match the
+Registry row. A parser profile digest is recomputed from the registered descriptor during
+bundle validation rather than trusted from stored input.
+
+Source Adequacy answers fitness for a requested use, not scientific credibility. Its
+public capability vocabulary separates basic understanding, complete reading, continuous
+text citation, figure/table extraction, layout-sensitive analysis and supplementary
+analysis. Deterministic hard failures cannot be overridden. Non-hard uncertainty may have
+an explicit user successor decision; P3 rejects Agent-authored assessments.
+
+Freshness is read-time and capability-specific. Changed source bytes, parse run, parser
+profile, parse output or rule version make affected uses stale without rewriting old
+Profiles. Historical Profiles remain valid after the active parsed-page projection is
+replaced: when their old pages are no longer active, their event and self-describing parser
+digest remain provenance, while they cannot pass a current gate.
+
+The deterministic trunk advances one authorized `local_source / semantic_gate` Pipeline
+Job through source observation, parse reuse or explicit reparse, Source Adequacy assessment
+and a zero-write capability gate. Missing sources, supplements, OCR/layout/reparse choices
+and non-hard uncertainty route to their specific Pipeline Job wait reason. Only parser
+domain or adapter-execution failures become `parse_failed`; authority, schema, source race
+and transaction-integrity errors fail closed.
+
+An allowed use stops at `route_ambiguous` until an explicit user decision selects
+`primary` or `review`; `mixed_document` is preserved as a review-route reason. P3-C creates
+no Paper Card, Evidence, Review Memory, scientific review queue or Agent Task. Those
+semantic and App-preview responsibilities remain in P4 and P3-D respectively.

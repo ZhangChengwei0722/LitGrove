@@ -26,6 +26,7 @@ from tests.pdf_helpers import write_synthetic_pdf
 from tests.runtime_helpers import make_runtime_workspace
 from tests.unit.test_question_mapping_service import _append_request, _link, _prepare_paper
 from tests.unit.test_review_memory_service import prepare_review_paper, review_payload
+from tests.unit.test_deterministic_trunk_service import _registered_job
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -90,14 +91,17 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert "source list" in output["read_commands"]
     assert "source scan" in output["read_commands"]
     assert "identity list" in output["read_commands"]
+    assert {"adequacy gate", "adequacy show"} <= set(output["read_commands"])
     assert "source copy" in output["write_commands"]
     assert "source observe" in output["write_commands"]
     assert "source reference" in output["write_commands"]
     assert "source relink" in output["write_commands"]
     assert "source select" in output["write_commands"]
     assert "identity correct" in output["write_commands"]
+    assert {"adequacy assess", "trunk advance"} <= set(output["write_commands"])
     assert "source-asset-state" in output["operational_record_kinds"]
     assert "registry-identity-correction" in output["operational_record_kinds"]
+    assert "source-adequacy-profile" in output["operational_record_kinds"]
     assert "review-memory" in output["mutation_record_kinds"]
     assert output["features"]["review_runtime"] is True
     assert output["features"]["manuscript_projection"] is True
@@ -110,6 +114,8 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert output["features"]["explicit_oa_acquisition"] is True
     assert output["features"]["legal_oa_resolution"] is True
     assert output["features"]["pipeline_jobs"] is True
+    assert output["features"]["source_adequacy"] is True
+    assert output["features"]["deterministic_trunk"] is True
     assert {"job list", "job show"} <= set(output["read_commands"])
     assert {"job create", "job transition", "job cancel", "job recover"} <= set(output["write_commands"])
 
@@ -177,6 +183,67 @@ def test_pipeline_job_cli_create_list_show_and_transition(tmp_path, capsys) -> N
     ]) == 0
     transitioned = json.loads(capsys.readouterr().out)
     assert transitioned["state"]["status"] == "running"
+
+
+def test_source_adequacy_and_trunk_cli_are_redacted_and_replayable(tmp_path, capsys) -> None:
+    layout, _, paper, job = _registered_job(tmp_path)
+    trunk_request = tmp_path / "trunk-request.json"
+    trunk_request.write_bytes(
+        serialize_json(
+            {
+                "job_id": job["job_id"],
+                "paper_id": paper["paper_id"],
+                "requested_operation": "basic_paper_card",
+                "adapter_name": "synthetic-text",
+            }
+        )
+    )
+
+    assert main([
+        "trunk", "advance", "--workspace", str(layout.config.path),
+        "--request", str(trunk_request), "--actor", "cli",
+    ]) == 0
+    trunk = json.loads(capsys.readouterr().out)
+    assert trunk["pipeline"]["wait_reason"] == "route_ambiguous"
+    assert trunk["gate"]["status"] == "allowed"
+
+    assert main([
+        "adequacy", "show", "--workspace", str(layout.config.path),
+        "--paper-id", paper["paper_id"], "--operation", "basic_paper_card",
+    ]) == 0
+    shown = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(shown)
+    assert shown["count"] == 1
+    assert "source_snapshots" not in serialized
+    assert "parse_snapshot" not in serialized
+    assert str(tmp_path) not in serialized
+    assert "sha256:" not in serialized
+
+    assert main([
+        "adequacy", "gate", "--workspace", str(layout.config.path),
+        "--paper-id", paper["paper_id"], "--operation", "basic_paper_card",
+    ]) == 0
+    gate = json.loads(capsys.readouterr().out)
+    assert gate["status"] == "allowed"
+
+    assess_request = tmp_path / "adequacy-assess.json"
+    assess_request.write_bytes(
+        serialize_json(
+            {
+                "paper_id": paper["paper_id"],
+                "job_id": job["job_id"],
+                "requested_operation": "basic_paper_card",
+            }
+        )
+    )
+    assert main([
+        "adequacy", "assess", "--workspace", str(layout.config.path),
+        "--request", str(assess_request), "--actor", "cli",
+    ]) == 0
+    replay = json.loads(capsys.readouterr().out)
+    assert replay["result"] == "no_change"
+    assert replay["persistent_writes"] == 0
+    assert "source_snapshots" not in json.dumps(replay)
 
 
 def test_manuscript_inspect_cli_emits_one_read_only_docx_report(tmp_path, capsys) -> None:

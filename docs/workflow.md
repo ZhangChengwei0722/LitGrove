@@ -298,4 +298,30 @@ identity list
 Merge and alias redirect current identity without rewriting references. Split must
 supersede an earlier duplicate merge. Archive and tombstone change active-library
 projection only. Every Registry row, paper ID, source and scientific record remains
-resolvable. P3-B ends here; Source Adequacy and semantic routes are later phases.
+resolvable. P3-B ends at the current source projection; P3-C consumes it as follows.
+
+### Source Adequacy and deterministic trunk
+
+```text
+current registered source manifestation
+-> current parse reuse or explicit registered adapter run
+-> Source Adequacy assessment for one requested operation
+-> current + adequate capability: semantic route wait
+-> no / uncertain / stale: specific Pipeline Job wait
+-> explicit user primary | review route
+-> completed semantic-gate boundary
+```
+
+Use `adequacy assess` only with a current Job that grants
+`assess_source_adequacy`. `adequacy show` returns redacted Profile projections;
+`adequacy gate` is zero-write. A Profile for `basic_paper_card` cannot authorize figure,
+formula or supplementary work. Main source, active parse, parser identity/profile and
+parsed output are rechecked before reuse. A reparse-related user wait always runs the
+adapter named in the resumed request; it does not silently reuse the parse that caused the
+wait.
+
+`trunk advance` requires one `local_source / semantic_gate` Job granting source
+observation, parse, adequacy and trunk authority. It may reuse an exact current parse and
+Profile on replay. It sends file/parse/capability problems to explicit wait reasons and
+leaves structural failures to fail closed and Guardian. It never infers document type or
+creates scientific records. A user-selected mixed document must use the review route.

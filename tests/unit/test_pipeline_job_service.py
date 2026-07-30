@@ -288,6 +288,53 @@ def test_pipeline_job_record_validation_rejects_invalid_root_and_wait_reason(tmp
     assert any("wait reason" in item.message for item in diagnostics)
 
 
+@pytest.mark.parametrize(
+    ("status", "wait_reason"),
+    [
+        ("waiting_user", "ocr_required"),
+        ("waiting_user", "layout_parse_required"),
+        ("waiting_user", "reparse_required"),
+        ("waiting_user", "source_adequacy_uncertain"),
+        ("waiting_source", "source_incomplete"),
+        ("waiting_source", "supplement_missing"),
+    ],
+)
+def test_pipeline_job_accepts_specific_source_adequacy_wait_reasons(
+    tmp_path,
+    status,
+    wait_reason,
+) -> None:
+    _, service = prepared_service(tmp_path)
+    created = create_job(service)
+    running = service.transition(
+        JOB_ID,
+        expected_state_id=created.state["state_id"],
+        expected_state_digest=canonical_digest(created.state),
+        status="running",
+        current_node="source_adequacy",
+        wait_reason=None,
+        output_refs=[],
+        retry_increment=0,
+        recovery_action=None,
+        actor="cli",
+    )
+
+    waiting = service.transition(
+        JOB_ID,
+        expected_state_id=running.state["state_id"],
+        expected_state_digest=canonical_digest(running.state),
+        status=status,
+        current_node="source_adequacy",
+        wait_reason=wait_reason,
+        output_refs=[],
+        retry_increment=0,
+        recovery_action=None,
+        actor="cli",
+    )
+
+    assert waiting.state["wait_reason"] == wait_reason
+
+
 def test_cancel_preserves_outputs_and_recovery_increments_retry(tmp_path) -> None:
     _, service = prepared_service(tmp_path)
     created = create_job(service)

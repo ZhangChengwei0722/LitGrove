@@ -63,6 +63,8 @@ from research_kb.services.discovery_acquisition import (
     DiscoveryAcquisitionTransportRegistry,
 )
 from research_kb.services.discovery_resolution import DiscoveryResolutionService, DiscoveryResolverRegistry
+from research_kb.services.deterministic_trunk import DeterministicTrunkService
+from research_kb.services.source_adequacy import SourceAdequacyService
 from research_kb.compatibility import LegacyReaderAdapter
 from research_kb.storage.json_io import serialize_json
 from research_kb.workspace import WorkspaceLayout
@@ -75,6 +77,7 @@ PIPELINE_JOB_REQUEST_INPUT_LIMIT = 64 * 1024
 GUARDIAN_DISPOSITION_REQUEST_INPUT_LIMIT = 64 * 1024
 SOURCE_REQUEST_INPUT_LIMIT = 64 * 1024
 IDENTITY_REQUEST_INPUT_LIMIT = 64 * 1024
+SOURCE_ADEQUACY_REQUEST_INPUT_LIMIT = 64 * 1024
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -231,6 +234,28 @@ def build_parser() -> argparse.ArgumentParser:
     parse_show.add_argument("--paper-id", required=True)
     parse_show.add_argument("--page")
 
+    adequacy = commands.add_parser("adequacy", help="assess and inspect source fitness by requested use")
+    adequacy_commands = adequacy.add_subparsers(dest="adequacy_command", required=True)
+    adequacy_assess = adequacy_commands.add_parser("assess", help="persist one exact Source Adequacy profile")
+    adequacy_assess.add_argument("--workspace", required=True, type=Path)
+    adequacy_assess.add_argument("--request", required=True, type=Path)
+    adequacy_assess.add_argument("--actor", choices=("cli", "user"), required=True)
+    adequacy_show = adequacy_commands.add_parser("show", help="show redacted Source Adequacy profiles")
+    adequacy_show.add_argument("--workspace", required=True, type=Path)
+    adequacy_show.add_argument("--paper-id", required=True)
+    adequacy_show.add_argument("--operation")
+    adequacy_gate = adequacy_commands.add_parser("gate", help="evaluate one zero-write requested-use gate")
+    adequacy_gate.add_argument("--workspace", required=True, type=Path)
+    adequacy_gate.add_argument("--paper-id", required=True)
+    adequacy_gate.add_argument("--operation", required=True)
+
+    trunk = commands.add_parser("trunk", help="advance the deterministic source-to-semantic boundary")
+    trunk_commands = trunk.add_subparsers(dest="trunk_command", required=True)
+    trunk_advance = trunk_commands.add_parser("advance", help="advance or resume one deterministic Pipeline Job")
+    trunk_advance.add_argument("--workspace", required=True, type=Path)
+    trunk_advance.add_argument("--request", required=True, type=Path)
+    trunk_advance.add_argument("--actor", choices=("cli", "user"), required=True)
+
     paper = commands.add_parser("paper", help="inspect one paper's deterministic state and context")
     paper_commands = paper.add_subparsers(dest="paper_command", required=True)
     paper_status = paper_commands.add_parser("status", help="emit one bounded paper status projection")
@@ -379,6 +404,14 @@ def main(
             return _parse_run(args)
         if args.command == "parse" and args.parse_command == "show":
             return _parse_show(args)
+        if args.command == "adequacy" and args.adequacy_command == "assess":
+            return _adequacy_assess(args)
+        if args.command == "adequacy" and args.adequacy_command == "show":
+            return _adequacy_show(args)
+        if args.command == "adequacy" and args.adequacy_command == "gate":
+            return _adequacy_gate(args)
+        if args.command == "trunk" and args.trunk_command == "advance":
+            return _trunk_advance(args)
         if args.command == "paper" and args.paper_command == "status":
             return _paper_status(args)
         if args.command == "paper" and args.paper_command == "context":
@@ -854,6 +887,91 @@ def _parse_show(args: argparse.Namespace) -> int:
     layout = WorkspaceLayout.load(args.workspace)
     result = ParseReadService(layout).show(paper_id=args.paper_id, page=args.page)
     _write_json_once(result)
+    return 0
+
+
+def _adequacy_assess(args: argparse.Namespace) -> int:
+    request = _read_bounded_request(
+        args.request,
+        limit=SOURCE_ADEQUACY_REQUEST_INPUT_LIMIT,
+        record_kind="source-adequacy-assess-request",
+    )
+    _require_request_fields(
+        request,
+        required={"paper_id", "job_id", "requested_operation"},
+        optional={"basis_profile_id", "user_decision"},
+        record_kind="source-adequacy-assess-request",
+    )
+    service = SourceAdequacyService(WorkspaceLayout.load(args.workspace))
+    mutation = service.assess(
+        paper_id=request["paper_id"],
+        job_id=request["job_id"],
+        requested_operation=request["requested_operation"],
+        actor=args.actor,
+        basis_profile_id=request.get("basis_profile_id"),
+        user_decision=request.get("user_decision"),
+    )
+    projection = service.show(
+        paper_id=request["paper_id"],
+        requested_operation=request["requested_operation"],
+    )
+    item = next(
+        value for value in projection["items"] if value["profile_id"] == mutation.profile["profile_id"]
+    )
+    _write_json_once(
+        {
+            "status": "success",
+            "result": "updated" if mutation.transaction is not None else "no_change",
+            "profile": item,
+            "persistent_writes": int(mutation.transaction is not None),
+            "event_id": None if mutation.transaction is None else mutation.transaction.event_id,
+        }
+    )
+    return 0
+
+
+def _adequacy_show(args: argparse.Namespace) -> int:
+    _write_json_once(
+        SourceAdequacyService(WorkspaceLayout.load(args.workspace)).show(
+            paper_id=args.paper_id,
+            requested_operation=args.operation,
+        )
+    )
+    return 0
+
+
+def _adequacy_gate(args: argparse.Namespace) -> int:
+    _write_json_once(
+        SourceAdequacyService(WorkspaceLayout.load(args.workspace)).gate(
+            paper_id=args.paper_id,
+            requested_operation=args.operation,
+        )
+    )
+    return 0
+
+
+def _trunk_advance(args: argparse.Namespace) -> int:
+    request = _read_bounded_request(
+        args.request,
+        limit=SOURCE_ADEQUACY_REQUEST_INPUT_LIMIT,
+        record_kind="deterministic-trunk-request",
+    )
+    _require_request_fields(
+        request,
+        required={"job_id", "paper_id", "requested_operation", "adapter_name"},
+        optional={"document_route", "route_reason"},
+        record_kind="deterministic-trunk-request",
+    )
+    result = DeterministicTrunkService(WorkspaceLayout.load(args.workspace)).advance(
+        job_id=request["job_id"],
+        paper_id=request["paper_id"],
+        requested_operation=request["requested_operation"],
+        adapter_name=request["adapter_name"],
+        actor=args.actor,
+        document_route=request.get("document_route"),
+        route_reason=request.get("route_reason"),
+    )
+    _write_json_once(result.to_dict())
     return 0
 
 
