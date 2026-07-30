@@ -9,7 +9,7 @@
 - sdist_sha256: `7b5d07924fe607213b5e9ef92c682726ea12870f0e379b0bad83cfc06f289fcd`
 - catalog_projection_schema_version: `2`
 - frozen_budget: `r0-windows-catalog-v1`
-- cleanup_status: `cleanup_deferred_until_user_returns`
+- cleanup_status: `cleanup_deferred_until_p11_and_overall_goal_complete`
 
 ## Delivered Boundary
 

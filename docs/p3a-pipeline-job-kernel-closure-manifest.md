@@ -9,7 +9,7 @@
 - wheel_sha256: `baaabbf4f0ea76d725efb9c1f73be7aab14aa4833bc25244b03a35078ba677d7`
 - sdist_sha256: `b702ccb7a411234381a651387f374cadd501e23865cf17e6e26b12fb6789f14d`
 - layout_contract: `m3c-2a` unchanged
-- cleanup_status: `cleanup_deferred_until_user_returns`
+- cleanup_status: `cleanup_deferred_until_p11_and_overall_goal_complete`
 
 ## Delivered Boundary
 
