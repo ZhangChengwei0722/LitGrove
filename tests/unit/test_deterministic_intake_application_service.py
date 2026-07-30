@@ -125,7 +125,7 @@ def test_upload_reaches_route_wait_and_exact_replay_is_zero_write(tmp_path: Path
         ("basic_paper_card", "primary", None, "primary_semantic_gate"),
         ("basic_review_memory", "review", None, "review_semantic_gate"),
         (
-            "basic_paper_card",
+            "basic_review_memory",
             "review",
             "mixed_document",
             "review_semantic_gate_mixed_document",
@@ -161,6 +161,34 @@ def test_upload_route_presets_reach_the_expected_semantic_boundary(
     assert result["route_reason"] == route_reason
     assert replay["persistent_writes"] == 0
     assert replay["pipeline"] == result["pipeline"]
+
+
+def test_mixed_document_rejects_legacy_basic_paper_card_operation(tmp_path: Path) -> None:
+    layout, session = _session(tmp_path)
+    payload = _pdf_bytes(tmp_path)
+    before = {
+        path: path.read_bytes()
+        for path in layout.knowledge_root.rglob("*")
+        if path.is_file()
+    }
+
+    with pytest.raises(ResearchKBError, match="basic Review Memory"):
+        DeterministicIntakeApplicationService(clock=lambda: NOW).start_upload(
+            session,
+            io.BytesIO(payload),
+            _upload_request(
+                payload,
+                requested_operation="basic_paper_card",
+                document_route="review",
+                route_reason="mixed_document",
+            ),
+        )
+
+    assert before == {
+        path: path.read_bytes()
+        for path in layout.knowledge_root.rglob("*")
+        if path.is_file()
+    }
 
 
 def test_watched_inbox_scan_is_redacted_and_review_route_is_replay_safe(tmp_path: Path) -> None:
