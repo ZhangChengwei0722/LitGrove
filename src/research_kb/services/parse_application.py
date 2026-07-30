@@ -73,12 +73,20 @@ class ParseApplicationService:
         self.registry = registry or ParseAdapterRegistry()
         self.parse_service = parse_service or ParseService(layout)
 
-    def run(self, *, paper_id: str, adapter_name: str, actor: str) -> ParseApplicationResult:
+    def run(
+        self,
+        *,
+        paper_id: str,
+        adapter_name: str,
+        actor: str,
+        job_id: str | None = None,
+    ) -> ParseApplicationResult:
         adapter = self.registry.create(adapter_name)
         pages, transaction = self.parse_service.run(
             paper_id=paper_id,
             adapter=adapter,
             actor=actor,
+            job_id=job_id,
         )
         return ParseApplicationResult(
             paper_id,

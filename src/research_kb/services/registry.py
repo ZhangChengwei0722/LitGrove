@@ -16,6 +16,7 @@ from research_kb.errors import (
 )
 from research_kb.identifiers import Namespace, allocate_id
 from research_kb.process_events import timestamp
+from research_kb.services._pipeline_authority import require_job_authority
 from research_kb.storage.json_io import file_sha256, read_jsonl, serialize_jsonl
 from research_kb.storage.transactions import TransactionManager, TransactionResult
 from research_kb.workspace import WorkspaceLayout
@@ -43,7 +44,10 @@ class RegistryService:
         relative_path: str,
         metadata: Mapping[str, Any],
         actor: str = "agent",
+        job_id: str | None = None,
     ) -> tuple[dict[str, Any], TransactionResult]:
+        if job_id is not None:
+            require_job_authority(self.layout, job_id, "registry_add")
         unexpected_metadata = set(metadata) - {"bibliography", "review_status", "fixture_origin"}
         if unexpected_metadata:
             raise ResearchKBError(
@@ -141,6 +145,7 @@ class RegistryService:
             validator=validate_temp,
             post_replace_validator=validate_source_stability,
             expected_before_sha256=registry_before,
+            job_id=job_id,
         )
         return record, result
 

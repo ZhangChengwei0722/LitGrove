@@ -9,6 +9,7 @@ from research_kb.errors import GROUNDING_MISMATCH, UNRESOLVED_REFERENCE, Diagnos
 from research_kb.guardian import GuardianService
 from research_kb.identifiers import Namespace, validate_id
 from research_kb.services.question_mapping import mapping_freshness_diagnostics
+from research_kb.source_adequacy import profile_freshness, required_capability
 from research_kb.source_resolution import observe_paper_source
 from research_kb.storage.json_io import file_sha256, read_json_document
 from research_kb.workspace import WorkspaceLayout
@@ -47,6 +48,7 @@ class PaperStatusService:
         evidence = [item for item in records_of_kind(entries, "evidence") if item["paper_id"] == paper_id]
         queue = [item for item in records_of_kind(entries, "review-queue") if item["paper_id"] == paper_id]
         mappings = _linked_mappings(entries, paper_id)
+        adequacy = _adequacy_projection(self.layout, entries, paper_id)
         guardian = GuardianService(self.layout).check(write_report=False).report
         incomplete_count, needs_resolution_count = _transaction_counts(self.layout)
         reachable = _reachable_ids(entries, paper_id)
@@ -70,6 +72,7 @@ class PaperStatusService:
             "paper_card": _card_projection(card),
             "evidence": {"count": len(evidence)},
             "review_queue": _queue_projection(queue),
+            "source_adequacy": adequacy,
             "question_mappings": {
                 "linked_count": len(mappings),
                 "items": [
@@ -162,6 +165,42 @@ def _queue_projection(queue: list[dict[str, Any]]) -> dict[str, Any]:
     return {"count": len(queue), "resolution_counts": counts}
 
 
+def _adequacy_projection(
+    layout: WorkspaceLayout,
+    entries: list[BundleEntry],
+    paper_id: str,
+) -> dict[str, Any]:
+    latest: dict[str, dict[str, Any]] = {}
+    for profile in records_of_kind(entries, "source-adequacy-profile"):
+        if profile["paper_id"] != paper_id:
+            continue
+        operation = profile["requested_operation"]
+        current = latest.get(operation)
+        if current is None or (profile["assessed_at"], profile["profile_id"]) > (
+            current["assessed_at"],
+            current["profile_id"],
+        ):
+            latest[operation] = profile
+    items = []
+    for operation, profile in sorted(latest.items()):
+        capability = required_capability(operation)
+        freshness = profile_freshness(layout, entries, profile)
+        capability_status = profile["capabilities"][capability]["status"]
+        items.append(
+            {
+                "profile_id": profile["profile_id"],
+                "requested_operation": operation,
+                "required_capability": capability,
+                "freshness": freshness,
+                "capability_status": capability_status,
+                "allowed": freshness["state"] == "current" and capability_status == "yes",
+                "known_limitations": profile["known_limitations"],
+                "recommended_actions": profile["recommended_actions"],
+            }
+        )
+    return {"count": len(items), "items": items}
+
+
 def _linked_mappings(entries: list[BundleEntry], paper_id: str) -> list[dict[str, Any]]:
     return sorted(
         (
@@ -208,6 +247,11 @@ def _reachable_ids(entries: list[BundleEntry], paper_id: str) -> set[str]:
     )
     reachable.update(
         item["queue_id"] for item in records_of_kind(entries, "review-queue") if item["paper_id"] == paper_id
+    )
+    reachable.update(
+        item["profile_id"]
+        for item in records_of_kind(entries, "source-adequacy-profile")
+        if item["paper_id"] == paper_id
     )
     for mapping in _linked_mappings(entries, paper_id):
         reachable.add(mapping["question_id"])

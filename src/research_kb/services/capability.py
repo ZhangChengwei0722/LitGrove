@@ -87,6 +87,8 @@ class CapabilityService:
                     "paper context",
                     "paper status",
                     "parse show",
+                    "adequacy gate",
+                    "adequacy show",
                     "question list",
                     "question show",
                     "question render",
@@ -112,6 +114,8 @@ class CapabilityService:
                     "source relink",
                     "source select",
                     "identity correct",
+                    "adequacy assess",
+                    "trunk advance",
                 )
             ),
             "operational_record_kinds": sorted(
@@ -122,6 +126,7 @@ class CapabilityService:
                     "process-event",
                     "registry-identity-correction",
                     "source-asset-state",
+                    "source-adequacy-profile",
                     "transaction-journal",
                 )
             ),
@@ -138,6 +143,8 @@ class CapabilityService:
                 "pipeline_jobs": True,
                 "source_asset_runtime": True,
                 "registry_identity_correction": True,
+                "source_adequacy": True,
+                "deterministic_trunk": True,
             },
         }
 

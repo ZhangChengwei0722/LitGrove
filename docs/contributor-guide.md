@@ -209,6 +209,18 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Index only current Source Asset and affected identity projections; do not index historical revisions, raw correction events, source refs or fingerprints.
 - Do not add Source Adequacy, Agent Task, semantic route or App mutation behavior in P3-B.
 
+## Source Adequacy And Deterministic Trunk Rules
+
+- Treat Source Adequacy as use-specific operational history, not scientific credibility or a global pass/fail label.
+- Bind every Profile to exact source roles/manifestations, one parse run, parser descriptor digest, parse-output digest, requested operation and rule versions.
+- Recompute implicit Registry-main and parser-profile identity during bundle validation; never trust stored digests by shape alone.
+- Preserve old Profiles after reparse and project them stale. Do not require historical parsed pages to remain in the active parsed-page store.
+- Keep hard failures machine-owned. P3 permits explicit user successor decisions only for non-hard uncertainty and rejects Agent assessment writes.
+- Require the matching current capability before downstream staging. Block only the requested use and route it to the specific Pipeline Job wait reason.
+- Resume `ocr_required`, `layout_parse_required` and `reparse_required` by running the newly selected registered adapter even when active pages already exist.
+- Convert only parser-domain or wrapped adapter-execution failures to `parse_failed`; authority, schema, source-race and transaction failures must propagate.
+- Keep the trunk restartable and Job-correlated. It may stop at an explicit primary/review semantic boundary but must not create Paper Card, Evidence, Review Memory, scientific review-queue or Agent Task records.
+
 ## Platform Rules
 
 Tests must include Windows-shaped and POSIX-shaped paths independent of the host. Persisted relative paths always use `/`.

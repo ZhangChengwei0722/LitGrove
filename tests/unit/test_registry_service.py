@@ -3,9 +3,70 @@ from pathlib import Path
 import pytest
 
 from research_kb.errors import ResearchKBError
+from research_kb.services.pipeline_job import PipelineJobService
 from research_kb.services.registry import RegistryService
 from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl
 from tests.runtime_helpers import make_runtime_workspace
+
+
+def _registry_job(layout, *, granted_operations: list[str], idempotency_key: str):
+    return PipelineJobService(layout).create(
+        requested_route="local_source",
+        requested_depth="registry_only",
+        current_node="registry",
+        input_refs=[],
+        authority_snapshot={
+            "actor": "user",
+            "granted_operations": granted_operations,
+            "captured_at": "2026-01-01T00:00:00Z",
+        },
+        idempotency_key=idempotency_key,
+        actor="user",
+        fixture_origin="synthetic_from_scratch",
+    ).state
+
+
+def test_registry_job_correlation_requires_authority_and_marks_event(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = layout.source_roots["alpha-sources"] / "job-study.txt"
+    source.write_text("Invented Registry Job source.\n", encoding="utf-8", newline="\n")
+    allowed = _registry_job(
+        layout,
+        granted_operations=["registry_add"],
+        idempotency_key="registry-job-allowed",
+    )
+
+    paper, _ = RegistryService(layout).add(
+        root_id="alpha-sources",
+        relative_path=source.name,
+        metadata={"fixture_origin": "synthetic_from_scratch"},
+        actor="cli",
+        job_id=allowed["job_id"],
+    )
+
+    events = read_jsonl(layout.process_events_path, record_kind="process-event")
+    event = next(item for item in events if item["operation"] == "registry_add")
+    assert event["job_id"] == allowed["job_id"]
+    assert paper["paper_id"] in event["output_refs"]
+
+    denied = _registry_job(
+        layout,
+        granted_operations=[],
+        idempotency_key="registry-job-denied",
+    )
+    second = layout.source_roots["alpha-sources"] / "job-study-denied.txt"
+    second.write_text("Invented denied source.\n", encoding="utf-8", newline="\n")
+    before = layout.registry_path.read_bytes()
+    with pytest.raises(ResearchKBError) as caught:
+        RegistryService(layout).add(
+            root_id="alpha-sources",
+            relative_path=second.name,
+            metadata={},
+            actor="cli",
+            job_id=denied["job_id"],
+        )
+    assert caught.value.diagnostic.code == "RKBC-006"
+    assert layout.registry_path.read_bytes() == before
 
 
 def test_registry_add_hashes_source_and_links_exact_duplicates(tmp_path: Path) -> None:

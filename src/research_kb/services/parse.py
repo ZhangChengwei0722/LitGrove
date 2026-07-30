@@ -16,6 +16,7 @@ from research_kb.errors import (
 from research_kb.identifiers import Namespace, allocate_id
 from research_kb.parse.base import ParseAdapter
 from research_kb.process_events import build_process_event, timestamp
+from research_kb.services._pipeline_authority import require_job_authority
 from research_kb.source_resolution import observe_paper_source
 from research_kb.storage.json_io import file_sha256, read_jsonl, serialize_jsonl
 from research_kb.storage.transactions import TransactionManager, TransactionResult
@@ -37,7 +38,16 @@ class ParseService:
         self.transactions = transaction_manager or TransactionManager(layout)
         self.id_allocator = id_allocator
 
-    def run(self, *, paper_id: str, adapter: ParseAdapter, actor: str = "cli") -> tuple[list[dict[str, Any]], TransactionResult]:
+    def run(
+        self,
+        *,
+        paper_id: str,
+        adapter: ParseAdapter,
+        actor: str = "cli",
+        job_id: str | None = None,
+    ) -> tuple[list[dict[str, Any]], TransactionResult]:
+        if job_id is not None:
+            require_job_authority(self.layout, job_id, "parse_run")
         current_entries = load_workspace_entries(self.layout)
         validate_workspace_entries(current_entries)
         papers = {item["paper_id"]: item for item in records_of_kind(current_entries, "registry-paper")}
@@ -72,6 +82,7 @@ class ParseService:
                 actor=actor,
                 input_refs=[paper_id],
                 event_id=event_id,
+                job_id=job_id,
             )
             raise
         pages = [
@@ -100,6 +111,7 @@ class ParseService:
             input_refs=[paper_id],
             output_refs=[paper_id],
             created_at=created_at,
+            job_id=job_id,
         )
         target = self.layout.parse_path(paper_id)
         target_before = file_sha256(target)
@@ -132,5 +144,6 @@ class ParseService:
             post_replace_validator=validate_source_stability,
             expected_before_sha256=target_before,
             event_id=event_id,
+            job_id=job_id,
         )
         return pages, result

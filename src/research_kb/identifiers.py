@@ -31,6 +31,7 @@ class Namespace(StrEnum):
     SOURCE_ASSET = "sourceasset"
     SOURCE_ASSET_STATE = "sourceassetstate"
     IDENTITY_CORRECTION = "identitycorr"
+    SOURCE_ADEQUACY = "adequacy"
 
 
 UUID4_PATTERN = r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"

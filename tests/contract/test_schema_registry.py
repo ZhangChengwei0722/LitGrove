@@ -17,3 +17,4 @@ def test_public_kinds_exclude_internal_definition_schemas() -> None:
     assert "paper-card" in kinds
     assert "review-memory" in kinds
     assert "step7-insight" in kinds
+    assert "source-adequacy-profile" in kinds

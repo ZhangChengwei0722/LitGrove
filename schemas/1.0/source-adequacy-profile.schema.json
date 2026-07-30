@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:source-adequacy-profile",
+  "$defs": {
+    "capability": {
+      "enum": [
+        "basic_paper_understanding",
+        "complete_reading",
+        "continuous_text_citation",
+        "figure_table_evidence_extraction",
+        "formula_or_layout_sensitive_analysis",
+        "supplementary_material_analysis"
+      ]
+    },
+    "capability_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reasons", "authority_layers"],
+      "properties": {
+        "status": {"enum": ["yes", "no", "uncertain"]},
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}
+        },
+        "authority_layers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["machine", "agent", "user"]}
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile_id",
+    "basis_profile",
+    "workspace_id",
+    "paper_id",
+    "job_id",
+    "requested_operation",
+    "operation_registry_version",
+    "source_snapshots",
+    "parse_snapshot",
+    "assessment_rule_version",
+    "assessed_by",
+    "assessed_at",
+    "machine_observations",
+    "agent_assessment",
+    "user_decision",
+    "capabilities",
+    "known_limitations",
+    "recommended_actions"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "profile_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_adequacy_id"},
+    "basis_profile": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["profile_id", "profile_digest"],
+          "properties": {
+            "profile_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_adequacy_id"},
+            "profile_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
+      ]
+    },
+    "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "paper_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+    "job_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/job_id"},
+    "requested_operation": {
+      "enum": [
+        "basic_paper_card",
+        "basic_review_memory",
+        "complete_reading",
+        "continuous_text_evidence",
+        "figure_table_evidence",
+        "formula_layout_analysis",
+        "supplementary_analysis"
+      ]
+    },
+    "operation_registry_version": {"const": "p3c-v1"},
+    "source_snapshots": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_asset_id",
+          "source_asset_state_id",
+          "role",
+          "source_ref",
+          "manifestation_id",
+          "availability"
+        ],
+        "properties": {
+          "source_asset_id": {
+            "anyOf": [
+              {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_asset_id"},
+              {"type": "null"}
+            ]
+          },
+          "source_asset_state_id": {
+            "anyOf": [
+              {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_asset_state_id"},
+              {"type": "null"}
+            ]
+          },
+          "role": {"enum": ["main_pdf", "supplement", "source_data"]},
+          "source_ref": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_ref"},
+          "manifestation_id": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "availability": {"enum": ["available", "missing", "inaccessible", "relink_required"]}
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"source_asset_id": {"type": "null"}}},
+            "then": {"properties": {"source_asset_state_id": {"type": "null"}}},
+            "else": {"properties": {"source_asset_state_id": {"type": "string"}}}
+          }
+        ]
+      }
+    },
+    "parse_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["active_parse_ref", "parser_identity", "output_bundle_digest", "page_count"],
+      "properties": {
+        "active_parse_ref": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/event_id"},
+        "parser_identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["adapter_id", "version", "profile_digest"],
+          "properties": {
+            "adapter_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+            "version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+            "profile_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        },
+        "output_bundle_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "page_count": {"type": "integer", "minimum": 1}
+      }
+    },
+    "assessment_rule_version": {"const": "p3c-v1"},
+    "assessed_by": {"enum": ["cli", "user"]},
+    "assessed_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "machine_observations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "status", "hard_failure", "affected_capabilities", "reason"],
+        "properties": {
+          "code": {
+            "enum": [
+              "source_readable",
+              "source_digest_matches",
+              "source_set_complete",
+              "parse_run_consistent",
+              "parser_identity_matches",
+              "text_presence",
+              "page_coverage",
+              "locator_reproducibility",
+              "reading_order_reliability",
+              "figure_table_context",
+              "formula_layout_context",
+              "supplement_available",
+              "supplement_parse_available"
+            ]
+          },
+          "status": {"enum": ["pass", "fail", "uncertain", "not_applicable"]},
+          "hard_failure": {"type": "boolean"},
+          "affected_capabilities": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"$ref": "#/$defs/capability"}
+          },
+          "reason": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}
+        }
+      }
+    },
+    "agent_assessment": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["actor", "status", "reason", "assessed_at"],
+          "properties": {
+            "actor": {"const": "agent"},
+            "status": {"enum": ["yes", "no", "uncertain"]},
+            "reason": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+            "assessed_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+          }
+        }
+      ]
+    },
+    "user_decision": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["actor", "decision", "capabilities", "reason", "decided_at"],
+          "properties": {
+            "actor": {"const": "user"},
+            "decision": {"enum": ["accept_uncertainty", "remediation_required"]},
+            "capabilities": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"$ref": "#/$defs/capability"}
+            },
+            "reason": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+            "decided_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+          }
+        }
+      ]
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basic_paper_understanding",
+        "complete_reading",
+        "continuous_text_citation",
+        "figure_table_evidence_extraction",
+        "formula_or_layout_sensitive_analysis",
+        "supplementary_material_analysis"
+      ],
+      "properties": {
+        "basic_paper_understanding": {"$ref": "#/$defs/capability_result"},
+        "complete_reading": {"$ref": "#/$defs/capability_result"},
+        "continuous_text_citation": {"$ref": "#/$defs/capability_result"},
+        "figure_table_evidence_extraction": {"$ref": "#/$defs/capability_result"},
+        "formula_or_layout_sensitive_analysis": {"$ref": "#/$defs/capability_result"},
+        "supplementary_material_analysis": {"$ref": "#/$defs/capability_result"}
+      }
+    },
+    "known_limitations": {
+      "type": "array",
+      "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}
+    },
+    "recommended_actions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"}
+    },
+    "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}
+  }
+}
