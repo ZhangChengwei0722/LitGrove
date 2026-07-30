@@ -117,11 +117,11 @@ def main() -> int:
             "diagnostic_code": "RKBC-028",
         }:
             raise SystemExit("base wheel capability report did not expose the missing PDF dependency")
-        if not {"discovery search", "discovery list", "discovery show", "discovery resolve", "intake inspect", "intake inspect-acquired", "job list", "job show", "manuscript inspect", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
+        if not {"discovery search", "discovery list", "discovery show", "discovery resolve", "identity list", "intake inspect", "intake inspect-acquired", "job list", "job show", "manuscript inspect", "paper context", "review context", "source list", "source scan", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
             raise SystemExit("base wheel capability report lacks deterministic intake/context reads")
         if capability["discovery_connectors"] != [{"connector": "europe-pmc", "availability": "available", "network_required": True}]:
             raise SystemExit("base wheel capability report lacks the Europe PMC connector")
-        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["approved_discovery_candidate_handoff"] is not True or capability["features"]["legal_oa_resolution"] is not True or capability["features"]["explicit_oa_acquisition"] is not True or capability["features"]["manuscript_projection"] is not True or capability["features"]["pipeline_jobs"] is not True:
+        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["approved_discovery_candidate_handoff"] is not True or capability["features"]["legal_oa_resolution"] is not True or capability["features"]["explicit_oa_acquisition"] is not True or capability["features"]["manuscript_projection"] is not True or capability["features"]["pipeline_jobs"] is not True or capability["features"]["source_asset_runtime"] is not True or capability["features"]["registry_identity_correction"] is not True:
             raise SystemExit("base wheel capability report lacks Review Memory, Step 7 or discovery runtime")
         subprocess.run(
             [
@@ -141,6 +141,8 @@ def main() -> int:
                 "assert registry.schema('discovery-candidate')['$id'].endswith('discovery-candidate'); "
                 "assert registry.schema('pipeline-job-state')['$id'].endswith('pipeline-job-state'); "
                 "assert registry.schema('guardian-finding-disposition')['$id'].endswith('guardian-finding-disposition'); "
+                "assert registry.schema('source-asset-state')['$id'].endswith('source-asset-state'); "
+                "assert registry.schema('registry-identity-correction')['$id'].endswith('registry-identity-correction'); "
                 "assert LegacyReaderAdapter.__name__ == 'LegacyReaderAdapter'; "
                 "assert CompatibilitySourceRef.__name__ == 'CompatibilitySourceRef'; "
                 "assert CompatibilityAdapterRegistry.__name__ == 'CompatibilityAdapterRegistry'; "
@@ -202,6 +204,22 @@ def main() -> int:
             check=True,
             capture_output=True,
         )
+        for group, command in (
+            ("source", "list"),
+            ("source", "associate"),
+            ("source", "copy"),
+            ("source", "select"),
+            ("source", "observe"),
+            ("source", "relink"),
+            ("identity", "list"),
+            ("identity", "correct"),
+        ):
+            subprocess.run(
+                [str(python), "-m", "research_kb", group, command, "--help"],
+                cwd=temporary,
+                check=True,
+                capture_output=True,
+            )
         subprocess.run(
             [str(python), "-m", "research_kb", "manuscript", "inspect", "--help"],
             cwd=temporary,
@@ -287,6 +305,14 @@ def main() -> int:
             raise SystemExit("wheel workspace lacks discovery directory")
         if any((workspace_root / "knowledge" / "discovery").iterdir()):
             raise SystemExit("workspace init created an empty discovery store")
+        if _run_json(
+            python, Path(temporary), "source", "list", "--workspace", str(config_path)
+        )["source_assets"] != []:
+            raise SystemExit("base wheel source list was not empty after bootstrap")
+        if _run_json(
+            python, Path(temporary), "identity", "list", "--workspace", str(config_path)
+        )["items"] != []:
+            raise SystemExit("base wheel identity list was not empty after bootstrap")
 
         manuscript_docx = write_synthetic_docx(
             sources / "wheel-manuscript.docx",
@@ -907,7 +933,7 @@ def main() -> int:
                     "from research_kb.application import APPLICATION_SERVICE_INTERFACE_VERSION; "
                     "from research_kb.services import CatalogCapabilityService, "
                     "CatalogProjectionService, CatalogQueryService, WorkspaceSession, "
-                    "WorkspaceSessionService; "
+                    "WorkspaceSessionService, SourceAssetService, RegistryIdentityCorrectionService; "
                     "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.0'"
                 ),
             ],

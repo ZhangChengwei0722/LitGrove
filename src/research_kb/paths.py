@@ -21,7 +21,7 @@ class SourceRef:
 
 
 def validate_root_id(root_id: str) -> str:
-    if ROOT_ID_PATTERN.fullmatch(root_id) is None:
+    if not isinstance(root_id, str) or ROOT_ID_PATTERN.fullmatch(root_id) is None:
         raise ResearchKBError(
             Diagnostic(PATH_ESCAPE, "source-ref", None, "/root_id", "invalid root_id")
         )

@@ -91,6 +91,9 @@ class CapabilityService:
                     "question show",
                     "question render",
                     "review context",
+                    "source list",
+                    "source scan",
+                    "identity list",
                     "step7 context",
                     "step7 render",
                 )
@@ -102,6 +105,13 @@ class CapabilityService:
                     "job create",
                     "job recover",
                     "job transition",
+                    "source copy",
+                    "source associate",
+                    "source observe",
+                    "source reference",
+                    "source relink",
+                    "source select",
+                    "identity correct",
                 )
             ),
             "operational_record_kinds": sorted(
@@ -110,6 +120,8 @@ class CapabilityService:
                     "guardian-report",
                     "pipeline-job-state",
                     "process-event",
+                    "registry-identity-correction",
+                    "source-asset-state",
                     "transaction-journal",
                 )
             ),
@@ -124,6 +136,8 @@ class CapabilityService:
                 "legal_oa_resolution": True,
                 "manuscript_projection": True,
                 "pipeline_jobs": True,
+                "source_asset_runtime": True,
+                "registry_identity_correction": True,
             },
         }
 

@@ -16,6 +16,7 @@ from research_kb.errors import (
 from research_kb.identifiers import Namespace, allocate_id
 from research_kb.parse.base import ParseAdapter
 from research_kb.process_events import build_process_event, timestamp
+from research_kb.source_resolution import observe_paper_source
 from research_kb.storage.json_io import file_sha256, read_jsonl, serialize_jsonl
 from research_kb.storage.transactions import TransactionManager, TransactionResult
 from research_kb.workspace import WorkspaceLayout
@@ -45,14 +46,11 @@ class ParseService:
                 Diagnostic(UNRESOLVED_REFERENCE, "parsed-page", paper_id, "/paper_id", "paper is not registered")
             )
         paper = papers[paper_id]
-        _, source = self.layout.resolve_source(
-            paper["source_ref"]["root_id"],
-            paper["source_ref"]["relative_path"],
-        )
-        expected_hash = paper["source_fingerprint"]["value"]
-        if file_sha256(source) != expected_hash:
+        source_observation = observe_paper_source(self.layout, current_entries, paper)
+        source = source_observation.path
+        if source_observation.state != "current":
             raise ResearchKBError(
-                Diagnostic(GROUNDING_MISMATCH, "parsed-page", paper_id, "/paper_id", "registered source fingerprint is stale")
+                Diagnostic(GROUNDING_MISMATCH, "parsed-page", paper_id, "/paper_id", "current source manifestation is not reusable")
             )
         event_id = self.id_allocator(Namespace.PROCESS_EVENT)
         created_at = timestamp(self.transactions.clock)
@@ -107,9 +105,9 @@ class ParseService:
         target_before = file_sha256(target)
 
         def validate_source_stability() -> None:
-            if file_sha256(source) != expected_hash:
+            if observe_paper_source(self.layout, current_entries, paper) != source_observation:
                 raise ResearchKBError(
-                    Diagnostic(GROUNDING_MISMATCH, "parsed-page", paper_id, "/paper_id", "source changed during parse")
+                    Diagnostic(GROUNDING_MISMATCH, "parsed-page", paper_id, "/paper_id", "source manifestation changed during parse")
                 )
 
         def validate_temp(path: Path) -> None:

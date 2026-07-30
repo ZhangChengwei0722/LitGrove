@@ -29,6 +29,15 @@ def acquisition_destination(
     candidate_id: str,
 ) -> AcquisitionDestination:
     candidate_id = validate_id(candidate_id, Namespace.DISCOVERY)
+    return local_inbox_destination(layout, f"{candidate_id}.pdf")
+
+
+def local_inbox_destination(
+    layout: WorkspaceLayout,
+    filename: str,
+) -> AcquisitionDestination:
+    if not filename or Path(filename).name != filename or filename.casefold().endswith(".pdf") is False:
+        raise _path_error(layout, "local_inbox target must be one PDF basename")
     _require_safe_declared_inbox(layout)
     inbox = layout.local_inbox
     if not _lexists(inbox) or not inbox.is_dir():
@@ -52,7 +61,7 @@ def acquisition_destination(
             "local_inbox must be addressable through exactly one declared source root",
         )
     root_id, root = owners[0]
-    final_path = inbox / f"{candidate_id}.pdf"
+    final_path = inbox / filename
     if final_path.parent != inbox:
         raise _path_error(layout, "acquisition target escaped local_inbox")
     relative_path = final_path.relative_to(root).as_posix()
@@ -118,4 +127,4 @@ def _path_error(layout: WorkspaceLayout, message: str) -> ResearchKBError:
     )
 
 
-__all__ = ["AcquisitionDestination", "acquisition_destination"]
+__all__ = ["AcquisitionDestination", "acquisition_destination", "local_inbox_destination"]

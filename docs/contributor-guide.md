@@ -181,6 +181,34 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Treat provider paper type as metadata and classify from parsed document content before scientific promotion.
 - Keep Step 7 separately explicit, primary-only and scoped to an existing or approved question.
 
+## Pipeline Job Rules
+
+- Treat Pipeline Jobs as append-only operational coordination, never as scientific truth or a generic unresolved queue.
+- Capture route, depth and authority at creation; transitions may consume but never enlarge that authority.
+- Bind every successor to the current state ID and digest, and correlate each committed state with exactly one success event.
+- Keep list/show output bounded, deterministic and free of source paths, fingerprints, paper text and task payloads.
+- Represent waiting, cancellation and recovery explicitly; never restart routing or guess through a stale head.
+
+## Source Asset And Identity Rules
+
+- Preserve legacy Registry source behavior when no explicit main Source Asset exists; do not bulk backfill old workspaces.
+- Append Source Asset revisions and identity-correction events. Never rewrite a prior digest, paper ID, Registry row or historical reference.
+- Require a current Pipeline Job with the exact operation authority for every source mutation; require exact `actor: user` for copy and identity correction.
+- Reject path escape, symlink/junction/reparse traversal, detectable hard-link ambiguity and changed observations. Revalidate source bytes inside the canonical transaction.
+- Keep inbox scan bounded and transient, revalidate its opaque handle at selection, and never expose an absolute path or raw source digest in browser-facing or Catalog output.
+- Treat revision one as the Source Asset's owning Job. Require exact authority, current CAS, an existing Registry paper and current available bytes before appending an association.
+- Require every known-paper `main_pdf` to match the Registry fingerprint. Never let a later source operation silently replace paper identity.
+- Exclude all registered refs from public inbox scan. Permit a registered candidate only for an exact same-Job selection replay; another Job cannot create a competing intake receipt. A later Job with exact association authority may append `paper_associated` without changing revision-one ownership.
+- Keep transition reasons closed: only association adds a paper ID, only same-digest relink changes the ref, and observation transitions preserve identity fields.
+- Block `completed` and `completed_with_findings` while an owning Job still has an unassociated Source Asset. Preserve receipts on `failed` or `cancelled` and leave them Guardian-visible.
+- Delete a failed copy artifact only while its captured file identity and digest still match. Leave uncertain residue for Guardian rather than deleting by filename.
+- Keep the Core copy boundary stream-based. A local path belongs only to the CLI adapter; browser/App callers must not submit a server path. Commit the Source Asset receipt before create-only publication so the same Job can resume each interruption point.
+- Bound the total inbox entries inspected, not only the number returned. Reject an over-budget inbox without hashing an unbounded directory.
+- Keep same-digest relink current. Project changed bytes as `stale_source` and missing, inaccessible or unsafe paths as unavailable without deleting historical Parse or scientific records.
+- Keep merge/split/alias/archive/tombstone user-authorized, acyclic and projection-only. A split must identify the earlier merge it supersedes.
+- Index only current Source Asset and affected identity projections; do not index historical revisions, raw correction events, source refs or fingerprints.
+- Do not add Source Adequacy, Agent Task, semantic route or App mutation behavior in P3-B.
+
 ## Platform Rules
 
 Tests must include Windows-shaped and POSIX-shaped paths independent of the host. Persisted relative paths always use `/`.

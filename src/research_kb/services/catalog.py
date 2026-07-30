@@ -33,6 +33,8 @@ from research_kb.errors import (
     Diagnostic,
     ResearchKBError,
 )
+from research_kb.identity_corrections import project_registry_identity
+from research_kb.source_assets import current_source_asset_heads
 from research_kb.storage.json_io import (
     atomic_write_bytes,
     ensure_private_directory,
@@ -359,9 +361,10 @@ class CatalogQueryService:
             else:
                 record = _load_exact_workspace_record(self.projection.session._layout, row)
             if record is not None:
-                diagnostics = validate_record(row["record_kind"], record, actor="stored")
-                if diagnostics:
-                    raise ResearchKBError(diagnostics[0])
+                if row["record_kind"] != "registry-identity-projection":
+                    diagnostics = validate_record(row["record_kind"], record, actor="stored")
+                    if diagnostics:
+                        raise ResearchKBError(diagnostics[0])
                 if adapter.record_id(record) != row["record_id"]:
                     record = None
         else:
@@ -370,7 +373,7 @@ class CatalogQueryService:
             record = next(
                 (
                     record
-                    for kind, record in entries
+                    for kind, record in self.projection.registry.select_entries(entries)
                     if kind == row["record_kind"]
                     and adapter.record_id(record) == row["record_id"]
                 ),
@@ -450,6 +453,33 @@ def _load_exact_workspace_record(layout, row: dict[str, Any]) -> dict[str, Any] 
         return _find_jsonl_record(layout.process_events_path, "event_id", row["record_id"])
     if kind == "pipeline-job-state":
         return _find_jsonl_record(layout.pipeline_jobs_path, "state_id", row["record_id"])
+    if kind == "source-asset-state":
+        states = read_jsonl(
+            layout.source_assets_path,
+            record_kind="source-asset-state",
+            id_field="source_asset_state_id",
+        )
+        return next(
+            (
+                state
+                for state in current_source_asset_heads(states)
+                if state["source_asset_id"] == row["record_id"]
+            ),
+            None,
+        )
+    if kind == "registry-identity-projection":
+        papers = read_jsonl(
+            layout.registry_path,
+            record_kind="registry-paper",
+            id_field="paper_id",
+        )
+        corrections = read_jsonl(
+            layout.identity_corrections_path,
+            record_kind="registry-identity-correction",
+            id_field="correction_id",
+        )
+        projected = project_registry_identity(papers, corrections).get(row["record_id"])
+        return None if projected is None else {"schema_version": "1.0", **projected}
     if kind == "guardian-report":
         return _find_jsonl_record(
             layout.guardian_reports_path,

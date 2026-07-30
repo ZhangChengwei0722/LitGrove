@@ -6,25 +6,38 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from research_kb.acquisition_paths import acquisition_destination
-from research_kb.bundle import BundleEntry, load_workspace_entries
+from research_kb.acquisition_paths import acquisition_destination, local_inbox_destination
+from research_kb.bundle import BundleEntry, load_workspace_entries, records_of_kind
 from research_kb.contracts.validator import validate_bundle, validate_record
 from research_kb.errors import (
     GROUNDING_MISMATCH,
     INCOMPLETE_TRANSACTION,
+    INPUT_TOO_LARGE,
+    INVALID_AUTHORITY,
     PATH_ESCAPE,
+    SCHEMA_VALIDATION_FAILED,
     SNAPSHOT_MISMATCH,
     Diagnostic,
     ResearchKBError,
 )
 from research_kb.identifiers import Namespace, allocate_id
+from research_kb.pipeline_jobs import current_pipeline_states
 from research_kb.process_events import timestamp
 from research_kb.review_memory_provenance import build_active_parse_index, review_memory_freshness
 from research_kb.services.question_mapping import mapping_freshness_diagnostics
+from research_kb.source_assets import (
+    current_source_asset_heads,
+    source_asset_chain_diagnostics,
+    source_asset_projection,
+)
+from research_kb.source_resolution import inspect_source_ref, observe_paper_source
 from research_kb.step7_support import STEP7_RECORD_KINDS, candidate_freshness
 from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl, serialize_jsonl
 from research_kb.storage.transactions import TransactionManager, TransactionResult, build_journal_event
 from research_kb.workspace import WorkspaceLayout
+
+
+MAX_GUARDIAN_INBOX_ENTRIES = 1_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +72,7 @@ class GuardianService:
             )
             diagnostics.extend(self._source_diagnostics(entries))
             diagnostics.extend(self._acquisition_diagnostics(entries))
+            diagnostics.extend(self._local_source_intake_diagnostics(entries))
             for kind, mapping in entries:
                 if kind == "question-mapping" and not validate_record(
                     "question-mapping", mapping, actor="stored"
@@ -76,6 +90,7 @@ class GuardianService:
         process_events = [record for kind, record in entries if kind == "process-event"]
         diagnostics.extend(self._transaction_diagnostics(process_events))
         diagnostics.extend(self._job_event_diagnostics(entries, process_events))
+        diagnostics.extend(self._source_event_diagnostics(entries, process_events))
         diagnostics = _deduplicate(diagnostics)
         defined_ids = _defined_ids(entries)
         findings = [_finding_from_diagnostic(item, defined_ids) for item in diagnostics]
@@ -95,27 +110,270 @@ class GuardianService:
 
     def _source_diagnostics(self, entries: list[BundleEntry]) -> list[Diagnostic]:
         diagnostics: list[Diagnostic] = []
+        source_states = [record for kind, record in entries if kind == "source-asset-state"]
+        if any(validate_record("source-asset-state", state, actor="stored") for state in source_states):
+            return diagnostics
+        if source_asset_chain_diagnostics(source_states):
+            return diagnostics
+        heads = current_source_asset_heads(source_states)
+        projections = {
+            item["source_asset_id"]: item for item in source_asset_projection(source_states)
+        }
+        explicit_main_papers: set[str] = set()
+        for head in heads:
+            if head["paper_id"] is None:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "source-asset-state",
+                        head["source_asset_state_id"],
+                        "/paper_id",
+                        "source asset is not yet associated with a Registry paper",
+                        severity="warning",
+                    )
+                )
+            elif head["asset_role"] == "main_pdf":
+                explicit_main_papers.add(head["paper_id"])
+            observed = inspect_source_ref(
+                self.layout,
+                root_id=head["source_ref"]["root_id"],
+                relative_path=head["source_ref"]["relative_path"],
+            )
+            projection = projections[head["source_asset_id"]]
+            if (
+                projection["source_currentness"] != "current"
+                or observed.availability != "available"
+                or observed.live_sha256 != head["source_fingerprint"]["value"]
+            ):
+                diagnostics.append(
+                    Diagnostic(
+                        GROUNDING_MISMATCH,
+                        "source-asset-state",
+                        head["source_asset_state_id"],
+                        "/source_fingerprint",
+                        "current Source Asset manifestation is stale, unavailable or no longer matches its receipt: "
+                        f"projected={projection['source_currentness']}; observed={observed.availability}",
+                    )
+                )
         for kind, paper in entries:
             if kind != "registry-paper":
                 continue
             paper_id = paper["paper_id"]
+            if paper_id in explicit_main_papers:
+                continue
             try:
-                _, source = self.layout.resolve_source(
-                    paper["source_ref"]["root_id"],
-                    paper["source_ref"]["relative_path"],
-                )
+                observation = observe_paper_source(self.layout, entries, paper)
             except ResearchKBError as error:
                 diagnostics.append(error.diagnostic)
                 continue
-            expected = paper["source_fingerprint"]["value"]
-            if file_sha256(source) != expected:
+            if observation.state != "current":
                 diagnostics.append(
                     Diagnostic(
                         GROUNDING_MISMATCH,
-                        "registry-paper",
-                        paper_id,
+                        "source-asset-state" if observation.source_asset_state_id is not None else "registry-paper",
+                        observation.source_asset_state_id or paper_id,
                         "/source_fingerprint",
-                        "registered source is missing or its SHA-256 fingerprint changed",
+                        f"current paper source is not reusable: {observation.state}",
+                    )
+                )
+        return diagnostics
+
+    def _source_event_diagnostics(
+        self,
+        entries: list[BundleEntry],
+        process_events: list[dict[str, Any]],
+    ) -> list[Diagnostic]:
+        source_states = [record for kind, record in entries if kind == "source-asset-state"]
+        corrections = [record for kind, record in entries if kind == "registry-identity-correction"]
+        job_states = [record for kind, record in entries if kind == "pipeline-job-state"]
+        if (
+            any(validate_record("source-asset-state", state, actor="stored") for state in source_states)
+            or any(validate_record("registry-identity-correction", item, actor="stored") for item in corrections)
+            or any(validate_record("pipeline-job-state", state, actor="stored") for state in job_states)
+        ):
+            return []
+        if source_asset_chain_diagnostics(source_states):
+            return []
+        try:
+            jobs = {state["job_id"]: state for state in current_pipeline_states(job_states)}
+        except ResearchKBError:
+            return []
+        valid_events = [
+            event
+            for event in process_events
+            if not validate_record("process-event", event, actor="stored")
+        ]
+        reason_operations = {
+            "reference_registered": "register_by_reference",
+            "copied_into_local_inbox": "copy_into_local_inbox",
+            "paper_associated": "associate_source_asset",
+            "same_digest_relink": "same_digest_relink",
+            "changed_bytes_observed": "observe_source",
+            "source_available": "observe_source",
+            "source_missing": "observe_source",
+            "source_inaccessible": "observe_source",
+            "source_relink_required": "observe_source",
+        }
+        event_operations = {
+            "reference_registered": "source_asset_register_reference",
+            "copied_into_local_inbox": "source_asset_copy_into_local_inbox",
+            "paper_associated": "source_asset_associate",
+            "same_digest_relink": "source_asset_relink",
+            "changed_bytes_observed": "source_asset_observe",
+            "source_available": "source_asset_observe",
+            "source_missing": "source_asset_observe",
+            "source_inaccessible": "source_asset_observe",
+            "source_relink_required": "source_asset_observe",
+        }
+        diagnostics: list[Diagnostic] = []
+        for state in source_states:
+            reason = state["reason"]
+            job = jobs.get(state["job_id"])
+            if job is not None and reason_operations[reason] not in job["authority_snapshot"]["granted_operations"]:
+                diagnostics.append(
+                    Diagnostic(
+                        INVALID_AUTHORITY,
+                        "source-asset-state",
+                        state["source_asset_state_id"],
+                        "/job_id",
+                        "Source Asset state is not covered by its Pipeline Job authority",
+                    )
+                )
+            matching = [
+                event
+                for event in valid_events
+                if event.get("result") == "success"
+                and event.get("job_id") == state["job_id"]
+                and event.get("operation") == event_operations[reason]
+                and state["source_asset_state_id"] in event.get("output_refs", [])
+                and state["source_asset_id"] in event.get("output_refs", [])
+            ]
+            if len(matching) != 1:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "source-asset-state",
+                        state["source_asset_state_id"],
+                        "/job_id",
+                        f"Source Asset state must have exactly one correlated success event; found {len(matching)}",
+                    )
+                )
+        for correction in corrections:
+            job = jobs.get(correction["job_id"])
+            if job is not None and "registry_identity_correction" not in job["authority_snapshot"]["granted_operations"]:
+                diagnostics.append(
+                    Diagnostic(
+                        INVALID_AUTHORITY,
+                        "registry-identity-correction",
+                        correction["correction_id"],
+                        "/job_id",
+                        "Registry identity correction is not covered by its Pipeline Job authority",
+                    )
+                )
+            matching = [
+                event
+                for event in valid_events
+                if event.get("result") == "success"
+                and event.get("job_id") == correction["job_id"]
+                and event.get("operation") == "registry_identity_correction"
+                and correction["correction_id"] in event.get("output_refs", [])
+            ]
+            if len(matching) != 1:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "registry-identity-correction",
+                        correction["correction_id"],
+                        "/job_id",
+                        f"Registry identity correction must have exactly one correlated success event; found {len(matching)}",
+                    )
+                )
+        return diagnostics
+
+    def _local_source_intake_diagnostics(self, entries: list[BundleEntry]) -> list[Diagnostic]:
+        diagnostics: list[Diagnostic] = []
+        try:
+            binding = local_inbox_destination(self.layout, "guardian-placeholder.pdf")
+        except ResearchKBError:
+            return diagnostics
+        source_refs: set[tuple[str, str]] = set()
+        for kind in ("registry-paper", "source-asset-state"):
+            for record in records_of_kind(entries, kind):
+                source_ref = record.get("source_ref")
+                if not isinstance(source_ref, dict):
+                    continue
+                root_id = source_ref.get("root_id")
+                relative_path = source_ref.get("relative_path")
+                if isinstance(root_id, str) and isinstance(relative_path, str):
+                    source_refs.add((root_id, relative_path))
+        paths: list[Path] = []
+        try:
+            with os.scandir(binding.inbox) as iterator:
+                for entry in iterator:
+                    if len(paths) >= MAX_GUARDIAN_INBOX_ENTRIES:
+                        diagnostics.append(
+                            Diagnostic(
+                                INPUT_TOO_LARGE,
+                                "local-source-intake",
+                                None,
+                                "/local_inbox",
+                                "Guardian local_inbox inspection reached its 1,000-entry bound",
+                                severity="warning",
+                            )
+                        )
+                        break
+                    paths.append(Path(entry.path))
+        except OSError:
+            diagnostics.append(
+                Diagnostic(
+                    SCHEMA_VALIDATION_FAILED,
+                    "local-source-intake",
+                    None,
+                    "/local_inbox",
+                    "Guardian could not inspect local_inbox",
+                )
+            )
+            return diagnostics
+        for path in sorted(paths, key=lambda item: item.name.casefold()):
+            if path.name.startswith(".research-kb-copy-job_") and path.name.endswith(".part.pdf"):
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "local-source-intake",
+                        None,
+                        "/local_inbox",
+                        "operation-pattern inbox copy partial remains in local_inbox",
+                    )
+                )
+                continue
+            if path.name.startswith("job_") and path.name.endswith(".pdf"):
+                source_ref = (
+                    binding.root_id,
+                    path.relative_to(self.layout.source_roots[binding.root_id]).as_posix(),
+                )
+                if source_ref not in source_refs:
+                    diagnostics.append(
+                        Diagnostic(
+                            INCOMPLETE_TRANSACTION,
+                            "local-source-intake",
+                            None,
+                            "/local_inbox",
+                            "job-named inbox source exists without a Source Asset receipt",
+                        )
+                    )
+            try:
+                metadata = os.lstat(path)
+            except OSError:
+                continue
+            if path.is_symlink() or not stat.S_ISREG(metadata.st_mode) or getattr(metadata, "st_nlink", 1) != 1:
+                diagnostics.append(
+                    Diagnostic(
+                        PATH_ESCAPE,
+                        "local-source-intake",
+                        None,
+                        "/local_inbox",
+                        "unsafe or ambiguous inbox entry cannot enter source intake",
+                        severity="warning",
                     )
                 )
         return diagnostics
@@ -207,6 +465,8 @@ class GuardianService:
         diagnostics: list[Diagnostic] = []
         paths = [
             self.layout.registry_path,
+            self.layout.source_assets_path,
+            self.layout.identity_corrections_path,
             self.layout.review_queue_path,
             self.layout.process_events_path,
             self.layout.pipeline_jobs_path,
@@ -460,6 +720,8 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
         "guardian-report": "guardian_report_id",
         "pipeline-job-state": "state_id",
         "guardian-finding-disposition": "disposition_id",
+        "source-asset-state": "source_asset_state_id",
+        "registry-identity-correction": "correction_id",
         "question-mapping": "question_id",
         "discovery-candidate": "candidate_id",
         "step7-synthesis": "candidate_id",
@@ -486,6 +748,8 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
                 result.add(value)
             if kind == "pipeline-job-state" and isinstance(record.get("job_id"), str):
                 result.add(record["job_id"])
+            elif kind == "source-asset-state" and isinstance(record.get("source_asset_id"), str):
+                result.add(record["source_asset_id"])
     return result
 
 

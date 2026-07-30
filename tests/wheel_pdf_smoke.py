@@ -88,11 +88,11 @@ def main() -> int:
             "diagnostic_code": None,
         }:
             raise SystemExit("PDF wheel text-flow capability does not match the installed adapter")
-        if not {"discovery search", "intake inspect", "intake inspect-acquired", "job list", "job show", "manuscript inspect", "paper context", "review context", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
+        if not {"discovery search", "identity list", "intake inspect", "intake inspect-acquired", "job list", "job show", "manuscript inspect", "paper context", "review context", "source list", "source scan", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
             raise SystemExit("PDF wheel capability report lacks deterministic intake/context reads")
         if capability["discovery_connectors"] != [{"connector": "europe-pmc", "availability": "available", "network_required": True}]:
             raise SystemExit("PDF wheel capability report lacks the Europe PMC connector")
-        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["manuscript_projection"] is not True or capability["features"]["pipeline_jobs"] is not True:
+        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["manuscript_projection"] is not True or capability["features"]["pipeline_jobs"] is not True or capability["features"]["source_asset_runtime"] is not True or capability["features"]["registry_identity_correction"] is not True:
             raise SystemExit("PDF wheel capability report lacks Review Memory, Step 7 or discovery runtime")
         for command in ("context", "render"):
             subprocess.run(

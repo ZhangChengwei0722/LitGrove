@@ -87,6 +87,17 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert "paper context" in output["read_commands"]
     assert "paper status" in output["read_commands"]
     assert "review context" in output["read_commands"]
+    assert "source list" in output["read_commands"]
+    assert "source scan" in output["read_commands"]
+    assert "identity list" in output["read_commands"]
+    assert "source copy" in output["write_commands"]
+    assert "source observe" in output["write_commands"]
+    assert "source reference" in output["write_commands"]
+    assert "source relink" in output["write_commands"]
+    assert "source select" in output["write_commands"]
+    assert "identity correct" in output["write_commands"]
+    assert "source-asset-state" in output["operational_record_kinds"]
+    assert "registry-identity-correction" in output["operational_record_kinds"]
     assert "review-memory" in output["mutation_record_kinds"]
     assert output["features"]["review_runtime"] is True
     assert output["features"]["manuscript_projection"] is True

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:registry-identity-correction",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "correction_id",
+    "workspace_id",
+    "previous_correction_id",
+    "previous_correction_digest",
+    "operation",
+    "subject_paper_ids",
+    "retained_paper_id",
+    "supersedes_correction_id",
+    "rationale",
+    "job_id",
+    "actor",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "correction_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/identity_correction_id"},
+    "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "previous_correction_id": {
+      "anyOf": [
+        {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/identity_correction_id"},
+        {"type": "null"}
+      ]
+    },
+    "previous_correction_digest": {
+      "anyOf": [
+        {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        {"type": "null"}
+      ]
+    },
+    "operation": {
+      "enum": [
+        "confirmed_duplicate_merge",
+        "mistaken_merge_split",
+        "paper_alias",
+        "library_archive",
+        "library_tombstone"
+      ]
+    },
+    "subject_paper_ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+      "uniqueItems": true
+    },
+    "retained_paper_id": {
+      "anyOf": [
+        {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+        {"type": "null"}
+      ]
+    },
+    "supersedes_correction_id": {
+      "anyOf": [
+        {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/identity_correction_id"},
+        {"type": "null"}
+      ]
+    },
+    "rationale": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "job_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/job_id"},
+    "actor": {"const": "user"},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}
+  }
+}

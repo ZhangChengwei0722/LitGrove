@@ -13,7 +13,9 @@ from research_kb.catalog.models import (
     canonical_digest,
 )
 from research_kb.errors import DUPLICATE_ID, UNKNOWN_SCHEMA_KIND, Diagnostic, ResearchKBError
+from research_kb.identity_corrections import project_registry_identity
 from research_kb.pipeline_jobs import current_pipeline_states
+from research_kb.source_assets import current_source_asset_heads
 
 
 MAX_TITLE_CHARACTERS = 1_000
@@ -88,6 +90,7 @@ class CatalogAdapterRegistry:
                 "review-queue",
                 "discovery-candidate",
                 "guardian-finding-disposition",
+                "registry-identity-correction",
                 *ignored_record_kinds,
             }
         )
@@ -208,6 +211,12 @@ class CatalogAdapterRegistry:
                 )
             ) from error
 
+    def select_entries(
+        self,
+        entries: Iterable[tuple[str, dict[str, Any]]],
+    ) -> tuple[tuple[str, dict[str, Any]], ...]:
+        return _select_catalog_entries(tuple(entries))
+
 
 def _default_adapters() -> tuple[CatalogRecordAdapter, ...]:
     return (
@@ -222,6 +231,8 @@ def _default_adapters() -> tuple[CatalogRecordAdapter, ...]:
         _adapter("step7-cross-view", "candidate_id", _project_step7, _step7_detail),
         _adapter("process-event", "event_id", _project_event, _event_detail),
         _adapter("pipeline-job-state", "state_id", _project_job, _job_detail),
+        _adapter("source-asset-state", "source_asset_id", _project_source_asset, _source_asset_detail),
+        _adapter("registry-identity-projection", "paper_id", _project_identity, _identity_detail),
         _adapter("guardian-report", "guardian_report_id", _project_guardian, _guardian_detail),
     )
 
@@ -517,6 +528,61 @@ def _project_guardian(record: Record, workspace_id: str, digest: str) -> tuple[C
     )
 
 
+def _project_source_asset(record: Record, workspace_id: str, digest: str) -> tuple[CatalogDocument, ...]:
+    del workspace_id
+    if record["availability"] != "available":
+        currentness = "unavailable"
+    elif record["manifestation_status"] == "change_candidate":
+        currentness = "stale_source"
+    else:
+        currentness = "current"
+    role = str(record["asset_role"])
+    paper_id = record.get("paper_id")
+    return (
+        _document(
+            record_kind="source-asset-state",
+            record_id=str(record["source_asset_id"]),
+            child_id=None,
+            item_kind="source_asset",
+            authority_layer="canonical",
+            paper_id=str(paper_id) if paper_id is not None else None,
+            question_id=None,
+            title=role.replace("_", " "),
+            summary=f"{currentness} / {record['availability']}",
+            statuses=(
+                f"source:{currentness}",
+                f"availability:{record['availability']}",
+                f"role:{role}",
+            ),
+            search_text=_join([role, currentness, str(record["availability"])]),
+            digest=digest,
+        ),
+    )
+
+
+def _project_identity(record: Record, workspace_id: str, digest: str) -> tuple[CatalogDocument, ...]:
+    del workspace_id
+    return (
+        _document(
+            record_kind="registry-identity-projection",
+            record_id=str(record["paper_id"]),
+            child_id=None,
+            item_kind="paper_identity",
+            authority_layer="canonical_projection",
+            paper_id=str(record["paper_id"]),
+            question_id=None,
+            title="Paper identity status",
+            summary=f"{record['library_status']} / {record['canonical_paper_id']}",
+            statuses=(
+                f"library:{record['library_status']}",
+                "identity:redirected" if record["canonical_paper_id"] != record["paper_id"] else "identity:self",
+            ),
+            search_text=_join([str(record["library_status"]), str(record["canonical_paper_id"])]),
+            digest=digest,
+        ),
+    )
+
+
 def _document(
     *,
     record_kind: str,
@@ -701,6 +767,35 @@ def _guardian_detail(record: Record, child_id: str | None) -> dict[str, Any]:
     }
 
 
+def _source_asset_detail(record: Record, child_id: str | None) -> dict[str, Any]:
+    del child_id
+    if record["availability"] != "available":
+        currentness = "unavailable"
+    elif record["manifestation_status"] == "change_candidate":
+        currentness = "stale_source"
+    else:
+        currentness = "current"
+    return {
+        "source_asset_id": record["source_asset_id"],
+        "source_asset_state_id": record["source_asset_state_id"],
+        "paper_id": record["paper_id"],
+        "asset_role": record["asset_role"],
+        "source_availability": record["availability"],
+        "source_currentness": currentness,
+        "manifestation_status": record["manifestation_status"],
+        "updated_at": record["updated_at"],
+    }
+
+
+def _identity_detail(record: Record, child_id: str | None) -> dict[str, Any]:
+    del child_id
+    return {
+        "paper_id": record["paper_id"],
+        "canonical_paper_id": record["canonical_paper_id"],
+        "library_status": record["library_status"],
+    }
+
+
 def _find_nested_unit(record: Record, child_id: str | None, id_field: str) -> dict[str, Any]:
     if child_id is None:
         raise ValueError("catalog unit detail requires a child ID")
@@ -741,11 +836,46 @@ def _select_catalog_entries(
     current_state_ids = {
         item["state_id"] for item in current_pipeline_states(job_states)
     }
-    return tuple(
+    selected = [
         (kind, record)
         for kind, record in entries
-        if kind != "pipeline-job-state" or record["state_id"] in current_state_ids
+        if (
+            (kind != "pipeline-job-state" or record["state_id"] in current_state_ids)
+            and kind not in {"source-asset-state", "registry-identity-correction"}
+        )
+    ]
+    source_states = [record for kind, record in entries if kind == "source-asset-state"]
+    selected.extend(("source-asset-state", item) for item in current_source_asset_heads(source_states))
+    corrections = _ordered_identity_corrections(
+        [record for kind, record in entries if kind == "registry-identity-correction"]
     )
+    if corrections:
+        papers = [record for kind, record in entries if kind == "registry-paper"]
+        projection = project_registry_identity(papers, corrections)
+        selected.extend(
+            (
+                "registry-identity-projection",
+                {
+                    "schema_version": "1.0",
+                    **value,
+                },
+            )
+            for value in projection.values()
+            if value["canonical_paper_id"] != value["paper_id"] or value["library_status"] != "active"
+        )
+    return tuple(selected)
+
+
+def _ordered_identity_corrections(corrections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not corrections:
+        return []
+    by_previous = {item.get("previous_correction_id"): item for item in corrections}
+    ordered: list[dict[str, Any]] = []
+    current = by_previous.get(None)
+    while current is not None and len(ordered) < len(corrections):
+        ordered.append(current)
+        current = by_previous.get(current.get("correction_id"))
+    return ordered if len(ordered) == len(corrections) else corrections
 
 
 __all__ = ["CatalogAdapterRegistry", "CatalogRecordAdapter"]

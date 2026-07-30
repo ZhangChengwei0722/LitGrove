@@ -54,6 +54,16 @@ def load_workspace_entries(
             entries.append((kind, record))
 
     add_jsonl(layout.registry_path, "registry-paper", "paper_id")
+    add_jsonl(
+        layout.source_assets_path,
+        "source-asset-state",
+        "source_asset_state_id",
+    )
+    add_jsonl(
+        layout.identity_corrections_path,
+        "registry-identity-correction",
+        "correction_id",
+    )
     if (layout.knowledge_root / "parse" / "by_paper").exists():
         for path in sorted((layout.knowledge_root / "parse" / "by_paper").glob("*.pages.jsonl")):
             add_jsonl(path, "parsed-page")

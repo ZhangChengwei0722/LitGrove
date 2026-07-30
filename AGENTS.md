@@ -8,8 +8,8 @@ This repository contains cross-platform Core/CLI code, public contracts, synthet
 
 - Never add real PDFs, parsed paper text, evidence quotes, Paper Cards, research notes, credentials, private paths, or a private workspace export.
 - Fixtures must be authored from scratch and marked `synthetic_from_scratch`.
-- Existing source assets are immutable. Core code must never move, delete, rename, overwrite, edit, or copy an existing source asset.
-- The only source-write exception is exact-user-authority `discovery acquire`: it may create one previously absent file under the configured, uniquely addressable `local_inbox`. Ordinary failure cleanup may unlink only a temp or final file created by that same operation while its recorded file identity still matches. Acquisition never authorizes Registry intake or downstream scientific records.
+- Existing source assets are immutable. Core code must never move, delete, rename, overwrite or edit an existing source asset. Reading an existing source for explicit create-only inbox import does not grant mutation authority over that source.
+- Source writes are limited to exact-user-authority `discovery acquire` and `copy_into_local_inbox`. Each may create only a previously absent file under the configured, uniquely addressable `local_inbox`; neither may overwrite, move, rename or delete an existing user file. Ordinary failure cleanup may unlink only a temp or final file created by that same operation while its recorded file identity still matches. Acquisition or copy never authorizes Registry intake or downstream scientific records.
 - The CLI performs deterministic I/O, validation, IDs, status gates, logging, rendering, and Guardian checks. It does not make scientific judgments or call an LLM.
 - Agent-produced records are candidates. Agents cannot assign `human_checked`, `verified`, final screening decisions, or high-risk source operations.
 - Discovery selection requires explicit user authority and creates metadata-only, non-evidence candidates; it never authorizes acquisition, Registry intake, screening, or verification.

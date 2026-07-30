@@ -18,6 +18,13 @@ def test_source_ref_serializes_as_posix() -> None:
     assert ref.to_dict() == {"root_id": "sources", "relative_path": "folder/\u6d4b\u8bd5.txt"}
 
 
+@pytest.mark.parametrize("root_id", [None, [], {}])
+def test_non_string_root_id_is_rejected_with_controlled_diagnostic(root_id) -> None:
+    with pytest.raises(ResearchKBError) as caught:
+        make_source_ref(root_id, "paper.pdf")
+    assert caught.value.diagnostic.code == "RKBC-007"
+
+
 @pytest.mark.parametrize(
     ("value", "code"),
     [

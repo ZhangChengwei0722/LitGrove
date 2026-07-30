@@ -227,7 +227,7 @@ def test_paper_context_rejects_unknown_stale_and_changing_sources(tmp_path: Path
     source.write_text("Invented current source.", encoding="utf-8", newline="\n")
     expected = paper["source_fingerprint"]["value"]
     calls = iter((expected, "f" * 64))
-    monkeypatch.setattr("research_kb.services.paper_context.file_sha256", lambda _: next(calls))
+    monkeypatch.setattr("research_kb.source_resolution.file_sha256", lambda _: next(calls))
     with pytest.raises(ResearchKBError) as caught:
         service.show(paper_id=paper["paper_id"])
     assert caught.value.diagnostic.code == "RKBC-009"

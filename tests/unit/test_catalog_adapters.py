@@ -143,3 +143,97 @@ def test_capability_reports_registered_ignored_and_unregistered_kinds() -> None:
     assert "registry-paper" in {
         adapter["record_kind"] for adapter in capability["adapters"]
     }
+
+
+def test_source_and_identity_catalog_use_current_redacted_projections() -> None:
+    paper_a = "paper_a1111111-1111-4111-8111-111111111111"
+    paper_b = "paper_b2222222-2222-4222-8222-222222222222"
+    source_asset = "sourceasset_a1111111-1111-4111-8111-111111111111"
+    source_state_1 = "sourceassetstate_a1111111-1111-4111-8111-111111111111"
+    source_state_2 = "sourceassetstate_b2222222-2222-4222-8222-222222222222"
+    correction = "identitycorr_a1111111-1111-4111-8111-111111111111"
+    entries = [item for item in _entries() if item[0] != "registry-paper"]
+    papers = [
+        {
+            "schema_version": "1.0",
+            "paper_id": paper_id,
+            "bibliography": {"title": paper_id, "authors": [], "year": 2026, "doi": None},
+            "source_ref": {"root_id": "alpha-sources", "relative_path": f"{paper_id}.pdf"},
+            "source_fingerprint": {"algorithm": "sha256", "value": "a" * 64},
+            "duplicate_candidate_ids": [],
+            "screening_status": "candidate",
+            "review_status": "ai_draft",
+            "automation_status": "pending",
+            "created_at": "2026-07-30T00:00:00Z",
+            "updated_at": "2026-07-30T00:00:00Z",
+        }
+        for paper_id in (paper_a, paper_b)
+    ]
+    source_common = {
+        "schema_version": "1.0",
+        "source_asset_id": source_asset,
+        "workspace_id": WORKSPACE_ID,
+        "paper_id": paper_a,
+        "asset_role": "main_pdf",
+        "source_ref": {"root_id": "alpha-sources", "relative_path": "paper.pdf"},
+        "availability": "available",
+        "job_id": "job_a1111111-1111-4111-8111-111111111111",
+        "actor": "cli",
+        "created_at": "2026-07-30T00:00:00Z",
+    }
+    state_1 = {
+        **source_common,
+        "source_asset_state_id": source_state_1,
+        "revision": 1,
+        "predecessor": None,
+        "source_fingerprint": {"algorithm": "sha256", "value": "a" * 64},
+        "manifestation_id": "sha256:" + "a" * 64,
+        "manifestation_status": "active",
+        "reason": "reference_registered",
+        "updated_at": "2026-07-30T00:00:00Z",
+    }
+    from research_kb.catalog.models import canonical_digest
+
+    state_2 = {
+        **source_common,
+        "source_asset_state_id": source_state_2,
+        "revision": 2,
+        "predecessor": {"state_id": source_state_1, "state_digest": canonical_digest(state_1)},
+        "source_fingerprint": {"algorithm": "sha256", "value": "b" * 64},
+        "manifestation_id": "sha256:" + "b" * 64,
+        "manifestation_status": "change_candidate",
+        "reason": "changed_bytes_observed",
+        "updated_at": "2026-07-30T00:01:00Z",
+    }
+    identity = {
+        "schema_version": "1.0",
+        "correction_id": correction,
+        "workspace_id": WORKSPACE_ID,
+        "previous_correction_id": None,
+        "previous_correction_digest": None,
+        "operation": "paper_alias",
+        "subject_paper_ids": [paper_b],
+        "retained_paper_id": paper_a,
+        "supersedes_correction_id": None,
+        "rationale": "Synthetic alias.",
+        "job_id": "job_a1111111-1111-4111-8111-111111111111",
+        "actor": "user",
+        "created_at": "2026-07-30T00:02:00Z",
+    }
+
+    registry = CatalogAdapterRegistry()
+    snapshot = registry.project_entries(
+        [*entries, *(('registry-paper', paper) for paper in papers), ("source-asset-state", state_2), ("source-asset-state", state_1), ("registry-identity-correction", identity)],
+        workspace_id=WORKSPACE_ID,
+    )
+
+    source_docs = [item for item in snapshot.documents if item.item_kind == "source_asset"]
+    identity_docs = [item for item in snapshot.documents if item.item_kind == "paper_identity"]
+    assert len(source_docs) == 1
+    assert "source:stale_source" in source_docs[0].status_labels
+    assert len(identity_docs) == 1
+    assert identity_docs[0].paper_id == paper_b
+    source_detail = registry.find_adapter("source-asset-state").detail(state_2, None)
+    assert source_detail["source_currentness"] == "stale_source"
+    assert "source_fingerprint" not in source_detail
+    assert "source_ref" not in source_detail
