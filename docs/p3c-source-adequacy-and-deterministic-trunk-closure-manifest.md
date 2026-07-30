@@ -1,15 +1,19 @@
 # P3-C Source Adequacy And Deterministic Trunk Closure Manifest
 
-- status: `remote_review_open`
+- status: `merged_post_merge_validated`
 - validated_at: `2026-07-31T00:04:03+08:00`
+- post_merge_validated_at: `2026-07-31`
 - implementation_commit: `e32f9132194263bf1a2eb4cc074d06d6f6db943c`
 - closure_commit: `f137d357664b613ceac9f8ecee7b46c8f4d68e17`
+- merge_commit: `7df703bff6458cbb5492d58fe8408436e40b8268`
 - review_pr: `https://github.com/ZhangChengwei0722/research-kb-core/pull/34`
 - branch: `feature/p3c-source-adequacy`
 - baseline: `main@1a504b60d07e9cfa40442de42f475adba4fcddc1`
 - package: `research-kb-core==0.1.0`
 - wheel_sha256: `c8cfd1380c21c6ce8ee744b893c3a0e373893a320147b1d6bdaf317d8f6f152a`
 - sdist_sha256: `6a6c0b020bcb83cf3c85cdb3a54834a5ae668a7c85b7f32331bbe273793212a6`
+- post_merge_wheel_sha256: `c8cfd1380c21c6ce8ee744b893c3a0e373893a320147b1d6bdaf317d8f6f152a`
+- post_merge_sdist_sha256: `0989c5c2341b8db6c4a09a3fca18a355c1660057206a7a8051d5a417425ce0ed`
 - layout_contract: `m3c-2a` unchanged; optional operational store added
 - cleanup_status: `cleanup_deferred_until_p11_and_overall_goal_complete`
 
@@ -69,6 +73,9 @@ or rule dependency is stale.
 - package version: `research-kb 0.1.0`;
 - privacy scan: `7 expected, 0 unexpected`;
 - `git diff --check`: passed;
+- post-merge validation at `7df703bff6458cbb5492d58fe8408436e40b8268`
+  repeated `compileall`, the full Windows suite, package build, both installed-wheel
+  smokes, version, privacy scan and clean-tree checks with the same passing results;
 - source assets, protected private workspaces and real PDFs: not accessed.
 
 ## Durable Reconciliation
@@ -76,12 +83,11 @@ or rule dependency is stale.
 - repository audiences are synchronized through `README.md`, `docs/architecture.md`,
   `docs/workflow.md`, `docs/contributor-guide.md` and this manifest;
 - reconciliation date: `2026-07-31`;
-- reconciliation revision: implementation commit
-  `e32f9132194263bf1a2eb4cc074d06d6f6db943c` based on
-  `1a504b60d07e9cfa40442de42f475adba4fcddc1`;
+- reconciliation revision: merge commit
+  `7df703bff6458cbb5492d58fe8408436e40b8268`;
 - the parent design, overall plan and roadmap in the external design workspace were
-  rechecked. They preserve the same P3-C boundary; milestone status will advance only
-  after the implementation commit is pushed and its integration state is known.
+  rechecked and synchronized to the merged, post-merge-validated P3-C state and P3-D0
+  next gate.
 
 ## Explicitly Not Delivered
 
@@ -89,9 +95,8 @@ or rule dependency is stale.
 - Agent Task, staging/preview approval, semantic processing, Paper Card/Evidence/Review
   Memory commit and scientific `review_queue`: P4;
 - Direction, Field Map, Question screening, Research Synthesis, Exchange, backup,
-  migration or protected legacy cutover;
-- merge or post-merge validation.
+  migration or protected legacy cutover.
 
-PR #34 is open and GitHub reports the branch mergeable with a clean merge state. The next
-gate is explicit integration and post-merge validation. P3-D must then begin from its own
-bounded implementation plan and may not absorb P4 semantic or Agent Task scope.
+PR #34 merged as `7df703bff6458cbb5492d58fe8408436e40b8268`; the feature branch remains
+available. P3-D begins from its reviewed bounded implementation plan and may not absorb
+P4 semantic or Agent Task scope.
