@@ -49,10 +49,13 @@ Milestone 1B through the M3D-1 repository slice provide:
 - use-specific Source Adequacy profiles bound to exact source and parse snapshots, with independent capability gates, stale projection and hard-failure precedence;
 - a resumable deterministic trunk from current source through Parse and Source Adequacy to an explicit user-selected primary/review semantic boundary, without creating scientific records.
 - a session-bound deterministic intake application facade for bounded upload and watched-inbox starts, receipt-based crash recovery, redacted Job controls and exact replay without App-owned workflow state.
+- a versioned external-Agent task registry and session-bound semantic handoff facade for document-route resolution, with exact privacy-class intersection, CAS leases, stale-input rejection, non-canonical staging, escaped preview, revision lineage and explicit user approval.
 
 The installed CLI contains no private adapter and performs no adapter or connector discovery. The CLI never calls an LLM or makes scientific judgments. M3D-1 audit semantics remain Agent-owned in the Portable Skill; Core still only projects manuscripts and exposes existing reads. OCR, manuscript rewriting, subtype-specific review runtime, persisted Markdown or additional derived views, Field Map integration, Review Unit Question Mapping, institutional/browser acquisition and migration remain later milestones.
 
-P3-D0 adds no browser server or CLI workflow command. A localhost App backend must open an opaque `WorkspaceSession` and call `DeterministicIntakeApplicationService`; it must not read workspace paths, invoke the CLI, parse CLI output or reproduce intake recovery rules.
+Application Service interface `1.2` exposes `DeterministicIntakeApplicationService` and `AgentTaskApplicationService` to a localhost App backend through opaque `WorkspaceSession` values. The App must not read workspace paths, invoke the CLI, parse CLI output or reproduce intake, privacy, staging or recovery rules. Core only prepares portable handoff manifests for external Codex CLI or Claude Code CLI use; it does not launch an Agent, manage credentials or call a model API.
+
+`AgentTaskApplicationService` currently enables only `document_route_resolution`. Its public flow is `registry -> create_from_pipeline -> prepare_handoff -> submit_result -> preview_result -> revise/reject/approve`. Workspace `agent_policy` is optional and absent means deny by default. All staged output is untrusted, non-canonical data; route approval advances only the deterministic Pipeline Job and creates no Paper Card, Evidence or Review Memory.
 
 ## Privacy Boundary
 

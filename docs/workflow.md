@@ -357,3 +357,25 @@ reference, fingerprint, raw parse text or free-text operational reason.
 
 P3-D0 is a Core surface only. The localhost HTTP server, multipart spool ownership,
 operation coordinator, Catalog rebuild scheduling and processing UI remain P3-D1/D2.
+
+### External Agent route-resolution handoff
+
+After a route-ambiguous deterministic intake, the App uses the P4-A service flow:
+
+```text
+waiting_user route_ambiguous Job
+-> user selects executor and exact content classes
+-> Agent Task created; Job becomes waiting_agent
+-> portable prompt manifest prepared under one CAS lease
+-> external Codex CLI or Claude Code CLI returns bounded JSON
+-> Core rejects stale basis or stages the untrusted result
+-> App renders escaped preview
+-> user requests revision, rejects or approves
+-> approval advances the deterministic primary/review semantic gate
+```
+
+No method launches an Agent or exposes a source path. A Task is bound to one exact Job
+state, paper record, live source digest, Parse output and current Source Adequacy profile.
+Revision creates a new Task with reciprocal lineage and refreshed inputs. Staging is
+operational and non-canonical; P4-A route approval creates no Paper Card, Evidence,
+Review Memory or scientific review-queue item.

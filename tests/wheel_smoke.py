@@ -125,6 +125,8 @@ def main() -> int:
             raise SystemExit("base wheel capability report lacks the Europe PMC connector")
         if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["approved_discovery_candidate_handoff"] is not True or capability["features"]["legal_oa_resolution"] is not True or capability["features"]["explicit_oa_acquisition"] is not True or capability["features"]["manuscript_projection"] is not True or capability["features"]["pipeline_jobs"] is not True or capability["features"]["source_asset_runtime"] is not True or capability["features"]["registry_identity_correction"] is not True or capability["features"]["source_adequacy"] is not True or capability["features"]["deterministic_trunk"] is not True or capability["features"]["deterministic_intake_application"] is not True:
             raise SystemExit("base wheel capability report lacks Review Memory, Step 7 or discovery runtime")
+        if capability["features"]["agent_task_staging"] is not True or capability["agent_task_registry_version"] != "p4a-v1":
+            raise SystemExit("base wheel capability report lacks P4-A Agent Task staging")
         subprocess.run(
             [
                 str(python), "-c",
@@ -273,6 +275,13 @@ def main() -> int:
                 "path_serialization": "workspace_relative_posix",
                 "default_encoding": "utf-8",
                 "line_ending": "lf",
+            },
+            "agent_policy": {
+                "registry_version": "p4a-v1",
+                "allowed_content_classes": ["metadata", "parsed_excerpt", "operational_context"],
+                "execution_scope": "cloud_allowed",
+                "max_prompt_bytes": 262_144,
+                "max_result_bytes": 65_536,
             },
         }
         profile_path = workspace_root / "domain-profile.json"
@@ -944,12 +953,36 @@ def main() -> int:
                     "from research_kb.services import CatalogCapabilityService, "
                     "CatalogProjectionService, CatalogQueryService, WorkspaceSession, "
                     "WorkspaceSessionService, SourceAssetService, RegistryIdentityCorrectionService, "
-                    "DeterministicIntakeApplicationService; "
-                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.1'; "
+                    "AgentTaskApplicationService, DeterministicIntakeApplicationService, "
+                    "DeterministicTrunkService, PipelineJobService; "
+                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.2'; "
                     f"session = WorkspaceSessionService({{'wheel': Path({str(config_path)!r})}}).open('wheel'); "
                     "limits = DeterministicIntakeApplicationService().limits(session); "
-                    "assert limits['interface_version'] == '1.1'; "
-                    "assert limits['ingress_modes'] == ['upload', 'watched_inbox']"
+                    "assert limits['interface_version'] == '1.2'; "
+                    "assert limits['ingress_modes'] == ['upload', 'watched_inbox']; "
+                    "layout = session._layout; "
+                    "job = PipelineJobService(layout).create(requested_route='local_source', "
+                    "requested_depth='semantic_gate', current_node='source_check', "
+                    f"input_refs=[{paper_id!r}], "
+                    "authority_snapshot={'actor':'user','granted_operations':['advance_deterministic_trunk','assess_source_adequacy','observe_source','parse_run'],'captured_at':'2026-07-31T00:00:00Z'}, "
+                    "idempotency_key='installed-wheel-agent-task', actor='user', fixture_origin='synthetic_from_scratch').state; "
+                    f"waiting = DeterministicTrunkService(layout).advance(job_id=job['job_id'], paper_id={paper_id!r}, requested_operation='basic_paper_card', adapter_name='synthetic-text', actor='user'); "
+                    "assert waiting.state['status'] == 'waiting_user'; "
+                    "tasks = AgentTaskApplicationService(); "
+                    "registry = tasks.registry(session); "
+                    "assert registry['registry_version'] == 'p4a-v1'; "
+                    "assert registry['embedded_agent_runtime'] is False; "
+                    f"created = tasks.create_from_pipeline(session, job['job_id'], {{'paper_id':{paper_id!r},'task_kind':'document_route_resolution','executor_id':'codex_cli','approved_content_classes':['metadata','parsed_excerpt','operational_context'],'idempotency_key':'installed-wheel-route-task'}}); "
+                    "expected = {'state_id':created['task']['state_id'],'state_digest':created['task']['state_digest']}; "
+                    "prepared = tasks.prepare_handoff(session, created['task']['task_id'], expected, 'codex_cli'); "
+                    "expected = {'state_id':prepared['task']['state_id'],'state_digest':prepared['task']['state_digest']}; "
+                    "result = {'contract_version':'p4a-document-route-decision@1.0','task_id':prepared['task']['task_id'],'input_basis_digest':prepared['task']['input_basis_digest'],'document_route':'primary','route_reason':None,'confidence':'high','rationale':'Synthetic installed-wheel route decision.'}; "
+                    "submitted = tasks.submit_result(session, prepared['task']['task_id'], expected, prepared['lease'], result); "
+                    "assert tasks.preview_result(session, submitted['task']['task_id'])['candidate']['canonical_scientific_write'] is False; "
+                    "expected = {'state_id':submitted['task']['state_id'],'state_digest':submitted['task']['state_digest']}; "
+                    "approved = tasks.approve_route_result(session, submitted['task']['task_id'], expected); "
+                    "assert approved['task']['status'] == 'approved'; "
+                    "assert approved['pipeline']['current_node'] == 'primary_semantic_gate'"
                 ),
             ],
             cwd=temporary,

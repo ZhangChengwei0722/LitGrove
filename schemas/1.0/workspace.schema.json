@@ -40,6 +40,24 @@
         "default_encoding": {"const": "utf-8"},
         "line_ending": {"const": "lf"}
       }
+    },
+    "agent_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registry_version", "allowed_content_classes", "execution_scope", "max_prompt_bytes", "max_result_bytes"],
+      "properties": {
+        "registry_version": {"const": "p4a-v1"},
+        "allowed_content_classes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["metadata", "parsed_excerpt", "canonical_evidence", "paper_card_content", "review_background", "research_routing_context", "research_synthesis", "operational_context", "source_document"]
+          }
+        },
+        "execution_scope": {"enum": ["cloud_allowed", "local_only"]},
+        "max_prompt_bytes": {"type": "integer", "minimum": 1024, "maximum": 33554432},
+        "max_result_bytes": {"type": "integer", "minimum": 1024, "maximum": 4194304}
+      }
     }
   }
 }

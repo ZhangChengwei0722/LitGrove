@@ -97,6 +97,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "trunk advance",
         ],
         "operational_record_kinds": [
+            "agent-task-state",
             "guardian-finding-disposition",
             "guardian-report",
             "pipeline-job-state",
@@ -122,7 +123,10 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "source_adequacy": True,
             "deterministic_trunk": True,
             "deterministic_intake_application": True,
+            "agent_task_staging": True,
+            "embedded_agent_runtime": False,
         },
+        "agent_task_registry_version": "p4a-v1",
     }
 
 

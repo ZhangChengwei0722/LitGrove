@@ -234,6 +234,18 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Stop at waits or semantic gates. Do not create Paper Card, Evidence, Review Memory, scientific review-queue, Agent Task or staging records in P3-D0.
 - Exercise the public facade from both base and PDF-extra installed wheels; source-checkout imports alone are insufficient.
 
+## External Agent Task And Staging Rules
+
+- Keep Core free of embedded Agent execution, credentials, executable discovery and model API calls. Export only a portable, explicit-user-action handoff manifest.
+- Register every task kind, result contract, content class and executor profile by version. Unknown and deferred kinds fail closed.
+- Treat privacy classes as explicit sets. Workspace policy, task-kind allowance, user approval and executor capability must all admit every required class.
+- Bind each Task to the exact Job state, paper digest, live source digest, Parse output and current Source Adequacy profile. Reject late results after any basis change.
+- Use append-only Task states, CAS-bound leases and transaction-correlated events. Exact replay is zero-write; changed intent conflicts.
+- Keep submitted output untrusted and non-canonical. App preview must be escaped and cannot expose source refs, paths, fingerprints, raw authority or private payloads.
+- Require explicit user revision, rejection or approval. Revision creates a reciprocal successor lineage with prior result digest, feedback and refreshed inputs.
+- P4-A may advance only document routing. It must not create Paper Card, Evidence, Review Memory, scientific review-queue or Research Synthesis records.
+- Exercise registry, handoff, submit, preview and approval from the installed wheel; live model availability is never a deterministic CI condition.
+
 ## Platform Rules
 
 Tests must include Windows-shaped and POSIX-shaped paths independent of the host. Persisted relative paths always use `/`.

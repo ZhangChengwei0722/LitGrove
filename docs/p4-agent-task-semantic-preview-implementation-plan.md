@@ -1,13 +1,13 @@
 # P4 Agent Task And Semantic Preview Implementation Plan
 
-- status: `reviewed_implementation_in_progress`
+- status: `p4a_core_validated`
 - prepared_at: `2026-07-31`
 - core_baseline: `main@b5844c8ca592626661ba6123e6297fdeccce8ead`
 - app_p3d2_implementation: `d43be4e768fbd3c3ee2477dd8e7daa816aa6eb4a`
 - app_p3d_closure: `10b49a0`
 - current_batch: `p4a_agent_task_staging_kernel`
 - implementation_authorized: `current_unattended_authorization_after_phase_plan`
-- next_gate: `p4a_full_validation_diff_review`
+- next_gate: `p4a_app_compatibility_and_integrated_acceptance`
 
 ## 1. Objective
 
@@ -87,8 +87,8 @@ as a temporary scientific contract.
   state but with task-specific transitions.
 - Prompt preparation issues one lease. Submission requires the current task state and
   lease basis plus the current input-basis digest.
-- Submission atomically appends the task state and writes one operation-owned staging
-  document under the managed knowledge root.
+- Submission atomically appends one task state containing a bounded staging envelope in
+  the operational Agent Task store. It does not require an unsafe two-target transaction.
 - Staging is non-canonical, absent from factual query and safe to remove after terminal
   receipt/retention policy. P4-A preserves all result and decision digests.
 - `revision_requested` terminalizes the submitted task and atomically creates a successor
@@ -108,8 +108,8 @@ Add only the P4-A owned contracts:
 - optional workspace Agent policy;
 - required task/state/staging ID definitions.
 
-Add managed operational paths for Agent Task states and confined staging. Advance the
-layout contract by one exact predecessor step only if new managed directories require it.
+Add one managed operational path for Agent Task states with confined staging envelopes.
+Advance the layout contract by one exact predecessor step only if new managed directories require it.
 Workspace bootstrap must plan and apply the upgrade without creating synthetic tasks or
 staging payloads.
 
@@ -212,7 +212,7 @@ complete task -> prompt -> import -> preview -> decision loop at desktop and mob
 widths.
 
 Full closure also verifies package identities, privacy scan, stale edges, transaction
-recovery, task/staging cleanup receipts, Catalog freshness and no private workspace/Q001
+recovery, task/staging cleanup receipts, Catalog freshness and no private legacy-workspace
 access.
 
 ## 8. Stop And Defer Boundaries
@@ -223,7 +223,7 @@ Proceed through ordinary implementation defects without interruption. Do not add
 - arbitrary provider plugins or `source_document` export in P4-A;
 - Direction/Field Map/Question proposal processing or Research Synthesis drafting;
 - PDF.js/UPDF, discovery, Exchange, Obsidian, backup or migration;
-- real workspaces, real PDFs or Q001 access.
+- real workspaces, real PDFs or private legacy-workspace access.
 
 The external `E:` final-design/overall-plan documents are currently unavailable. Record
 their synchronization as a recoverable documentation action and continue repository-local

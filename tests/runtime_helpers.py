@@ -16,6 +16,7 @@ def make_runtime_workspace(
     local_inbox: str = "./inbox",
     create_local_inbox: bool = False,
     source_roots: list[dict[str, object]] | None = None,
+    agent_policy: dict[str, object] | None = None,
 ) -> WorkspaceLayout:
     root = tmp_path / domain
     root.mkdir()
@@ -37,6 +38,8 @@ def make_runtime_workspace(
         },
         "runtime": {"path_serialization": "workspace_relative_posix", "default_encoding": "utf-8", "line_ending": "lf"},
     }
+    if agent_policy is not None:
+        workspace["agent_policy"] = agent_policy
     config_path = root / "workspace.yaml"
     config_path.write_text(yaml.safe_dump(workspace, sort_keys=False), encoding="utf-8", newline="\n")
     profile = {

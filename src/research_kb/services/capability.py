@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from research_kb import __version__
+from research_kb.agent_task_registry import PRIVACY_REGISTRY_VERSION
 from research_kb.contracts.versions import SUPPORTED_VERSION
 from research_kb.errors import PARSE_ADAPTER_UNAVAILABLE, ResearchKBError
 from research_kb.parse.pdfplumber_adapter import (
@@ -127,6 +128,7 @@ class CapabilityService:
                     "registry-identity-correction",
                     "source-asset-state",
                     "source-adequacy-profile",
+                    "agent-task-state",
                     "transaction-journal",
                 )
             ),
@@ -146,7 +148,10 @@ class CapabilityService:
                 "source_adequacy": True,
                 "deterministic_trunk": True,
                 "deterministic_intake_application": True,
+                "agent_task_staging": True,
+                "embedded_agent_runtime": False,
             },
+            "agent_task_registry_version": PRIVACY_REGISTRY_VERSION,
         }
 
     def _pdfplumber_version(self) -> str | None:

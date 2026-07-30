@@ -178,7 +178,7 @@ def test_pipeline_job_create_and_transition_reruns_are_idempotent(tmp_path) -> N
     assert len(read_jsonl(layout.process_events_path, record_kind="process-event")) == 2
 
 
-def test_pipeline_job_rejects_stale_cas_invalid_wait_and_reserved_agent_state(tmp_path) -> None:
+def test_pipeline_job_rejects_stale_cas_invalid_wait_and_invalid_agent_transition(tmp_path) -> None:
     layout, service = prepared_service(tmp_path)
     created = create_job(service)
     before = layout.pipeline_jobs_path.read_bytes()
@@ -209,7 +209,7 @@ def test_pipeline_job_rejects_stale_cas_invalid_wait_and_reserved_agent_state(tm
             recovery_action=None,
             actor="cli",
         )
-    with pytest.raises(ResearchKBError, match="P4"):
+    with pytest.raises(ResearchKBError, match="invalid Pipeline Job transition"):
         service.transition(
             JOB_ID,
             expected_state_id=created.state["state_id"],
