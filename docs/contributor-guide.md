@@ -221,6 +221,19 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Convert only parser-domain or wrapped adapter-execution failures to `parse_failed`; authority, schema, source-race and transaction failures must propagate.
 - Keep the trunk restartable and Job-correlated. It may stop at an explicit primary/review semantic boundary but must not create Paper Card, Evidence, Review Memory, scientific review-queue or Agent Task records.
 
+## Deterministic Intake Application Facade Rules
+
+- Accept only an opaque `WorkspaceSession`; App code and callers must not read `session._layout`, workspace config or canonical stores.
+- Keep upload and watched-inbox authority registries closed. A request cannot add operations, and watched selection requires both selection and reference-registration authority.
+- Bind upload to backend-computed size and SHA-256. Do not accept a browser-submitted server path, filename as authority or unbounded stream.
+- Require exactly one mode-matching Source Asset root and one correlated success event containing its asset and state IDs before resuming downstream work.
+- Reconcile Registry and Source Asset association from Job-correlated receipts. Never repeat `RegistryService.add` after its receipt exists.
+- Permit `running -> running` only when the node advances, outputs strictly grow and wait/retry/recovery fields remain unchanged. Apply the same rule to stored-chain diagnostics.
+- Keep deterministic intake nodes monotonic during recovery. Resume may append a missing transition but cannot move a later node back to Registry or association.
+- Return only bounded App projections. Never expose source refs, paths, fingerprints, authority snapshots, idempotency keys, raw page text or user-authored operational reason text.
+- Stop at waits or semantic gates. Do not create Paper Card, Evidence, Review Memory, scientific review-queue, Agent Task or staging records in P3-D0.
+- Exercise the public facade from both base and PDF-extra installed wheels; source-checkout imports alone are insufficient.
+
 ## Platform Rules
 
 Tests must include Windows-shaped and POSIX-shaped paths independent of the host. Persisted relative paths always use `/`.

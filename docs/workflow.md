@@ -325,3 +325,35 @@ observation, parse, adequacy and trunk authority. It may reuse an exact current 
 Profile on replay. It sends file/parse/capability problems to explicit wait reasons and
 leaves structural failures to fail closed and Guardian. It never infers document type or
 creates scientific records. A user-selected mixed document must use the review route.
+
+### App-facing deterministic intake facade
+
+The App backend uses one Core session facade rather than replaying CLI commands:
+
+```text
+configured workspace option
+-> WorkspaceSessionService.open
+-> facade limits / bounded inbox scan
+-> explicit upload-stream or watched-inbox start
+-> one closed-authority Pipeline Job
+-> Source Asset receipt and matching success event
+-> Registry receipt
+-> Source Asset association receipt
+-> deterministic trunk
+-> explicit wait or completed semantic gate
+```
+
+An exact start replay is zero-write after all committed steps are present. After a crash,
+the facade reconciles Source Asset, Registry and association receipts and advances only
+the missing transition. Intake progress nodes are monotonic; a resume cannot move from
+association or trunk back to Registry. Changed intent under the same client idempotency
+key, ambiguous receipts, stale CAS or a source/event mismatch fails closed.
+
+Upload callers provide an already-open bounded stream plus trusted backend-computed size
+and digest. Watched-inbox callers provide one opaque stable candidate handle. Neither
+route accepts an arbitrary filesystem path through the application facade. List, detail,
+limits and mutation results are bounded App projections without source path, portable
+reference, fingerprint, raw parse text or free-text operational reason.
+
+P3-D0 is a Core surface only. The localhost HTTP server, multipart spool ownership,
+operation coordinator, Catalog rebuild scheduling and processing UI remain P3-D1/D2.

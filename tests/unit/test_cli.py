@@ -116,6 +116,7 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert output["features"]["pipeline_jobs"] is True
     assert output["features"]["source_adequacy"] is True
     assert output["features"]["deterministic_trunk"] is True
+    assert output["features"]["deterministic_intake_application"] is True
     assert {"job list", "job show"} <= set(output["read_commands"])
     assert {"job create", "job transition", "job cancel", "job recover"} <= set(output["write_commands"])
 

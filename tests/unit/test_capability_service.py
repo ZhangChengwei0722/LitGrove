@@ -121,6 +121,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "source_asset_runtime": True,
             "source_adequacy": True,
             "deterministic_trunk": True,
+            "deterministic_intake_application": True,
         },
     }
 
