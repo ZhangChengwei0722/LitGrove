@@ -1,8 +1,8 @@
 # P3-C Source Adequacy And Deterministic Trunk Closure Manifest
 
-- status: `implementation_validated_ready_for_commit`
+- status: `implementation_committed_ready_for_remote_review`
 - validated_at: `2026-07-31T00:04:03+08:00`
-- implementation_commit: `pending_current_commit`
+- implementation_commit: `e32f9132194263bf1a2eb4cc074d06d6f6db943c`
 - branch: `feature/p3c-source-adequacy`
 - baseline: `main@1a504b60d07e9cfa40442de42f475adba4fcddc1`
 - package: `research-kb-core==0.1.0`
@@ -73,10 +73,10 @@ or rule dependency is stale.
 
 - repository audiences are synchronized through `README.md`, `docs/architecture.md`,
   `docs/workflow.md`, `docs/contributor-guide.md` and this manifest;
-- reconciliation date: `2026-07-30`;
-- reconciliation revision: validated P3-C worktree based on
-  `1a504b60d07e9cfa40442de42f475adba4fcddc1`, ready for an authorized implementation
-  commit;
+- reconciliation date: `2026-07-31`;
+- reconciliation revision: implementation commit
+  `e32f9132194263bf1a2eb4cc074d06d6f6db943c` based on
+  `1a504b60d07e9cfa40442de42f475adba4fcddc1`;
 - the parent design, overall plan and roadmap in the external design workspace were
   rechecked. They preserve the same P3-C boundary; milestone status will advance only
   after the implementation commit is pushed and its integration state is known.
@@ -90,6 +90,5 @@ or rule dependency is stale.
   migration or protected legacy cutover;
 - merge or post-merge validation.
 
-The next gate is the authorized P3-C implementation commit and remote review closure.
-P3-D must then begin from its own bounded implementation plan and may not absorb P4
-semantic or Agent Task scope.
+The next gate is P3-C remote review and integration closure. P3-D must then begin from
+its own bounded implementation plan and may not absorb P4 semantic or Agent Task scope.
