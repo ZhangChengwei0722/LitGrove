@@ -1,13 +1,16 @@
 # P3-B Source Assets, Intake And Identity Correction Closure Manifest
 
-- status: `implementation_validated`
-- closed_at: `2026-07-30T12:54:08+08:00`
+- status: `closed_post_merge_validated`
+- closed_at: `2026-07-30T13:17:08+08:00`
 - implementation_commit: `3371edd12b062a016fc260a267ca0a5443377e04`
 - branch: `feature/p3b-source-intake`
 - baseline: `origin/main@176b583a193fbd88b8092d3fb662b47c627660c0`
+- pull_request: `#32`
+- merged_head: `89e33beb49eafb435e0555a2aa46abd7e4a49781`
 - package: `research-kb-core==0.1.0`
 - wheel_sha256: `c37f8c1b1e2d2dd147ed9d13740143ffd30b14af66e2732962ee1187480fd590`
-- sdist_sha256: `a25bfcbd173676596c944e3a419ff6c7306ed390b2d9b8c6b64db0f051b41bdd`
+- sdist_sha256: `5fac43ce2849a6f7805576d0d12ca436562d9bdfdff838bbde49fc5155a1ead5`
+- pre_merge_sdist_sha256: `a25bfcbd173676596c944e3a419ff6c7306ed390b2d9b8c6b64db0f051b41bdd`
 - layout_contract: `m3c-2a` unchanged
 - cleanup_status: `cleanup_deferred_until_p11_and_overall_goal_complete`
 
@@ -64,6 +67,9 @@ layout migration or historical-record rewrite was added.
 - package version: `research-kb 0.1.0`;
 - privacy scan: `7 expected, 0 unexpected`;
 - `git diff --check`: passed before implementation commit;
+- post-merge validation at `89e33beb49eafb435e0555a2aa46abd7e4a49781` repeated
+  `compileall`, the full Windows suite, package build, both installed-wheel smokes,
+  version, privacy scan and clean-tree checks with the same passing results;
 - source assets, protected private workspaces and real PDFs: not accessed.
 
 ## Explicitly Not Delivered
@@ -76,6 +82,6 @@ layout migration or historical-record rewrite was added.
 - Direction, Question screening, Research Synthesis, Exchange, backup, migration or
   protected legacy cutover.
 
-P3-C may begin only after this branch is merged, the merged head passes post-merge
-validation, durable roadmap state is reconciled and P3-C has its own bounded reviewed
+P3-C may begin from merged head `89e33beb49eafb435e0555a2aa46abd7e4a49781`
+only after durable roadmap state is reconciled and P3-C has its own bounded reviewed
 implementation plan.
