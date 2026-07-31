@@ -1,6 +1,6 @@
 # P4-B Primary Semantic Bundle Implementation Plan
 
-- status: `approved_unattended`
+- status: `closed`
 - prepared_at: `2026-07-31`
 - branch: `feature/p4b-primary-semantic-bundle`
 - local_baseline: `3f28d36`
@@ -8,7 +8,11 @@
 - upstream_p4a_post_merge_pr: `40 merged as b47b4394; local fetch pending after github.com:443 timeout`
 - required_application_service_interface: `1.3`
 - implementation_authorized: `standing unattended authorization after bounded phase plan`
-- next_gate: `p4b_implementation_validation_and_diff_review`
+- implementation_commit: `d85c1955fd65b0de9c4bb77e772ce82e33dec35c`
+- validated_at: `2026-08-01T01:01:45+08:00`
+- validation_receipt: `docs/p4b-primary-semantic-bundle-validation-receipt.md`
+- closure_manifest: `docs/p4b-primary-semantic-bundle-closure-manifest.md`
+- next_gate: `bounded_p4c_review_semantic_bundle_plan`
 
 ## 1. Objective
 
