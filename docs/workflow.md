@@ -379,3 +379,35 @@ state, paper record, live source digest, Parse output and current Source Adequac
 Revision creates a new Task with reciprocal lineage and refreshed inputs. Staging is
 operational and non-canonical; P4-A route approval creates no Paper Card, Evidence,
 Review Memory or scientific review-queue item.
+
+### Primary semantic processing and approval
+
+After deterministic intake reaches a completed Primary gate, the App uses the P4-B
+service flow:
+
+```text
+completed primary_semantic_gate
+-> user requests a Primary semantic Task and selects an external executor
+-> Core creates an independent semantic Job and assesses five requested uses
+-> basic Paper Card capability allowed: Task and bounded handoff are created
+-> external Agent returns aliases, seven Card sections, Evidence and boundaries
+-> Core validates aliases, exact provenance and each consumed capability
+-> non-canonical App preview
+-> user revises, refreshes, rejects or approves
+-> Core allocates canonical IDs and atomically appends one Primary bundle revision
+-> semantic Job and Task receipts complete or recover idempotently
+```
+
+An inadequate requested Evidence use moves only the semantic Job to the matching source
+or reparse wait and writes no scientific staging. Basic Paper Card processing can proceed
+when figure, formula or supplementary capabilities are unavailable, provided the
+candidate does not request those operations. A changed source, Parse output, Profile or
+bundle head rejects stale submission or approval; refresh supersedes the old Task and
+creates a successor without returning to document routing.
+
+Only the active bundle revision is projected into ordinary Paper Card, Evidence and
+review-queue reads. Corrections repeat staging and preview, then append a new revision.
+Existing Question Mapping and Research Synthesis references to the superseded revision
+remain auditable but become stale and cannot provide current factual support until they
+are remapped.
+Legacy Primary records are never silently adopted or combined with a Primary bundle.

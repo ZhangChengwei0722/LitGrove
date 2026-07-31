@@ -6,7 +6,8 @@ from typing import Any
 from research_kb.errors import SCHEMA_VALIDATION_FAILED, Diagnostic, ResearchKBError
 
 
-PRIVACY_REGISTRY_VERSION = "p4a-v1"
+PRIVACY_REGISTRY_VERSION = "p4b-v1"
+SUPPORTED_REGISTRY_VERSIONS = ("p4a-v1", "p4b-v1")
 CONTENT_CLASSES = frozenset(
     {
         "metadata",
@@ -64,7 +65,7 @@ class ExecutorDefinition:
 _ROUTE_CLASSES = frozenset({"metadata", "parsed_excerpt", "operational_context"})
 _EXECUTOR_CLASSES = frozenset(CONTENT_CLASSES - {"source_document"})
 
-TASK_KINDS: dict[str, TaskKindDefinition] = {
+P4A_TASK_KINDS: dict[str, TaskKindDefinition] = {
     "document_route_resolution": TaskKindDefinition(
         "document_route_resolution",
         _ROUTE_CLASSES,
@@ -144,6 +145,24 @@ TASK_KINDS: dict[str, TaskKindDefinition] = {
     ),
 }
 
+TASK_KINDS = {
+    **P4A_TASK_KINDS,
+    "primary_semantic_processing": TaskKindDefinition(
+        "primary_semantic_processing",
+        _ROUTE_CLASSES,
+        frozenset({"research_routing_context"}),
+        "p4b-primary-semantic-candidate@1.0",
+        "available",
+        256,
+        1_048_576,
+        524_288,
+    ),
+}
+REGISTRY_TASK_KINDS = {
+    "p4a-v1": P4A_TASK_KINDS,
+    "p4b-v1": TASK_KINDS,
+}
+
 EXECUTORS: dict[str, ExecutorDefinition] = {
     "codex_cli": ExecutorDefinition("codex_cli", "cloud_allowed", _EXECUTOR_CLASSES),
     "claude_code_cli": ExecutorDefinition(
@@ -152,12 +171,16 @@ EXECUTORS: dict[str, ExecutorDefinition] = {
 }
 
 
-def registry_projection() -> dict[str, Any]:
+def registry_projection(registry_version: str | None = None) -> dict[str, Any]:
+    selected_version = registry_version or PRIVACY_REGISTRY_VERSION
+    definitions = REGISTRY_TASK_KINDS.get(selected_version)
+    if definitions is None:
+        raise _registry_error("Agent Task registry version is unsupported", "/registry_version")
     return {
         "status": "success",
-        "registry_version": PRIVACY_REGISTRY_VERSION,
+        "registry_version": selected_version,
         "content_classes": sorted(CONTENT_CLASSES),
-        "task_kinds": [TASK_KINDS[key].projection() for key in sorted(TASK_KINDS)],
+        "task_kinds": [definitions[key].projection() for key in sorted(definitions)],
         "executors": [EXECUTORS[key].projection() for key in sorted(EXECUTORS)],
         "embedded_agent_runtime": False,
     }
@@ -172,9 +195,11 @@ def resolve_effective_classes(
 ) -> tuple[TaskKindDefinition, ExecutorDefinition, tuple[str, ...]]:
     if workspace_policy is None:
         raise _registry_error("workspace Agent policy is absent; Agent Tasks are denied", "/agent_policy")
-    if workspace_policy.get("registry_version") != PRIVACY_REGISTRY_VERSION:
+    registry_version = workspace_policy.get("registry_version")
+    definitions = REGISTRY_TASK_KINDS.get(registry_version)
+    if definitions is None:
         raise _registry_error("workspace Agent policy registry version is unsupported", "/agent_policy/registry_version")
-    definition = TASK_KINDS.get(task_kind)
+    definition = definitions.get(task_kind)
     if definition is None:
         raise _registry_error("Agent Task kind is not registered", "/task_kind")
     if definition.runtime_status != "available":
@@ -212,6 +237,8 @@ __all__ = [
     "CONTENT_CLASSES",
     "EXECUTORS",
     "PRIVACY_REGISTRY_VERSION",
+    "SUPPORTED_REGISTRY_VERSIONS",
+    "REGISTRY_TASK_KINDS",
     "TASK_KINDS",
     "ExecutorDefinition",
     "TaskKindDefinition",

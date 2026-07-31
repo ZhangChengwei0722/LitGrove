@@ -45,8 +45,8 @@
         }
       ]
     },
-    "requested_route": {"enum": ["local_source", "discovery_candidate"]},
-    "requested_depth": {"enum": ["registry_only", "parse_only", "semantic_gate"]},
+    "requested_route": {"enum": ["local_source", "discovery_candidate", "semantic_processing"]},
+    "requested_depth": {"enum": ["registry_only", "parse_only", "semantic_gate", "primary_semantic_bundle"]},
     "current_node": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
     "status": {
       "enum": [

@@ -44,6 +44,11 @@ from research_kb.pipeline_jobs import (
     pipeline_job_chain_diagnostics,
     validate_wait_state,
 )
+from research_kb.primary_bundles import (
+    expand_active_primary_entries,
+    mixed_primary_authority_diagnostics,
+    primary_bundle_diagnostics,
+)
 from research_kb.review_memory_provenance import (
     build_active_parse_index,
     review_memory_freshness,
@@ -56,7 +61,7 @@ from research_kb.source_assets import (
 
 
 CONFIG_KINDS = {"workspace", "domain-profile", "mutation-request"}
-RESULT_CONTRACT_KINDS = {"document-route-decision"}
+RESULT_CONTRACT_KINDS = {"document-route-decision", "primary-semantic-candidate"}
 HUMAN_ONLY_REVIEW_STATES = {"human_checked", "verified"}
 NON_SUPPORTING_UNIT_STATES = {"interpretive", "background_only", "needs_resolution"}
 
@@ -168,7 +173,11 @@ def validate_bundle(
         diagnostics.extend(record_diagnostics)
         if not any(item.code in {UNSUPPORTED_VERSION, SCHEMA_VALIDATION_FAILED, UNKNOWN_SCHEMA_KIND} for item in record_diagnostics):
             normalized.append((kind, record))
-    diagnostics.extend(_cross_record_diagnostics(normalized))
+    diagnostics.extend(mixed_primary_authority_diagnostics(normalized))
+    expanded = expand_active_primary_entries(normalized)
+    for kind, record in expanded[len(normalized):]:
+        diagnostics.extend(validate_record(kind, record, registry=schema_registry, actor=actor))
+    diagnostics.extend(_cross_record_diagnostics(expanded))
     return _deduplicate_diagnostics(diagnostics)
 
 
@@ -504,6 +513,8 @@ def _local_semantic_diagnostics(kind: str, record: dict[str, Any]) -> list[Diagn
                     "non-rejected candidate cannot retain a rejection rationale",
                 )
             )
+    if kind == "primary-semantic-bundle":
+        diagnostics.extend(primary_bundle_diagnostics(record))
     return diagnostics
 
 
@@ -515,6 +526,9 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
     evidence: set[str] = set()
     queues: set[str] = set()
     units: set[str] = set()
+    historical_evidence: set[str] = set()
+    historical_queues: set[str] = set()
+    historical_units: set[str] = set()
     questions: set[str] = set()
     candidates: set[str] = set()
     events: set[str] = set()
@@ -529,6 +543,12 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
     evidence_updated_at: dict[str, str] = {}
     queue_paper: dict[str, str] = {}
     queue_updated_at: dict[str, str] = {}
+    historical_unit_paper: dict[str, str] = {}
+    historical_unit_evidence: dict[str, set[str]] = {}
+    historical_unit_boundaries: dict[str, set[str]] = {}
+    historical_unit_status: dict[str, str] = {}
+    historical_evidence_paper: dict[str, str] = {}
+    historical_queue_paper: dict[str, str] = {}
     paper_fingerprint: dict[str, dict[str, Any]] = {}
     registry_papers: dict[str, dict[str, Any]] = {}
     profile_sections: dict[str, list[str]] = {}
@@ -738,6 +758,35 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
             agent_task_states.append(record)
             agent_tasks.add(record.get("task_id", ""))
             defined["taskstate"].append(record.get("state_id", ""))
+        elif kind == "primary-semantic-bundle":
+            defined["primaryrev"].extend(
+                revision.get("revision_id", "")
+                for revision in record.get("revisions", [])
+            )
+            active_revision_id = record.get("active_revision_id")
+            for revision in record.get("revisions", []):
+                if revision.get("revision_id") == active_revision_id:
+                    continue
+                paper_id = record.get("paper_id", "")
+                for section in revision.get("paper_card", {}).get("sections", []):
+                    for unit in section.get("units", []):
+                        unit_id = unit.get("unit_id", "")
+                        historical_units.add(unit_id)
+                        defined["unit"].append(unit_id)
+                        historical_unit_paper[unit_id] = paper_id
+                        historical_unit_evidence[unit_id] = set(unit.get("evidence_ids", []))
+                        historical_unit_boundaries[unit_id] = set(unit.get("boundary_refs", []))
+                        historical_unit_status[unit_id] = unit.get("grounding_status", "")
+                for item in revision.get("evidence", []):
+                    evidence_id = item.get("evidence_id", "")
+                    historical_evidence.add(evidence_id)
+                    defined["evidence"].append(evidence_id)
+                    historical_evidence_paper[evidence_id] = paper_id
+                for item in revision.get("review_queue", []):
+                    queue_id = item.get("queue_id", "")
+                    historical_queues.add(queue_id)
+                    defined["queue"].append(queue_id)
+                    historical_queue_paper[queue_id] = paper_id
         elif kind == "guardian-report":
             guardian_reports.append(record)
             defined["guardian"].append(record.get("guardian_report_id", ""))
@@ -748,6 +797,15 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
     defined["job"].extend(sorted(filter(None, jobs)))
     defined["task"].extend(sorted(filter(None, agent_tasks)))
     defined["sourceasset"].extend(sorted(filter(None, source_assets)))
+    referencable_units = units | historical_units
+    referencable_evidence = evidence | historical_evidence
+    referencable_queues = queues | historical_queues
+    referencable_unit_paper = {**historical_unit_paper, **unit_paper}
+    referencable_unit_evidence = {**historical_unit_evidence, **unit_evidence}
+    referencable_unit_boundaries = {**historical_unit_boundaries, **unit_boundaries}
+    referencable_unit_status = {**historical_unit_status, **unit_status}
+    referencable_evidence_paper = {**historical_evidence_paper, **evidence_paper}
+    referencable_queue_paper = {**historical_queue_paper, **queue_paper}
     pipeline_diagnostics = pipeline_job_chain_diagnostics(pipeline_states)
     agent_task_diagnostics = agent_task_chain_diagnostics(agent_task_states)
     source_diagnostics = source_asset_chain_diagnostics(source_asset_states)
@@ -1271,24 +1329,33 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                         *(evidence_updated_at.get(value, "") for value in link.get("evidence_ids", [])),
                         *(queue_updated_at.get(value, "") for value in link.get("boundary_refs", [])),
                     )
+                ) or any(
+                    value not in units
+                    for value in link.get("selected_card_unit_ids", [])
+                ) or any(
+                    value not in evidence
+                    for value in link.get("evidence_ids", [])
+                ) or any(
+                    value not in queues
+                    for value in link.get("boundary_refs", [])
                 )
                 expanded_evidence: set[str] = set()
                 required_boundaries: set[str] = set()
                 selected_needs_resolution = False
                 for value in link.get("selected_card_unit_ids", []):
-                    _require_ref(diagnostics, kind, record_id, base + "/selected_card_unit_ids", value, units, "Card Unit")
-                    if value in unit_paper and unit_paper[value] != paper_id:
+                    _require_ref(diagnostics, kind, record_id, base + "/selected_card_unit_ids", value, referencable_units, "Card Unit")
+                    if value in referencable_unit_paper and referencable_unit_paper[value] != paper_id:
                         diagnostics.append(Diagnostic(GROUNDING_MISMATCH, kind, record_id, base + "/selected_card_unit_ids", "selected Card Unit belongs to another paper"))
-                    expanded_evidence.update(unit_evidence.get(value, set()))
-                    required_boundaries.update(unit_boundaries.get(value, set()))
-                    selected_needs_resolution = selected_needs_resolution or unit_status.get(value) == "needs_resolution"
+                    expanded_evidence.update(referencable_unit_evidence.get(value, set()))
+                    required_boundaries.update(referencable_unit_boundaries.get(value, set()))
+                    selected_needs_resolution = selected_needs_resolution or referencable_unit_status.get(value) == "needs_resolution"
                 for value in link.get("evidence_ids", []):
-                    _require_ref(diagnostics, kind, record_id, base + "/evidence_ids", value, evidence, "evidence")
-                    if value in evidence_paper and evidence_paper[value] != paper_id:
+                    _require_ref(diagnostics, kind, record_id, base + "/evidence_ids", value, referencable_evidence, "evidence")
+                    if value in referencable_evidence_paper and referencable_evidence_paper[value] != paper_id:
                         diagnostics.append(Diagnostic(GROUNDING_MISMATCH, kind, record_id, base + "/evidence_ids", "question-link evidence belongs to another paper"))
                 for value in link.get("boundary_refs", []):
-                    _require_ref(diagnostics, kind, record_id, base + "/boundary_refs", value, queues, "review queue")
-                    if value in queue_paper and queue_paper[value] != paper_id:
+                    _require_ref(diagnostics, kind, record_id, base + "/boundary_refs", value, referencable_queues, "review queue")
+                    if value in referencable_queue_paper and referencable_queue_paper[value] != paper_id:
                         diagnostics.append(Diagnostic(GROUNDING_MISMATCH, kind, record_id, base + "/boundary_refs", "question-link boundary belongs to another paper"))
                 if not upstream_is_newer and expanded_evidence != set(link.get("evidence_ids", [])):
                     diagnostics.append(
@@ -1399,31 +1466,32 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                     if value in seen_units:
                         diagnostics.append(Diagnostic(DUPLICATE_ID, kind, record_id, f"/paper_card_base/{base_index}/card_unit_ids", "Card Unit appears more than once"))
                     seen_units.add(value)
-                    _require_ref(diagnostics, kind, record_id, f"/paper_card_base/{base_index}/card_unit_ids", value, units, "Card Unit")
-                    if value in unit_paper and unit_paper[value] != paper_id:
+                    _require_ref(diagnostics, kind, record_id, f"/paper_card_base/{base_index}/card_unit_ids", value, referencable_units, "Card Unit")
+                    if value in referencable_unit_paper and referencable_unit_paper[value] != paper_id:
                         diagnostics.append(Diagnostic(STEP7_BOUNDARY, kind, record_id, f"/paper_card_base/{base_index}/card_unit_ids", "Card Unit belongs to another paper"))
                     if (
-                        value in unit_status
-                        and unit_status[value] not in {"grounded", "revised"}
+                        value in referencable_unit_status
+                        and referencable_unit_status[value] not in {"grounded", "revised"}
                         and not _timestamp_is_after(card_updated_at.get(paper_id, ""), candidate_updated_at)
+                        and value in units
                     ):
                         diagnostics.append(Diagnostic(STEP7_BOUNDARY, kind, record_id, f"/paper_card_base/{base_index}/card_unit_ids", "non-factual Card Unit cannot enter Step 7 support"))
-                    expanded_evidence.update(unit_evidence.get(value, set()))
-                    expanded_boundaries.update(unit_boundaries.get(value, set()))
+                    expanded_evidence.update(referencable_unit_evidence.get(value, set()))
+                    expanded_boundaries.update(referencable_unit_boundaries.get(value, set()))
             for value in record.get("evidence_base", []):
-                if value in queues:
+                if value in referencable_queues:
                     diagnostics.append(Diagnostic(QUEUE_AS_EVIDENCE, kind, record_id, "/evidence_base", "review queue record used as evidence"))
-                _require_ref(diagnostics, kind, record_id, "/evidence_base", value, evidence, "evidence")
-                if value in evidence_paper and evidence_paper[value] not in base_papers:
+                _require_ref(diagnostics, kind, record_id, "/evidence_base", value, referencable_evidence, "evidence")
+                if value in referencable_evidence_paper and referencable_evidence_paper[value] not in base_papers:
                     diagnostics.append(Diagnostic(STEP7_BOUNDARY, kind, record_id, "/evidence_base", "evidence belongs to a paper outside paper_card_base"))
             for value in record.get("review_queue_refs", []):
-                _require_ref(diagnostics, kind, record_id, "/review_queue_refs", value, queues, "review queue")
-                if value in queue_paper and queue_paper[value] not in base_papers:
+                _require_ref(diagnostics, kind, record_id, "/review_queue_refs", value, referencable_queues, "review queue")
+                if value in referencable_queue_paper and referencable_queue_paper[value] not in base_papers:
                     diagnostics.append(Diagnostic(STEP7_BOUNDARY, kind, record_id, "/review_queue_refs", "review queue boundary belongs to a paper outside paper_card_base"))
             card_is_newer = any(
                 _timestamp_is_after(card_updated_at.get(paper_id, ""), candidate_updated_at)
                 for paper_id in base_papers
-            )
+            ) or any(value not in units for value in base_units)
             if expanded_evidence != set(record.get("evidence_base", [])) and not card_is_newer:
                 diagnostics.append(Diagnostic(SNAPSHOT_MISMATCH, kind, record_id, "/evidence_base", "evidence_base does not equal selected Card Unit evidence expansion"))
             if expanded_boundaries != set(record.get("review_queue_refs", [])) and not card_is_newer:
@@ -1514,6 +1582,26 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                 set(adequacy_profiles),
                 "Source Adequacy profile",
             )
+            if basis.get("origin_job_id") is not None:
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    "/input_basis/origin_job_id",
+                    basis.get("origin_job_id"),
+                    jobs,
+                    "Pipeline Job",
+                )
+            for index, snapshot in enumerate(basis.get("adequacy_profiles", [])):
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    f"/input_basis/adequacy_profiles/{index}/profile_id",
+                    snapshot.get("profile_id"),
+                    set(adequacy_profiles),
+                    "Source Adequacy profile",
+                )
             predecessor = record.get("predecessor")
             if isinstance(predecessor, dict):
                 _require_ref(
@@ -1557,6 +1645,29 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                         decision.get("applied_job_state_id"),
                         set(defined["jobstate"]),
                         "Pipeline Job state",
+                    )
+        elif kind == "primary-semantic-bundle":
+            for index, revision in enumerate(record.get("revisions", [])):
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    f"/revisions/{index}/approval/task_id",
+                    revision.get("approval", {}).get("task_id"),
+                    agent_tasks,
+                    "Agent Task",
+                )
+                for profile_index, snapshot in enumerate(
+                    revision.get("input_snapshot", {}).get("adequacy_profiles", [])
+                ):
+                    _require_ref(
+                        diagnostics,
+                        kind,
+                        record_id,
+                        f"/revisions/{index}/input_snapshot/adequacy_profiles/{profile_index}/profile_id",
+                        snapshot.get("profile_id"),
+                        set(adequacy_profiles),
+                        "Source Adequacy profile",
                     )
         elif kind == "guardian-report":
             _require_ref(diagnostics, kind, record_id, "/workspace_id", record.get("workspace_id"), workspaces, "workspace")
@@ -1616,6 +1727,7 @@ def _record_id(kind: str, record: dict[str, Any]) -> str | None:
         "registry-identity-correction": "correction_id",
         "source-adequacy-profile": "profile_id",
         "agent-task-state": "state_id",
+        "primary-semantic-bundle": "paper_id",
     }
     field = fields.get(kind)
     value = record.get(field) if field else None

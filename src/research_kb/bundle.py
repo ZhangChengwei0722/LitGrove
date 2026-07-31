@@ -7,6 +7,7 @@ from typing import Any
 from research_kb.config.loader import load_config
 from research_kb.contracts.validator import validate_bundle
 from research_kb.errors import WORKSPACE_LAYOUT_CONFLICT, Diagnostic, ResearchKBError
+from research_kb.primary_bundles import active_primary_entries
 from research_kb.storage.json_io import read_json_document, read_jsonl
 from research_kb.workspace import WorkspaceLayout
 
@@ -80,6 +81,26 @@ def load_workspace_entries(
                 "review-memory",
                 expected_paper_id=path.name[: -len(".review.json")],
             )
+    if (layout.knowledge_root / "primary_bundles" / "by_paper").exists():
+        for path in sorted((layout.knowledge_root / "primary_bundles" / "by_paper").glob("*.primary.json")):
+            resolved = path.resolve()
+            if resolved in resolved_overrides:
+                override_entries = resolved_overrides[resolved]
+                bundles = [record for kind, record in override_entries if kind == "primary-semantic-bundle"]
+                if len(bundles) != 1:
+                    raise ResearchKBError(
+                        Diagnostic(WORKSPACE_LAYOUT_CONFLICT, "primary-semantic-bundle", None, "", "Primary bundle override must contain one bundle")
+                    )
+                bundle = bundles[0]
+                consumed.add(resolved)
+            else:
+                bundle = read_json_document(path, record_kind="primary-semantic-bundle")
+            _require_paper_filename_binding(
+                [("primary-semantic-bundle", bundle)],
+                "primary-semantic-bundle",
+                path.name[: -len(".primary.json")],
+            )
+            entries.append(("primary-semantic-bundle", bundle))
     add_jsonl(layout.review_queue_path, "review-queue", "queue_id")
     add_jsonl(layout.question_mappings_path, "question-mapping", "question_id")
     add_jsonl(layout.discovery_candidates_path, "discovery-candidate", "candidate_id")
@@ -126,7 +147,17 @@ def validate_workspace_entries(entries: list[BundleEntry], *, actor: str = "stor
 
 
 def records_of_kind(entries: Iterable[BundleEntry], kind: str) -> list[dict[str, Any]]:
-    return [record for entry_kind, record in entries if entry_kind == kind]
+    materialized = list(entries)
+    records = [record for entry_kind, record in materialized if entry_kind == kind]
+    if kind in {"paper-card", "evidence", "review-queue"}:
+        records.extend(
+            child
+            for entry_kind, bundle in materialized
+            if entry_kind == "primary-semantic-bundle"
+            for child_kind, child in active_primary_entries(bundle)
+            if child_kind == kind
+        )
+    return records
 
 
 def _require_paper_filename_binding(

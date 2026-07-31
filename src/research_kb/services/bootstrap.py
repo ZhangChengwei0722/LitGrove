@@ -360,6 +360,7 @@ class WorkspaceBootstrapService:
             ("paper_cards/by_paper", "*.card.json"),
             ("evidence/by_paper", "*.evidence.jsonl"),
             ("review_memories/by_paper", "*.review.json"),
+            ("primary_bundles/by_paper", "*.primary.json"),
             (".research-kb/transactions", "*.json"),
         ):
             directory = context.knowledge_root / Path(*relative.split("/"))
@@ -486,6 +487,22 @@ class WorkspaceBootstrapService:
                         Diagnostic(
                             WORKSPACE_LAYOUT_CONFLICT,
                             "review-memory",
+                            expected_paper_id,
+                            "/paper_id",
+                            "store filename does not match contained paper_id",
+                        )
+                    )
+
+        primary_directory = layout.knowledge_root / "primary_bundles" / "by_paper"
+        if primary_directory.is_dir():
+            for path in sorted(primary_directory.glob("*.primary.json")):
+                expected_paper_id = path.name[: -len(".primary.json")]
+                bundle = read_json_document(path, record_kind="primary-semantic-bundle")
+                if bundle.get("paper_id") != expected_paper_id:
+                    raise ResearchKBError(
+                        Diagnostic(
+                            WORKSPACE_LAYOUT_CONFLICT,
+                            "primary-semantic-bundle",
                             expected_paper_id,
                             "/paper_id",
                             "store filename does not match contained paper_id",
@@ -619,6 +636,7 @@ def _journal_target_matches_store(target_store: str, relative_path: str) -> bool
         "paper_cards": ("paper_cards/by_paper/", ".card.json"),
         "evidence": ("evidence/by_paper/", ".evidence.jsonl"),
         "review_memories": ("review_memories/by_paper/", ".review.json"),
+        "primary_bundles": ("primary_bundles/by_paper/", ".primary.json"),
     }
     match = patterns.get(target_store)
     if match is None:

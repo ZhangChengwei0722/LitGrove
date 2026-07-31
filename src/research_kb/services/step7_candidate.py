@@ -19,6 +19,7 @@ from research_kb.errors import (
 )
 from research_kb.identifiers import Namespace, allocate_id, validate_id
 from research_kb.mutation import MutationRequest
+from research_kb.primary_bundles import expand_active_primary_entries
 from research_kb.process_events import timestamp
 from research_kb.step7_support import (
     STEP7_KIND_TO_NAMESPACE,
@@ -412,7 +413,7 @@ def _upstream_signature(
     queue_ids = set(closure.review_queue_refs)
     source_ids = set(source_views)
     projection: list[tuple[str, dict[str, Any]]] = []
-    for kind, record in entries:
+    for kind, record in expand_active_primary_entries(entries):
         include = (
             kind == "domain-profile"
             or (kind == "question-mapping" and record.get("question_id") == closure.question_mapping["question_id"])

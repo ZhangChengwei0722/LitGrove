@@ -25,6 +25,7 @@ from research_kb.errors import (
 from research_kb.identifiers import Namespace, allocate_id
 from research_kb.pipeline_jobs import current_pipeline_states, pipeline_job_chain_diagnostics
 from research_kb.process_events import timestamp
+from research_kb.primary_bundles import expand_active_primary_entries
 from research_kb.review_memory_provenance import build_active_parse_index, review_memory_freshness
 from research_kb.services.question_mapping import mapping_freshness_diagnostics
 from research_kb.source_assets import (
@@ -487,6 +488,7 @@ class GuardianService:
             (self.layout.knowledge_root / "paper_cards" / "by_paper", "*.card.json"),
             (self.layout.knowledge_root / "evidence" / "by_paper", "*.evidence.jsonl"),
             (self.layout.knowledge_root / "review_memories" / "by_paper", "*.review.json"),
+            (self.layout.knowledge_root / "primary_bundles" / "by_paper", "*.primary.json"),
         ):
             if directory.exists():
                 paths.extend(directory.glob(pattern))
@@ -553,7 +555,9 @@ class GuardianService:
             if job_states and not pipeline_chain
             else {}
         )
-        for task in current_agent_task_states(states):
+        current_tasks = current_agent_task_states(states)
+        task_heads = {task["task_id"]: task for task in current_tasks}
+        for task in current_tasks:
             basis = task["input_basis"]
             basis_job = job_by_state.get(basis["job_state_id"])
             if basis_job is not None and canonical_digest(basis_job) != basis["job_state_digest"]:
@@ -569,13 +573,36 @@ class GuardianService:
             if task["status"] == "approved":
                 applied = job_by_state.get(task["decision"]["applied_job_state_id"])
                 staged = task["staged_result"]
-                expected_node = (
-                    "review_semantic_gate_mixed_document"
-                    if staged["document_route"] == "review" and staged["route_reason"] == "mixed_document"
-                    else "primary_semantic_gate"
-                    if staged["document_route"] == "primary"
-                    else "review_semantic_gate"
-                )
+                if task["task_kind"] == "primary_semantic_processing":
+                    expected_node = "primary_semantic_bundle_committed"
+                    matching_bundles = [
+                        record
+                        for kind, record in entries
+                        if kind == "primary-semantic-bundle"
+                        and record["paper_id"] == basis["paper_id"]
+                        and any(
+                            revision["approval"]["task_id"] == task["task_id"]
+                            for revision in record["revisions"]
+                        )
+                    ]
+                    if len(matching_bundles) != 1:
+                        diagnostics.append(
+                            Diagnostic(
+                                GROUNDING_MISMATCH,
+                                "agent-task-state",
+                                task["state_id"],
+                                "/decision/applied_job_state_id",
+                                "approved Primary Task lacks one matching active bundle revision",
+                            )
+                        )
+                else:
+                    expected_node = (
+                        "review_semantic_gate_mixed_document"
+                        if staged["document_route"] == "review" and staged["route_reason"] == "mixed_document"
+                        else "primary_semantic_gate"
+                        if staged["document_route"] == "primary"
+                        else "review_semantic_gate"
+                    )
                 if applied is not None and (
                     applied.get("status") != "completed" or applied.get("current_node") != expected_node
                 ):
@@ -589,10 +616,33 @@ class GuardianService:
                         )
                     )
             job_head = job_heads.get(basis["job_id"])
-            if not pipeline_chain and task["status"] not in {"revision_requested", "rejected", "approved", "cancelled"} and (
-                job_head is None
-                or job_head.get("status") != "waiting_agent"
-                or job_head.get("current_node") != "document_route_resolution"
+            expected_ownership = (
+                job_head is not None
+                and (
+                    (
+                        task["task_kind"] == "document_route_resolution"
+                        and job_head.get("status") == "waiting_agent"
+                        and job_head.get("current_node") == "document_route_resolution"
+                    )
+                    or (
+                        task["task_kind"] == "primary_semantic_processing"
+                        and (
+                            (
+                                job_head.get("status") == "waiting_agent"
+                                and job_head.get("current_node") == "primary_semantic_processing"
+                            )
+                            or (
+                                job_head.get("status") in {"waiting_source", "waiting_user"}
+                                and job_head.get("current_node") == "source_adequacy_remediation"
+                            )
+                        )
+                    )
+                )
+            )
+            if (
+                not pipeline_chain
+                and task["status"] not in {"revision_requested", "superseded", "rejected", "approved", "cancelled"}
+                and not expected_ownership
             ):
                 diagnostics.append(
                     Diagnostic(
@@ -600,9 +650,73 @@ class GuardianService:
                         "agent-task-state",
                         task["state_id"],
                         "/input_basis/job_id",
-                        "non-terminal Agent Task is not owned by a waiting_agent route-resolution Job",
+                        "non-terminal Agent Task is not owned by its expected semantic Job state",
                     )
                 )
+        for kind, bundle in entries:
+            if kind != "primary-semantic-bundle":
+                continue
+            for index, revision in enumerate(bundle["revisions"]):
+                task_id = revision["approval"]["task_id"]
+                task = task_heads.get(task_id)
+                if task is None:
+                    continue
+                basis = task["input_basis"]
+                if task["task_kind"] != "primary_semantic_processing" or basis["paper_id"] != bundle["paper_id"]:
+                    diagnostics.append(
+                        Diagnostic(
+                            GROUNDING_MISMATCH,
+                            "primary-semantic-bundle",
+                            bundle["paper_id"],
+                            f"/revisions/{index}/approval/task_id",
+                            "Primary revision approval Task kind or paper binding does not match",
+                        )
+                    )
+                    continue
+                if canonical_digest(task.get("staged_result")) != revision["approval"]["task_result_digest"]:
+                    diagnostics.append(
+                        Diagnostic(
+                            GROUNDING_MISMATCH,
+                            "primary-semantic-bundle",
+                            bundle["paper_id"],
+                            f"/revisions/{index}/approval/task_result_digest",
+                            "Primary revision result digest does not match its Agent Task result",
+                        )
+                    )
+                if task["status"] != "approved":
+                    diagnostics.append(
+                        Diagnostic(
+                            INCOMPLETE_TRANSACTION,
+                            "primary-semantic-bundle",
+                            bundle["paper_id"],
+                            f"/revisions/{index}/approval/task_id",
+                            "Primary revision exists before its Agent Task approval receipt is complete",
+                        )
+                    )
+                snapshot = revision["input_snapshot"]
+                task_profiles = [
+                    {
+                        "requested_operation": item["requested_operation"],
+                        "profile_id": item["profile_id"],
+                        "profile_digest": item["profile_digest"],
+                    }
+                    for item in basis["adequacy_profiles"]
+                ]
+                if (
+                    snapshot["source_fingerprint"].get("value") != basis["source_digest"]
+                    or snapshot["parse_run_id"] != basis["parse_run_id"]
+                    or snapshot["parse_output_digest"] != basis["parse_output_digest"]
+                    or snapshot["adequacy_profiles"] != task_profiles
+                ):
+                    diagnostics.append(
+                        Diagnostic(
+                            GROUNDING_MISMATCH,
+                            "primary-semantic-bundle",
+                            bundle["paper_id"],
+                            f"/revisions/{index}/input_snapshot",
+                            "Primary revision input snapshot does not match its Agent Task basis",
+                        )
+                    )
         return diagnostics
 
     def _job_event_diagnostics(
@@ -902,6 +1016,8 @@ def _finding_from_diagnostic(diagnostic: Diagnostic, defined_ids: set[str]) -> d
         remediation = "Re-run the exact requested-use assessment or resume its owning Pipeline Job; do not edit or delete the historical profile."
     elif diagnostic.record_kind == "agent-task-state":
         remediation = "Inspect the Agent Task chain, its exact input basis and correlated transaction event; do not promote staged output automatically."
+    elif diagnostic.record_kind == "primary-semantic-bundle":
+        remediation = "Inspect the immutable Primary revision chain and active head; repair only through a new approved revision."
     return {
         "code": diagnostic.code,
         "severity": diagnostic.severity,
@@ -912,6 +1028,7 @@ def _finding_from_diagnostic(diagnostic: Diagnostic, defined_ids: set[str]) -> d
 
 
 def _defined_ids(entries: list[BundleEntry]) -> set[str]:
+    entries = expand_active_primary_entries(entries)
     result: set[str] = set()
     fields = {
         "registry-paper": "paper_id",
@@ -926,6 +1043,7 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
         "registry-identity-correction": "correction_id",
         "source-adequacy-profile": "profile_id",
         "agent-task-state": "state_id",
+        "primary-semantic-bundle": "active_revision_id",
         "question-mapping": "question_id",
         "discovery-candidate": "candidate_id",
         "step7-synthesis": "candidate_id",
@@ -939,6 +1057,13 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
         elif kind == "paper-card":
             for section in record.get("sections", []):
                 result.update(unit["unit_id"] for unit in section.get("units", []))
+        elif kind == "primary-semantic-bundle":
+            for revision in record.get("revisions", []):
+                result.add(revision["revision_id"])
+                for section in revision["paper_card"].get("sections", []):
+                    result.update(unit["unit_id"] for unit in section.get("units", []))
+                result.update(item["evidence_id"] for item in revision.get("evidence", []))
+                result.update(item["queue_id"] for item in revision.get("review_queue", []))
         elif kind == "review-memory":
             result.add(record["review_memory_id"])
             for section in record.get("sections", []):

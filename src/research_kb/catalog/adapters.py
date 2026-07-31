@@ -15,6 +15,7 @@ from research_kb.catalog.models import (
 from research_kb.errors import DUPLICATE_ID, UNKNOWN_SCHEMA_KIND, Diagnostic, ResearchKBError
 from research_kb.identity_corrections import project_registry_identity
 from research_kb.pipeline_jobs import current_pipeline_states
+from research_kb.primary_bundles import expand_active_primary_entries
 from research_kb.source_assets import current_source_asset_heads
 
 
@@ -91,6 +92,7 @@ class CatalogAdapterRegistry:
                 "discovery-candidate",
                 "guardian-finding-disposition",
                 "registry-identity-correction",
+                "primary-semantic-bundle",
                 *ignored_record_kinds,
             }
         )
@@ -119,7 +121,9 @@ class CatalogAdapterRegistry:
         *,
         workspace_id: str,
     ) -> CatalogSnapshot:
-        selected_entries = _select_catalog_entries(tuple(entries))
+        selected_entries = _select_catalog_entries(
+            tuple(expand_active_primary_entries(entries))
+        )
         source_records: list[CatalogSourceRecord] = []
         documents: list[CatalogDocument] = []
         unknown: list[tuple[str, str]] = []

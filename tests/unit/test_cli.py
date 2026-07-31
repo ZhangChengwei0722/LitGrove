@@ -1200,9 +1200,10 @@ def test_step7_read_missing_id_has_empty_stdout(tmp_path, capsys, command) -> No
 def test_runtime_cli_reports_old_layout_as_upgrade_required(tmp_path, capsys, argv) -> None:
     layout = make_runtime_workspace(tmp_path)
     marker = json.loads(layout.marker_path.read_text(encoding="utf-8"))
-    marker["layout_contract_version"] = "m3b-1"
+    marker["layout_contract_version"] = "m3c-2a"
     layout.marker_path.write_bytes(serialize_json(marker))
-    (layout.knowledge_root / "discovery").rmdir()
+    (layout.knowledge_root / "primary_bundles" / "by_paper").rmdir()
+    (layout.knowledge_root / "primary_bundles").rmdir()
 
     result = main([argv[0], argv[1], "--workspace", str(layout.config.path), *argv[2:]])
 
