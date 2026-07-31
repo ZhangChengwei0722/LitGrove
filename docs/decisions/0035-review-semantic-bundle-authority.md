@@ -2,7 +2,7 @@
 
 - status: `accepted`
 - accepted_at: `2026-08-01`
-- implementation: `pending_validation_commit`
+- implementation: `6b707937be5908a488917ab82698a8a61bad5f7d`
 
 ## Context
 
