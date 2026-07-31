@@ -595,6 +595,28 @@ class GuardianService:
                                 "approved Primary Task lacks one matching active bundle revision",
                             )
                         )
+                elif task["task_kind"] == "review_semantic_processing":
+                    expected_node = "review_semantic_bundle_committed"
+                    matching_bundles = [
+                        record
+                        for kind, record in entries
+                        if kind == "review-semantic-bundle"
+                        and record["paper_id"] == basis["paper_id"]
+                        and any(
+                            revision["approval"]["task_id"] == task["task_id"]
+                            for revision in record["revisions"]
+                        )
+                    ]
+                    if len(matching_bundles) != 1:
+                        diagnostics.append(
+                            Diagnostic(
+                                GROUNDING_MISMATCH,
+                                "agent-task-state",
+                                task["state_id"],
+                                "/decision/applied_job_state_id",
+                                "approved Review Task lacks one matching active bundle revision",
+                            )
+                        )
                 else:
                     expected_node = (
                         "review_semantic_gate_mixed_document"
@@ -637,6 +659,19 @@ class GuardianService:
                             )
                         )
                     )
+                    or (
+                        task["task_kind"] == "review_semantic_processing"
+                        and (
+                            (
+                                job_head.get("status") == "waiting_agent"
+                                and job_head.get("current_node") == "review_semantic_processing"
+                            )
+                            or (
+                                job_head.get("status") in {"waiting_source", "waiting_user"}
+                                and job_head.get("current_node") == "source_adequacy_remediation"
+                            )
+                        )
+                    )
                 )
             )
             if (
@@ -654,22 +689,25 @@ class GuardianService:
                     )
                 )
         for kind, bundle in entries:
-            if kind != "primary-semantic-bundle":
+            if kind not in {"primary-semantic-bundle", "review-semantic-bundle"}:
                 continue
+            is_primary = kind == "primary-semantic-bundle"
+            expected_task_kind = "primary_semantic_processing" if is_primary else "review_semantic_processing"
+            label = "Primary" if is_primary else "Review"
             for index, revision in enumerate(bundle["revisions"]):
                 task_id = revision["approval"]["task_id"]
                 task = task_heads.get(task_id)
                 if task is None:
                     continue
                 basis = task["input_basis"]
-                if task["task_kind"] != "primary_semantic_processing" or basis["paper_id"] != bundle["paper_id"]:
+                if task["task_kind"] != expected_task_kind or basis["paper_id"] != bundle["paper_id"]:
                     diagnostics.append(
                         Diagnostic(
                             GROUNDING_MISMATCH,
-                            "primary-semantic-bundle",
+                            kind,
                             bundle["paper_id"],
                             f"/revisions/{index}/approval/task_id",
-                            "Primary revision approval Task kind or paper binding does not match",
+                            f"{label} revision approval Task kind or paper binding does not match",
                         )
                     )
                     continue
@@ -677,20 +715,20 @@ class GuardianService:
                     diagnostics.append(
                         Diagnostic(
                             GROUNDING_MISMATCH,
-                            "primary-semantic-bundle",
+                            kind,
                             bundle["paper_id"],
                             f"/revisions/{index}/approval/task_result_digest",
-                            "Primary revision result digest does not match its Agent Task result",
+                            f"{label} revision result digest does not match its Agent Task result",
                         )
                     )
                 if task["status"] != "approved":
                     diagnostics.append(
                         Diagnostic(
                             INCOMPLETE_TRANSACTION,
-                            "primary-semantic-bundle",
+                            kind,
                             bundle["paper_id"],
                             f"/revisions/{index}/approval/task_id",
-                            "Primary revision exists before its Agent Task approval receipt is complete",
+                            f"{label} revision exists before its Agent Task approval receipt is complete",
                         )
                     )
                 snapshot = revision["input_snapshot"]
@@ -711,10 +749,10 @@ class GuardianService:
                     diagnostics.append(
                         Diagnostic(
                             GROUNDING_MISMATCH,
-                            "primary-semantic-bundle",
+                            kind,
                             bundle["paper_id"],
                             f"/revisions/{index}/input_snapshot",
-                            "Primary revision input snapshot does not match its Agent Task basis",
+                            f"{label} revision input snapshot does not match its Agent Task basis",
                         )
                     )
         return diagnostics

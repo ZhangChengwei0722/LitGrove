@@ -12,7 +12,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
         "core": {
             "version": "0.1.0",
             "contract_versions": ["1.0"],
-            "layout_versions": ["p4b-1"],
+            "layout_versions": ["p4c-1"],
         },
         "parse_adapters": [
             {
@@ -126,7 +126,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "agent_task_staging": True,
             "embedded_agent_runtime": False,
         },
-        "agent_task_registry_version": "p4b-v1",
+        "agent_task_registry_version": "p4c-v1",
     }
 
 

@@ -392,6 +392,19 @@ class ReviewMemoryService:
         paper_id: str,
         record_id: str | None,
     ) -> None:
+        if any(
+            kind == "review-semantic-bundle" and record.get("paper_id") == paper_id
+            for kind, record in entries
+        ):
+            raise ResearchKBError(
+                Diagnostic(
+                    DUPLICATE_REVIEW_MEMORY,
+                    "review-memory",
+                    record_id,
+                    "/paper_id",
+                    "legacy Review Memory mutation cannot bypass Review bundle revision authority",
+                )
+            )
         has_card = any(item["paper_id"] == paper_id for item in records_of_kind(entries, "paper-card"))
         has_evidence = any(item["paper_id"] == paper_id for item in records_of_kind(entries, "evidence"))
         if has_card or has_evidence:

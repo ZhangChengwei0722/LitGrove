@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:review-semantic-bundle",
+  "$defs": {
+    "adequacy_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requested_operation", "profile_id", "profile_digest"],
+      "properties": {
+        "requested_operation": {"enum": ["basic_review_memory", "continuous_text_evidence", "figure_table_evidence", "formula_layout_analysis", "supplementary_analysis"]},
+        "profile_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_adequacy_id"},
+        "profile_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "provenance_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["review_unit_id", "source_note_index", "requested_operation", "profile_id", "profile_digest"],
+      "properties": {
+        "review_unit_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/review_unit_id"},
+        "source_note_index": {"type": "integer", "minimum": 0},
+        "requested_operation": {"enum": ["continuous_text_evidence", "figure_table_evidence", "formula_layout_analysis", "supplementary_analysis"]},
+        "profile_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_adequacy_id"},
+        "profile_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision_id", "revision_number", "predecessor", "approval", "input_snapshot", "provenance_bindings", "review_memory", "created_at"],
+      "properties": {
+        "revision_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/review_revision_id"},
+        "revision_number": {"type": "integer", "minimum": 1},
+        "predecessor": {
+          "oneOf": [
+            {"type": "null"},
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["revision_id", "revision_digest"],
+              "properties": {
+                "revision_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/review_revision_id"},
+                "revision_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+              }
+            }
+          ]
+        },
+        "approval": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["task_id", "task_result_digest", "approved_by", "approved_at"],
+          "properties": {
+            "task_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/agent_task_id"},
+            "task_result_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "approved_by": {"const": "user"},
+            "approved_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+          }
+        },
+        "input_snapshot": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source_fingerprint", "parse_run_id", "parse_output_digest", "adequacy_profiles"],
+          "properties": {
+            "source_fingerprint": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_fingerprint"},
+            "parse_run_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/event_id"},
+            "parse_output_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "adequacy_profiles": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/adequacy_snapshot"}}
+          }
+        },
+        "provenance_bindings": {"type": "array", "items": {"$ref": "#/$defs/provenance_binding"}},
+        "review_memory": {"$ref": "urn:research-kb:schema:1.0:review-memory"},
+        "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "paper_id", "active_revision_id", "revisions", "created_at", "updated_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "paper_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+    "active_revision_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/review_revision_id"},
+    "revisions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/revision"}},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "updated_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}
+  }
+}

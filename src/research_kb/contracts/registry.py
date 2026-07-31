@@ -42,6 +42,8 @@ SCHEMA_FILES: dict[str, str] = {
     "document-route-decision": "document-route-decision.schema.json",
     "primary-semantic-bundle": "primary-semantic-bundle.schema.json",
     "primary-semantic-candidate": "primary-semantic-candidate.schema.json",
+    "review-semantic-bundle": "review-semantic-bundle.schema.json",
+    "review-semantic-candidate": "review-semantic-candidate.schema.json",
     "mutation-request": "mutation-request.schema.json",
     "transaction-journal": "transaction-journal.schema.json",
 }

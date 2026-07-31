@@ -9,7 +9,8 @@
       "properties": {
         "pdf_page": {"type": "integer", "minimum": 1},
         "printed_page": {"type": ["string", "null"]},
-        "section": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "section": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}, {"type": "null"}]},
+        "section_missing_reason": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
         "figure_or_table": {"type": ["string", "null"]},
         "note_type": {"enum": ["paraphrase", "quote_excerpt"]},
         "text": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
@@ -17,6 +18,10 @@
         "reopen_priority": {"enum": ["high", "medium", "low"]}
       },
       "allOf": [
+        {
+          "if": {"properties": {"section": {"type": "null"}}, "required": ["section"]},
+          "then": {"required": ["section_missing_reason"]}
+        },
         {
           "if": {"properties": {"note_type": {"const": "quote_excerpt"}}, "required": ["note_type"]},
           "then": {

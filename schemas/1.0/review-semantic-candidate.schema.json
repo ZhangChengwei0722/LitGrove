@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:review-semantic-candidate",
+  "$defs": {
+    "source_note": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pdf_page", "printed_page", "section", "figure_or_table", "note_type", "text", "locator", "reopen_priority", "requested_operation"],
+      "properties": {
+        "pdf_page": {"type": "integer", "minimum": 1},
+        "printed_page": {"type": ["string", "null"]},
+        "section": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}, {"type": "null"}]},
+        "section_missing_reason": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "figure_or_table": {"type": ["string", "null"]},
+        "note_type": {"enum": ["paraphrase", "quote_excerpt"]},
+        "text": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "locator": {"type": ["string", "null"]},
+        "reopen_priority": {"enum": ["high", "medium", "low"]},
+        "requested_operation": {"enum": ["continuous_text_evidence", "figure_table_evidence", "formula_layout_analysis", "supplementary_analysis"]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"section": {"type": "null"}}, "required": ["section"]},
+          "then": {"required": ["section_missing_reason"]}
+        },
+        {
+          "if": {"properties": {"note_type": {"const": "quote_excerpt"}}, "required": ["note_type"]},
+          "then": {
+            "properties": {
+              "text": {"type": "string", "minLength": 1, "maxLength": 500},
+              "locator": {"type": "string", "pattern": "^page:[1-9][0-9]*:char:[0-9]+-[0-9]+$"}
+            }
+          },
+          "else": {"properties": {"locator": {"type": "null"}}}
+        }
+      ]
+    },
+    "unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section_id", "unit_type", "content", "source_notes", "workflow_impacts", "evidence_use", "reuse_quality", "primary_paper_lead"],
+      "properties": {
+        "section_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+        "unit_type": {"enum": ["field_axis", "mechanism_frame", "synthesis_statement", "method_guardrail", "metric_or_endpoint", "overclaim_warning", "gap_or_limitation", "frontier_topic", "question_seed_candidate", "primary_paper_lead"]},
+        "content": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "source_notes": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/source_note"}},
+        "workflow_impacts": {"type": "array", "minItems": 1, "items": {"$ref": "urn:research-kb:schema:1.0:review-memory#/$defs/workflow_impact"}},
+        "evidence_use": {"$ref": "urn:research-kb:schema:1.0:review-memory#/$defs/evidence_use"},
+        "reuse_quality": {"$ref": "urn:research-kb:schema:1.0:review-memory#/$defs/reuse_quality"},
+        "primary_paper_lead": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:review-memory#/$defs/primary_paper_lead"}, {"type": "null"}]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"unit_type": {"const": "primary_paper_lead"}}, "required": ["unit_type"]},
+          "then": {"properties": {"primary_paper_lead": {"$ref": "urn:research-kb:schema:1.0:review-memory#/$defs/primary_paper_lead"}}},
+          "else": {"properties": {"primary_paper_lead": {"type": "null"}}}
+        }
+      ]
+    },
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section_id", "units"],
+      "properties": {
+        "section_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+        "units": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/unit"}}
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "task_id", "input_basis_digest", "review_subtype", "review_subtype_source", "review_subtype_reason", "read_status", "scope_tags", "one_sentence_reuse_value", "memory_value", "coverage_limits", "sections", "non_reusable_notes"],
+  "properties": {
+    "contract_version": {"const": "p4c-review-semantic-candidate@1.0"},
+    "task_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/agent_task_id"},
+    "input_basis_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "review_subtype": {"enum": ["narrative_review", "systematic_review", "scoping_review", "meta_analysis", "perspective_or_commentary"]},
+    "review_subtype_source": {"enum": ["agent_high_confidence", "user_supplied"]},
+    "review_subtype_reason": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+    "read_status": {"enum": ["skimmed", "targeted_read", "deep_read"]},
+    "scope_tags": {"type": "array", "uniqueItems": true, "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"}},
+    "one_sentence_reuse_value": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+    "memory_value": {"$ref": "urn:research-kb:schema:1.0:review-memory#/properties/memory_value"},
+    "coverage_limits": {"$ref": "urn:research-kb:schema:1.0:review-memory#/properties/coverage_limits"},
+    "sections": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "prefixItems": [
+        {"allOf": [{"$ref": "#/$defs/section"}, {"properties": {"section_id": {"const": "review_objective_scope"}}}]},
+        {"allOf": [{"$ref": "#/$defs/section"}, {"properties": {"section_id": {"const": "review_question_search_boundaries"}}}]},
+        {"allOf": [{"$ref": "#/$defs/section"}, {"properties": {"section_id": {"const": "taxonomy_field_structure"}}}]},
+        {"allOf": [{"$ref": "#/$defs/section"}, {"properties": {"section_id": {"const": "major_synthesis"}}}]},
+        {"allOf": [{"$ref": "#/$defs/section"}, {"properties": {"section_id": {"const": "methods_metrics_guardrails"}}}]},
+        {"allOf": [{"$ref": "#/$defs/section"}, {"properties": {"section_id": {"const": "gaps_frontiers"}}}]},
+        {"allOf": [{"$ref": "#/$defs/section"}, {"properties": {"section_id": {"const": "primary_leads_reuse"}}}]}
+      ]
+    },
+    "non_reusable_notes": {"$ref": "urn:research-kb:schema:1.0:review-memory#/properties/non_reusable_notes"}
+  }
+}

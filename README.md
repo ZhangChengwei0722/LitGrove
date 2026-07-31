@@ -20,7 +20,7 @@ Milestone 1B through the M3D-1 repository slice provide:
 - initialized-workspace enforcement for every runtime command.
 - generic read-only compatibility inspection through explicitly injected legacy adapters;
 - deterministic compatibility differences, protected-input snapshots, and blocking policy without migration or persistence.
-- historical layout upgrades through `m3c-2a` and the current exact `m3c-2a -> p4b-1` upgrade with no canonical-record rewrite;
+- historical layout upgrades through `p4b-1` and the current exact `p4b-1 -> p4c-1` upgrade with no canonical-record rewrite;
 - persistent, domain-neutral Question Mapping from selected Paper Card Units;
 - CLI-owned question/link IDs and exact evidence/boundary projection;
 - read-only `question list/show` commands and Guardian mapping freshness warnings.
@@ -52,12 +52,14 @@ Milestone 1B through the M3D-1 repository slice provide:
 - a versioned external-Agent task registry and session-bound semantic handoff facade for document-route resolution, with exact privacy-class intersection, CAS leases, stale-input rejection, non-canonical staging, escaped preview, revision lineage and explicit user approval.
 - one atomic, per-paper Primary Semantic Bundle with an append-only correction chain, active Paper Card/Evidence/review-queue projection, operation-specific Source Adequacy gates, task-local aliases and Core-owned canonical IDs.
 - an independent Primary semantic Pipeline Job, external-Agent handoff, non-canonical preview and explicit user-approved commit flow with source/parse/profile revalidation and crash-safe receipt recovery.
+- one atomic, per-paper Review Semantic Bundle with immutable correction revisions, active-only Review Memory projection, same-review provenance bindings and Core-owned Memory/Unit IDs.
+- an independent Review semantic Pipeline Job and `p4c-v1` external-Agent route that accepts zero-Unit low-value memories, blocks only consumed inadequate uses and preserves the background-only/non-evidence boundary.
 
 The installed CLI contains no private adapter and performs no adapter or connector discovery. The CLI never calls an LLM or makes scientific judgments. M3D-1 audit semantics remain Agent-owned in the Portable Skill; Core still only projects manuscripts and exposes existing reads. OCR, manuscript rewriting, subtype-specific review runtime, persisted Markdown or additional derived views, Field Map integration, Review Unit Question Mapping, institutional/browser acquisition and migration remain later milestones.
 
-Application Service interface `1.3` exposes `DeterministicIntakeApplicationService` and `AgentTaskApplicationService` to a localhost App backend through opaque `WorkspaceSession` values. The App must not read workspace paths, invoke the CLI, parse CLI output or reproduce intake, privacy, staging, scientific commit or recovery rules. Core only prepares portable handoff manifests for external Codex CLI or Claude Code CLI use; it does not launch an Agent, manage credentials or call a model API.
+Application Service interface `1.4` exposes `DeterministicIntakeApplicationService` and `AgentTaskApplicationService` to a localhost App backend through opaque `WorkspaceSession` values. The App must not read workspace paths, invoke the CLI, parse CLI output or reproduce intake, privacy, staging, scientific commit or recovery rules. Core only prepares portable handoff manifests for external Codex CLI or Claude Code CLI use; it does not launch an Agent, manage credentials or call a model API.
 
-`AgentTaskApplicationService` enables `document_route_resolution` and `primary_semantic_processing`. Its public flow is `registry -> create_from_pipeline -> prepare_handoff -> submit_result -> preview_result -> revise/refresh/reject/approve`. Workspace `agent_policy` is optional and absent means deny by default. All staged output is untrusted, non-canonical data. Route approval advances only the deterministic Pipeline Job; Primary approval atomically writes one complete Primary bundle revision after rechecking the bound source, Parse output and use-specific Source Adequacy profiles. Review semantic processing remains deferred.
+`AgentTaskApplicationService` enables `document_route_resolution`, `primary_semantic_processing` and `review_semantic_processing`. Its public flow is `registry -> create_from_pipeline -> prepare_handoff -> submit_result -> preview_result -> revise/refresh/reject/approve`. Workspace `agent_policy` is optional and absent means deny by default. All staged output is untrusted, non-canonical data. Route approval advances only the deterministic Pipeline Job. Primary and Review approval each atomically append one route-specific bundle revision after rechecking the bound source, Parse output and use-specific Source Adequacy profiles. Review revisions remain background-only and cannot create canonical Evidence or a scientific review-queue substitute.
 
 ## Privacy Boundary
 

@@ -18,3 +18,11 @@
 ## Enforcement
 
 The privacy scanner checks normal repository files, fixtures, and build artifacts. Intentional negative fixtures are exact-file allowlisted and must produce only their declared findings.
+
+External Review Agent handoffs use the same explicit content-class intersection as other
+Agent Tasks. Required payload classes are metadata, bounded parsed excerpts and
+operational context. Existing Review background is optional and appears only when the
+workspace policy, task definition, executor and current user approval all allow
+`review_background`. Source paths, fingerprints, credentials, unbounded source documents
+and unrelated workspace content are never included. PDF text and Agent output remain
+untrusted data and cannot expand Task authority.

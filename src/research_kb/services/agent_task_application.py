@@ -36,6 +36,15 @@ from research_kb.primary_candidates import (
     consumed_evidence_operations,
     primary_candidate_diagnostics,
 )
+from research_kb.review_candidates import (
+    REVIEW_OPERATIONS,
+    consumed_review_operations,
+    review_candidate_diagnostics,
+)
+from research_kb.review_memory_provenance import (
+    build_active_parse_index,
+    validate_review_memory_provenance,
+)
 from research_kb.services.deterministic_trunk import DeterministicTrunkService
 from research_kb.services.pipeline_job import PipelineJobService
 from research_kb.services.source_adequacy import SourceAdequacyService
@@ -56,6 +65,15 @@ from research_kb.workspace import WorkspaceLayout
 IdAllocator = Callable[[Namespace], str]
 Clock = Callable[[], datetime]
 MAX_PAGE_SIZE = 100
+REVIEW_SECTIONS = (
+    "review_objective_scope",
+    "review_question_search_boundaries",
+    "taxonomy_field_structure",
+    "major_synthesis",
+    "methods_metrics_guardrails",
+    "gaps_frontiers",
+    "primary_leads_reuse",
+)
 _CREATE_FIELDS = frozenset(
     {
         "paper_id",
@@ -218,6 +236,48 @@ class AgentTaskApplicationService:
                 origin_job_id=origin_job["job_id"],
             )
             job_writes += profile_writes + resume_writes
+        elif task_kind == "review_semantic_processing":
+            job, job_writes = self._prepare_review_job(
+                layout,
+                jobs,
+                origin_job,
+                normalized["paper_id"],
+                normalized["idempotency_key"],
+            )
+            profiles, profile_writes = self._assess_review_operations(
+                layout,
+                job,
+                normalized["paper_id"],
+            )
+            gate = SourceAdequacyService(layout).gate(
+                paper_id=normalized["paper_id"],
+                requested_operation="basic_review_memory",
+            )
+            if gate["status"] != "allowed":
+                blocked_job, wait_writes = self._transition_to_adequacy_wait(
+                    jobs,
+                    job,
+                    gate,
+                    profile_ids=[item["profile_id"] for item in profiles],
+                )
+                return self._blocked_result(
+                    blocked_job,
+                    gate,
+                    persistent_writes=job_writes + profile_writes + wait_writes,
+                )
+            job, resume_writes = self._ensure_review_agent_wait(
+                jobs,
+                job,
+                profile_ids=[item["profile_id"] for item in profiles],
+            )
+            basis = self._derive_input_basis(
+                layout,
+                job,
+                normalized["paper_id"],
+                task_kind=task_kind,
+                origin_job_id=origin_job["job_id"],
+            )
+            job_writes += profile_writes + resume_writes
         else:
             raise _request_error(None, "/task_kind", "Agent Task kind is not implemented")
         task_id = self.id_allocator(Namespace.AGENT_TASK)
@@ -328,11 +388,10 @@ class AgentTaskApplicationService:
         encoded = json.dumps(normalized_result, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
         if len(encoded) > policy["max_result_bytes"]:
             raise _request_error(head["state_id"], "/staged_result", "Agent result exceeds the workspace result budget")
-        result_kind = (
-            "primary-semantic-candidate"
-            if head["task_kind"] == "primary_semantic_processing"
-            else "document-route-decision"
-        )
+        result_kind = {
+            "primary_semantic_processing": "primary-semantic-candidate",
+            "review_semantic_processing": "review-semantic-candidate",
+        }.get(head["task_kind"], "document-route-decision")
         diagnostics = validate_record(result_kind, normalized_result, actor="agent")
         if diagnostics:
             raise ResearchKBError(diagnostics[0])
@@ -365,6 +424,27 @@ class AgentTaskApplicationService:
                     task=head,
                 )
             self._validate_primary_provenance(layout, head, normalized_result)
+        elif head["task_kind"] == "review_semantic_processing":
+            candidate_diagnostics = review_candidate_diagnostics(normalized_result)
+            if candidate_diagnostics:
+                raise ResearchKBError(candidate_diagnostics[0])
+            gate_failure = self._review_gate_failure(layout, head, normalized_result)
+            if gate_failure is not None:
+                jobs = self._pipeline_jobs(layout)
+                current_job = jobs.show(head["input_basis"]["job_id"])["current_state"]
+                blocked_job, wait_writes = self._transition_to_adequacy_wait(
+                    jobs,
+                    current_job,
+                    gate_failure,
+                    profile_ids=[item["profile_id"] for item in head["input_basis"]["adequacy_profiles"]],
+                )
+                return self._blocked_result(
+                    blocked_job,
+                    gate_failure,
+                    persistent_writes=wait_writes,
+                    task=head,
+                )
+            self._validate_review_provenance(layout, head, normalized_result)
         submitted = self._next_state(head, status="submitted", staged_result=normalized_result)
         self._append_states(layout, states, [submitted], operation="agent_task_submit", actor="agent")
         return {**self._mutation_result(submitted, persistent_writes=1), "staged_result": normalized_result}
@@ -386,6 +466,24 @@ class AgentTaskApplicationService:
                     "sections": result["sections"],
                     "evidence": result["evidence"],
                     "review_boundaries": result["review_boundaries"],
+                    "canonical_scientific_write": False,
+                },
+            }
+        if head["task_kind"] == "review_semantic_processing":
+            return {
+                "status": "success",
+                "interface_version": APPLICATION_SERVICE_INTERFACE_VERSION,
+                "task": _task_projection(head),
+                "candidate": {
+                    "content_type": "application/json",
+                    "contract_version": result["contract_version"],
+                    "review_subtype": result["review_subtype"],
+                    "read_status": result["read_status"],
+                    "memory_value": result["memory_value"],
+                    "coverage_limits": result["coverage_limits"],
+                    "sections": result["sections"],
+                    "non_reusable_notes": result["non_reusable_notes"],
+                    "background_only": True,
                     "canonical_scientific_write": False,
                 },
             }
@@ -486,6 +584,98 @@ class AgentTaskApplicationService:
         approved = self._next_state(refreshed_head, status="approved", decision=decision)
         self._append_states(layout, refreshed_states, [approved], operation="agent_task_approve", actor="user")
         return self._primary_approval_result(
+            approved,
+            job,
+            bundle,
+            persistent_writes=bundle_writes + job_writes + 1,
+        )
+
+    def approve_review_result(
+        self,
+        session: WorkspaceSession,
+        task_id: str,
+        expected_state: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        layout = _session_layout(session)
+        states = self._read_states(layout)
+        head = self._head(states, task_id)
+        expected = _normalize_expected(expected_state)
+        if head["task_kind"] != "review_semantic_processing":
+            raise _request_error(head["state_id"], "/task_kind", "Review approval requires a Review semantic Task")
+        if head["status"] == "approved":
+            self._require_replay_expected(head, expected)
+            job = self._pipeline_jobs(layout).show(head["input_basis"]["job_id"])["current_state"]
+            bundle = read_json_document(
+                layout.review_bundle_path(head["input_basis"]["paper_id"]),
+                record_kind="review-semantic-bundle",
+            )
+            return self._review_approval_result(head, job, bundle, persistent_writes=0)
+        self._require_expected(head, expected, status="submitted")
+
+        bundle, bundle_writes = self._commit_or_recover_review_bundle(layout, head)
+        revision = bundle["revisions"][-1]
+        jobs = self._pipeline_jobs(layout)
+        job = jobs.show(head["input_basis"]["job_id"])["current_state"]
+        if job["status"] in {"completed", "completed_with_findings"}:
+            if (
+                job["current_node"] != "review_semantic_bundle_committed"
+                or revision["revision_id"] not in job["output_refs"]
+            ):
+                raise _conflict(head["state_id"], "Review semantic Job completion does not match the committed bundle revision")
+            job_writes = 0
+        else:
+            job_writes = 0
+            if job["status"] == "waiting_agent":
+                running = jobs.transition(
+                    job["job_id"],
+                    expected_state_id=job["state_id"],
+                    expected_state_digest=canonical_digest(job),
+                    status="running",
+                    current_node="review_semantic_commit",
+                    wait_reason=None,
+                    output_refs=sorted({*job["output_refs"], revision["revision_id"]}),
+                    retry_increment=0,
+                    recovery_action=None,
+                    actor="user",
+                )
+                job = running.state
+                job_writes += int(running.transaction is not None)
+            mutation = jobs.transition(
+                job["job_id"],
+                expected_state_id=job["state_id"],
+                expected_state_digest=canonical_digest(job),
+                status="completed",
+                current_node="review_semantic_bundle_committed",
+                wait_reason=None,
+                output_refs=sorted({*job["output_refs"], revision["revision_id"]}),
+                retry_increment=0,
+                recovery_action=None,
+                actor="user",
+            )
+            job = mutation.state
+            job_writes += int(mutation.transaction is not None)
+
+        refreshed_states = self._read_states(layout)
+        refreshed_head = self._head(refreshed_states, task_id)
+        if refreshed_head["status"] == "approved":
+            return self._review_approval_result(
+                refreshed_head,
+                job,
+                bundle,
+                persistent_writes=bundle_writes + job_writes,
+            )
+        self._require_expected(refreshed_head, expected, status="submitted")
+        decision = {
+            "action": "approved",
+            "reason_code": "review_bundle_committed",
+            "feedback": None,
+            "successor_task_id": None,
+            "applied_job_state_id": job["state_id"],
+            "decided_at": timestamp(self.clock),
+        }
+        approved = self._next_state(refreshed_head, status="approved", decision=decision)
+        self._append_states(layout, refreshed_states, [approved], operation="agent_task_approve", actor="user")
+        return self._review_approval_result(
             approved,
             job,
             bundle,
@@ -775,6 +965,156 @@ class AgentTaskApplicationService:
             "successor_task": _task_projection(successor),
         }
 
+    def refresh_review_task(
+        self,
+        session: WorkspaceSession,
+        task_id: str,
+        expected_state: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        layout = _session_layout(session)
+        states = self._read_states(layout)
+        head = self._head(states, task_id)
+        expected = _normalize_expected(expected_state)
+        if head["status"] == "superseded":
+            self._require_replay_expected(head, expected)
+            successor = self._head(states, head["decision"]["successor_task_id"])
+            return {
+                **self._mutation_result(head, persistent_writes=0),
+                "successor_task": _task_projection(successor),
+            }
+        if head["task_kind"] != "review_semantic_processing" or head["status"] not in {"created", "leased", "submitted"}:
+            raise _request_error(
+                head["state_id"],
+                "/status",
+                "Review input refresh requires a created, leased or submitted Review Task",
+            )
+        self._require_expected(head, expected, status=head["status"])
+        jobs = self._pipeline_jobs(layout)
+        job = jobs.show(head["input_basis"]["job_id"])["current_state"]
+        profiles, profile_writes = self._assess_review_operations(
+            layout,
+            job,
+            head["input_basis"]["paper_id"],
+        )
+        gate = SourceAdequacyService(layout).gate(
+            paper_id=head["input_basis"]["paper_id"],
+            requested_operation="basic_review_memory",
+        )
+        profile_ids = [item["profile_id"] for item in profiles]
+        if gate["status"] != "allowed":
+            blocked_job, wait_writes = self._transition_to_adequacy_wait(
+                jobs,
+                job,
+                gate,
+                profile_ids=profile_ids,
+            )
+            return self._blocked_result(
+                blocked_job,
+                gate,
+                persistent_writes=profile_writes + wait_writes,
+                task=head,
+            )
+        job, resume_writes = self._ensure_review_agent_wait(
+            jobs,
+            job,
+            profile_ids=profile_ids,
+        )
+        basis = self._derive_input_basis(
+            layout,
+            job,
+            head["input_basis"]["paper_id"],
+            task_kind=head["task_kind"],
+            origin_job_id=head["input_basis"]["origin_job_id"],
+        )
+        if basis == head["input_basis"]:
+            raise _conflict(head["state_id"], "Review Task inputs are already current")
+        successor_task_id = self.id_allocator(Namespace.AGENT_TASK)
+        terminal_state_id = self.id_allocator(Namespace.AGENT_TASK_STATE)
+        successor_state_id = self.id_allocator(Namespace.AGENT_TASK_STATE)
+        for value, namespace in (
+            (successor_task_id, Namespace.AGENT_TASK),
+            (terminal_state_id, Namespace.AGENT_TASK_STATE),
+            (successor_state_id, Namespace.AGENT_TASK_STATE),
+        ):
+            validate_id(value, namespace)
+        used_ids = {item["task_id"] for item in states} | {item["state_id"] for item in states}
+        if {successor_task_id, terminal_state_id, successor_state_id} & used_ids:
+            raise ResearchKBError(
+                Diagnostic(
+                    DUPLICATE_ID,
+                    "agent-task-state",
+                    successor_state_id,
+                    "/state_id",
+                    "allocated refreshed Review Task ID is already in use",
+                )
+            )
+        now = timestamp(self.clock)
+        decision = {
+            "action": "superseded",
+            "reason_code": "input_refreshed",
+            "feedback": None,
+            "successor_task_id": successor_task_id,
+            "applied_job_state_id": None,
+            "decided_at": now,
+        }
+        terminal = self._next_state(
+            head,
+            status="superseded",
+            decision=decision,
+            state_id=terminal_state_id,
+        )
+        handoff_digest = (head.get("lease") or {}).get("handoff_digest", head["input_basis_digest"])
+        successor = {
+            **{
+                field: head[field]
+                for field in (
+                    "schema_version",
+                    "workspace_id",
+                    "task_kind",
+                    "result_contract",
+                    "privacy_registry_version",
+                    "executor_id",
+                    "execution_scope",
+                    "effective_content_classes",
+                )
+            },
+            "state_id": successor_state_id,
+            "task_id": successor_task_id,
+            "revision": 1,
+            "predecessor": None,
+            "input_basis": basis,
+            "input_basis_digest": canonical_digest(basis),
+            "idempotency_key": f"input-refresh:{successor_task_id}",
+            "lineage": {
+                "predecessor_task_id": head["task_id"],
+                "predecessor_handoff_digest": handoff_digest,
+                "refresh_reason": "input_refreshed",
+            },
+            "status": "created",
+            "lease": None,
+            "staged_result": None,
+            "decision": None,
+            "terminal_receipt": False,
+            "created_at": now,
+            "updated_at": now,
+        }
+        if "fixture_origin" in head:
+            successor["fixture_origin"] = head["fixture_origin"]
+        self._append_states(
+            layout,
+            states,
+            [terminal, successor],
+            operation="agent_task_input_refresh",
+            actor="user",
+        )
+        return {
+            **self._mutation_result(
+                terminal,
+                persistent_writes=profile_writes + resume_writes + 1,
+            ),
+            "successor_task": _task_projection(successor),
+        }
+
     def approve_route_result(
         self,
         session: WorkspaceSession,
@@ -939,6 +1279,57 @@ class AgentTaskApplicationService:
             return job, writes
         raise _conflict(job["state_id"], "Primary semantic Job is not ready for an Agent Task")
 
+    def _prepare_review_job(
+        self,
+        layout: WorkspaceLayout,
+        jobs: PipelineJobService,
+        origin_job: Mapping[str, Any],
+        paper_id: str,
+        task_key: str,
+    ) -> tuple[dict[str, Any], int]:
+        if (
+            origin_job["status"] not in {"completed", "completed_with_findings"}
+            or origin_job["current_node"] not in {
+                "review_semantic_gate",
+                "review_semantic_gate_mixed_document",
+            }
+            or paper_id not in set(origin_job["input_refs"]) | set(origin_job["output_refs"])
+        ):
+            raise ResearchKBError(
+                Diagnostic(
+                    INVALID_AUTHORITY,
+                    "agent-task-state",
+                    origin_job["job_id"],
+                    "/input_basis/origin_job_id",
+                    "Review semantic Task requires a completed Review semantic gate origin Job",
+                )
+            )
+        semantic_key = "review-semantic:" + canonical_digest(
+            {"origin_job_id": origin_job["job_id"], "paper_id": paper_id, "task_key": task_key}
+        )
+        created = jobs.create(
+            requested_route="semantic_processing",
+            requested_depth="review_semantic_bundle",
+            current_node="review_semantic_processing",
+            input_refs=[origin_job["job_id"], paper_id],
+            authority_snapshot={
+                "actor": "user",
+                "granted_operations": [
+                    "assess_source_adequacy",
+                    "commit_review_semantic_bundle",
+                ],
+                "captured_at": origin_job["authority_snapshot"]["captured_at"],
+            },
+            idempotency_key=semantic_key,
+            actor="user",
+            fixture_origin=origin_job.get("fixture_origin"),
+        )
+        job = created.state
+        writes = int(created.transaction is not None)
+        if job["status"] in {"created", "waiting_agent", "waiting_source", "waiting_user"}:
+            return job, writes
+        raise _conflict(job["state_id"], "Review semantic Job is not ready for an Agent Task")
+
     def _assess_primary_operations(
         self,
         layout: WorkspaceLayout,
@@ -953,6 +1344,30 @@ class AgentTaskApplicationService:
         profiles: list[dict[str, Any]] = []
         writes = 0
         for operation in PRIMARY_OPERATIONS:
+            result = service.assess(
+                paper_id=paper_id,
+                job_id=job["job_id"],
+                requested_operation=operation,
+                actor="cli",
+            )
+            profiles.append(result.profile)
+            writes += int(result.transaction is not None)
+        return profiles, writes
+
+    def _assess_review_operations(
+        self,
+        layout: WorkspaceLayout,
+        job: Mapping[str, Any],
+        paper_id: str,
+    ) -> tuple[list[dict[str, Any]], int]:
+        service = SourceAdequacyService(
+            layout,
+            transaction_manager=TransactionManager(layout, clock=self.clock),
+            id_allocator=self.id_allocator,
+        )
+        profiles: list[dict[str, Any]] = []
+        writes = 0
+        for operation in REVIEW_OPERATIONS:
             result = service.assess(
                 paper_id=paper_id,
                 job_id=job["job_id"],
@@ -1000,6 +1415,51 @@ class AgentTaskApplicationService:
             expected_state_digest=canonical_digest(current),
             status="waiting_agent",
             current_node="primary_semantic_processing",
+            wait_reason=None,
+            output_refs=outputs,
+            retry_increment=0,
+            recovery_action=None,
+            actor="user",
+        )
+        return waiting.state, writes + int(waiting.transaction is not None)
+
+    def _ensure_review_agent_wait(
+        self,
+        jobs: PipelineJobService,
+        job: Mapping[str, Any],
+        *,
+        profile_ids: list[str],
+    ) -> tuple[dict[str, Any], int]:
+        outputs = sorted({*job["output_refs"], *profile_ids})
+        if (
+            job["status"] == "waiting_agent"
+            and job["current_node"] == "review_semantic_processing"
+            and job["output_refs"] == outputs
+        ):
+            return dict(job), 0
+        writes = 0
+        current = dict(job)
+        if current["status"] in {"created", "waiting_agent", "waiting_source", "waiting_user"}:
+            running = jobs.transition(
+                current["job_id"],
+                expected_state_id=current["state_id"],
+                expected_state_digest=canonical_digest(current),
+                status="running",
+                current_node="source_adequacy_assessed",
+                wait_reason=None,
+                output_refs=outputs,
+                retry_increment=0,
+                recovery_action=None,
+                actor="user",
+            )
+            current = running.state
+            writes += int(running.transaction is not None)
+        waiting = jobs.transition(
+            current["job_id"],
+            expected_state_id=current["state_id"],
+            expected_state_digest=canonical_digest(current),
+            status="waiting_agent",
+            current_node="review_semantic_processing",
             wait_reason=None,
             output_refs=outputs,
             retry_increment=0,
@@ -1065,6 +1525,22 @@ class AgentTaskApplicationService:
     ) -> dict[str, Any] | None:
         service = SourceAdequacyService(layout)
         for operation in consumed_evidence_operations(candidate):
+            gate = service.gate(
+                paper_id=task["input_basis"]["paper_id"],
+                requested_operation=operation,
+            )
+            if gate["status"] != "allowed":
+                return gate
+        return None
+
+    @staticmethod
+    def _review_gate_failure(
+        layout: WorkspaceLayout,
+        task: Mapping[str, Any],
+        candidate: Mapping[str, Any],
+    ) -> dict[str, Any] | None:
+        service = SourceAdequacyService(layout)
+        for operation in consumed_review_operations(candidate):
             gate = service.gate(
                 paper_id=task["input_basis"]["paper_id"],
                 requested_operation=operation,
@@ -1164,6 +1640,62 @@ class AgentTaskApplicationService:
                                 "candidate locator page does not match source_page.pdf_page",
                             )
                         )
+
+    def _validate_review_provenance(
+        self,
+        layout: WorkspaceLayout,
+        task: Mapping[str, Any],
+        candidate: Mapping[str, Any],
+    ) -> None:
+        entries = load_workspace_entries(layout)
+        paper_id = task["input_basis"]["paper_id"]
+        pages = [
+            item
+            for item in records_of_kind(entries, "parsed-page")
+            if item["paper_id"] == paper_id
+            and item["parse_run_id"] == task["input_basis"]["parse_run_id"]
+        ]
+        active_by_paper, failures = build_active_parse_index(pages)
+        if failures:
+            failure = failures[0]
+            raise ResearchKBError(
+                Diagnostic(
+                    failure.code,
+                    failure.record_kind,
+                    failure.record_id,
+                    failure.json_path,
+                    failure.message,
+                )
+            )
+        active = active_by_paper.get(paper_id)
+        if active is None:
+            raise ResearchKBError(
+                Diagnostic(
+                    UNRESOLVED_REFERENCE,
+                    "review-semantic-candidate",
+                    task["task_id"],
+                    "/sections",
+                    "Review candidate has no Task-bound active parse",
+                )
+            )
+        memory = {
+            "review_memory_id": None,
+            "paper_id": paper_id,
+            "parse_snapshot": active.snapshot,
+            "sections": candidate["sections"],
+        }
+        provenance = validate_review_memory_provenance(memory, active_by_paper)
+        if provenance:
+            failure = provenance[0]
+            raise ResearchKBError(
+                Diagnostic(
+                    failure.code,
+                    "review-semantic-candidate",
+                    task["task_id"],
+                    failure.json_path,
+                    failure.message,
+                )
+            )
 
     def _commit_or_recover_primary_bundle(
         self,
@@ -1412,6 +1944,272 @@ class AgentTaskApplicationService:
             "canonical_scientific_write": True,
         }
 
+    def _commit_or_recover_review_bundle(
+        self,
+        layout: WorkspaceLayout,
+        task: Mapping[str, Any],
+    ) -> tuple[dict[str, Any], int]:
+        paper_id = task["input_basis"]["paper_id"]
+        target = layout.review_bundle_path(paper_id)
+        expected_before = task["input_basis"]["bundle_head_digest"]
+        result_digest = canonical_digest(task["staged_result"])
+        if target.is_file():
+            existing = read_json_document(target, record_kind="review-semantic-bundle")
+            diagnostics = validate_record("review-semantic-bundle", existing, actor="stored")
+            if diagnostics:
+                raise ResearchKBError(diagnostics[0])
+            active = existing["revisions"][-1]
+            if active["approval"]["task_id"] == task["task_id"]:
+                if active["approval"]["task_result_digest"] != result_digest:
+                    raise _conflict(task["state_id"], "committed Review revision has a different Task result digest")
+                return existing, 0
+        if file_sha256(target) != expected_before:
+            raise _conflict(task["state_id"], "Review bundle head changed before approval")
+        self._require_bound_review_inputs(layout, task, check_bundle=True)
+        bundle = self._build_review_bundle(layout, task)
+        transaction = TransactionManager(layout, clock=self.clock).promote_bytes(
+            target=target,
+            content=serialize_json(bundle),
+            target_store="review_bundles",
+            operation="review_bundle_commit",
+            actor="user",
+            input_refs=[task["task_id"], task["state_id"]],
+            output_refs=[bundle["active_revision_id"]],
+            validator=lambda path: self._validate_review_temp(layout, target, path),
+            post_replace_validator=lambda: self._require_bound_review_inputs(
+                layout,
+                task,
+                check_bundle=False,
+            ),
+            expected_before_sha256=expected_before,
+            job_id=task["input_basis"]["job_id"],
+        )
+        return bundle, int(transaction is not None)
+
+    def _build_review_bundle(
+        self,
+        layout: WorkspaceLayout,
+        task: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        entries = load_workspace_entries(layout)
+        paper = self._paper(entries, task["input_basis"]["paper_id"])
+        candidate = task["staged_result"]
+        now = timestamp(self.clock)
+        profile_by_operation = {
+            item["requested_operation"]: item
+            for item in task["input_basis"]["adequacy_profiles"]
+        }
+        sections: list[dict[str, Any]] = []
+        provenance_bindings: list[dict[str, Any]] = []
+        for section in candidate["sections"]:
+            units: list[dict[str, Any]] = []
+            for source_unit in section["units"]:
+                unit_id = self.id_allocator(Namespace.REVIEW_UNIT)
+                source_notes = []
+                for note_index, source_note in enumerate(source_unit["source_notes"]):
+                    operation = source_note["requested_operation"]
+                    profile = profile_by_operation[operation]
+                    source_notes.append(
+                        {
+                            key: value
+                            for key, value in source_note.items()
+                            if key != "requested_operation"
+                        }
+                    )
+                    provenance_bindings.append(
+                        {
+                            "review_unit_id": unit_id,
+                            "source_note_index": note_index,
+                            "requested_operation": operation,
+                            "profile_id": profile["profile_id"],
+                            "profile_digest": profile["profile_digest"],
+                        }
+                    )
+                units.append(
+                    {
+                        **{
+                            key: value
+                            for key, value in source_unit.items()
+                            if key != "source_notes"
+                        },
+                        "review_unit_id": unit_id,
+                        "section_id": section["section_id"],
+                        "source_notes": source_notes,
+                        "background_only": True,
+                        "can_enter_canonical_evidence": False,
+                        "not_fact": True,
+                    }
+                )
+            sections.append({"section_id": section["section_id"], "units": units})
+        pages = [
+            item
+            for item in records_of_kind(entries, "parsed-page")
+            if item["paper_id"] == paper["paper_id"]
+            and item["parse_run_id"] == task["input_basis"]["parse_run_id"]
+        ]
+        if not pages:
+            raise _conflict(task["state_id"], "Review Task-bound parse is unavailable at commit")
+        parser = pages[0]["parser"]
+        review_memory = {
+            "schema_version": "1.0",
+            "review_memory_id": self.id_allocator(Namespace.REVIEW_MEMORY),
+            "paper_id": paper["paper_id"],
+            "source_type": "review",
+            **{
+                key: candidate[key]
+                for key in (
+                    "review_subtype",
+                    "review_subtype_source",
+                    "review_subtype_reason",
+                    "read_status",
+                    "scope_tags",
+                    "one_sentence_reuse_value",
+                    "memory_value",
+                    "coverage_limits",
+                    "non_reusable_notes",
+                )
+            },
+            "sections": sections,
+            "source_fingerprint": dict(paper["source_fingerprint"]),
+            "parse_snapshot": {
+                "parse_run_id": task["input_basis"]["parse_run_id"],
+                "adapter": parser["adapter"],
+                "version": parser["version"],
+            },
+            "background_only": True,
+            "can_enter_canonical_evidence": False,
+            "not_fact": True,
+            "review_status": "human_checked",
+            "automation_status": "passed_auto_checks",
+            "created_at": now,
+            "updated_at": now,
+        }
+        fixture_origin = paper.get("fixture_origin")
+        if fixture_origin is not None:
+            review_memory["fixture_origin"] = fixture_origin
+        target = layout.review_bundle_path(paper["paper_id"])
+        previous_bundle = (
+            read_json_document(target, record_kind="review-semantic-bundle")
+            if target.is_file()
+            else None
+        )
+        previous_revisions = [] if previous_bundle is None else list(previous_bundle["revisions"])
+        predecessor = None
+        if previous_revisions:
+            previous = previous_revisions[-1]
+            predecessor = {
+                "revision_id": previous["revision_id"],
+                "revision_digest": canonical_digest(previous),
+            }
+        revision_id = self.id_allocator(Namespace.REVIEW_REVISION)
+        revision = {
+            "revision_id": revision_id,
+            "revision_number": len(previous_revisions) + 1,
+            "predecessor": predecessor,
+            "approval": {
+                "task_id": task["task_id"],
+                "task_result_digest": canonical_digest(candidate),
+                "approved_by": "user",
+                "approved_at": now,
+            },
+            "input_snapshot": {
+                "source_fingerprint": dict(paper["source_fingerprint"]),
+                "parse_run_id": task["input_basis"]["parse_run_id"],
+                "parse_output_digest": task["input_basis"]["parse_output_digest"],
+                "adequacy_profiles": [
+                    {
+                        "requested_operation": item["requested_operation"],
+                        "profile_id": item["profile_id"],
+                        "profile_digest": item["profile_digest"],
+                    }
+                    for item in task["input_basis"]["adequacy_profiles"]
+                ],
+            },
+            "provenance_bindings": provenance_bindings,
+            "review_memory": review_memory,
+            "created_at": now,
+        }
+        bundle = {
+            "schema_version": "1.0",
+            "paper_id": paper["paper_id"],
+            "active_revision_id": revision_id,
+            "revisions": [*previous_revisions, revision],
+            "created_at": now if previous_bundle is None else previous_bundle["created_at"],
+            "updated_at": now,
+        }
+        if fixture_origin is not None:
+            bundle["fixture_origin"] = fixture_origin
+        diagnostics = validate_record("review-semantic-bundle", bundle, actor="stored")
+        if diagnostics:
+            raise ResearchKBError(diagnostics[0])
+        return bundle
+
+    def _require_bound_review_inputs(
+        self,
+        layout: WorkspaceLayout,
+        task: Mapping[str, Any],
+        *,
+        check_bundle: bool,
+    ) -> None:
+        entries = load_workspace_entries(layout)
+        basis = task["input_basis"]
+        paper = self._paper(entries, basis["paper_id"])
+        observation = observe_paper_source(layout, entries, paper)
+        if canonical_digest(paper) != basis["paper_record_digest"]:
+            raise _conflict(task["state_id"], "Review Task paper record changed before commit")
+        if observation.state != "current" or observation.live_sha256 != basis["source_digest"]:
+            raise _conflict(task["state_id"], "Review Task source changed before commit")
+        current_job = self._pipeline_jobs(layout).show(basis["job_id"])["current_state"]
+        if current_job["state_id"] != basis["job_state_id"] or canonical_digest(current_job) != basis["job_state_digest"]:
+            raise _conflict(task["state_id"], "Review semantic Job changed before commit")
+        profiles = {item["profile_id"]: item for item in records_of_kind(entries, "source-adequacy-profile")}
+        for snapshot in basis["adequacy_profiles"]:
+            profile = profiles.get(snapshot["profile_id"])
+            if (
+                profile is None
+                or canonical_digest(profile) != snapshot["profile_digest"]
+                or profile_freshness(layout, entries, profile)["state"] != "current"
+            ):
+                raise _conflict(task["state_id"], "Review Source Adequacy basis changed before commit")
+        if check_bundle and file_sha256(layout.review_bundle_path(basis["paper_id"])) != basis["bundle_head_digest"]:
+            raise _conflict(task["state_id"], "Review bundle head changed before commit")
+
+    @staticmethod
+    def _validate_review_temp(layout: WorkspaceLayout, target, temporary) -> None:
+        bundle = read_json_document(temporary, record_kind="review-semantic-bundle")
+        entries = load_workspace_entries(
+            layout,
+            overrides={target: [("review-semantic-bundle", bundle)]},
+        )
+        validate_workspace_entries(entries)
+
+    @staticmethod
+    def _review_approval_result(
+        task: Mapping[str, Any],
+        job: Mapping[str, Any],
+        bundle: Mapping[str, Any],
+        *,
+        persistent_writes: int,
+    ) -> dict[str, Any]:
+        revision = bundle["revisions"][-1]
+        memory = revision["review_memory"]
+        return {
+            "status": "success",
+            "interface_version": APPLICATION_SERVICE_INTERFACE_VERSION,
+            "task": _task_projection(task),
+            "pipeline": PipelineJobService.summary(job),
+            "review_bundle": {
+                "paper_id": bundle["paper_id"],
+                "revision_id": revision["revision_id"],
+                "revision_number": revision["revision_number"],
+                "review_memory_id": memory["review_memory_id"],
+                "review_unit_count": sum(len(item["units"]) for item in memory["sections"]),
+                "background_only": True,
+            },
+            "persistent_writes": persistent_writes,
+            "canonical_scientific_write": True,
+        }
+
     @staticmethod
     def _blocked_result(
         job: Mapping[str, Any],
@@ -1448,11 +2246,13 @@ class AgentTaskApplicationService:
         origin_job_id: str | None = None,
     ) -> dict[str, Any]:
         paper_id = validate_id(paper_id, Namespace.PAPER)
-        expected_node = (
-            "document_route_resolution"
-            if task_kind == "document_route_resolution"
-            else "primary_semantic_processing"
-        )
+        expected_node = {
+            "document_route_resolution": "document_route_resolution",
+            "primary_semantic_processing": "primary_semantic_processing",
+            "review_semantic_processing": "review_semantic_processing",
+        }.get(task_kind)
+        if expected_node is None:
+            raise _request_error(job["state_id"], "/task_kind", "Agent Task kind is not implemented")
         if job["status"] != "waiting_agent" or job["current_node"] != expected_node:
             raise _conflict(job["state_id"], "Agent Task input basis requires its current waiting_agent Job head")
         if paper_id not in set(job["input_refs"]) | set(job["output_refs"]):
@@ -1500,7 +2300,8 @@ class AgentTaskApplicationService:
                 "requested_operation": profile["requested_operation"],
             }
         if origin_job_id is None:
-            raise _request_error(job["state_id"], "/input_basis/origin_job_id", "Primary Task origin Job is required")
+            raise _request_error(job["state_id"], "/input_basis/origin_job_id", "Semantic Task origin Job is required")
+        operations = PRIMARY_OPERATIONS if task_kind == "primary_semantic_processing" else REVIEW_OPERATIONS
         latest: dict[str, dict[str, Any]] = {}
         for profile in profiles:
             if profile["paper_id"] != paper_id or profile["job_id"] != job["job_id"]:
@@ -1512,14 +2313,14 @@ class AgentTaskApplicationService:
                 current["profile_id"],
             ):
                 latest[operation] = profile
-        if set(latest) != set(PRIMARY_OPERATIONS):
-            raise _conflict(job["state_id"], "Primary Task input basis lacks complete Source Adequacy profiles")
-        ordered_profiles = [latest[operation] for operation in PRIMARY_OPERATIONS]
+        if set(latest) != set(operations):
+            raise _conflict(job["state_id"], "Semantic Task input basis lacks complete Source Adequacy profiles")
+        ordered_profiles = [latest[operation] for operation in operations]
         if any(profile_freshness(layout, entries, item)["state"] != "current" for item in ordered_profiles):
-            raise _conflict(job["state_id"], "Primary Task Source Adequacy profile is stale")
+            raise _conflict(job["state_id"], "Semantic Task Source Adequacy profile is stale")
         parse_snapshots = {canonical_digest(item["parse_snapshot"]): item["parse_snapshot"] for item in ordered_profiles}
         if len(parse_snapshots) != 1:
-            raise _conflict(job["state_id"], "Primary Task Source Adequacy profiles do not share one parse")
+            raise _conflict(job["state_id"], "Semantic Task Source Adequacy profiles do not share one parse")
         parse_snapshot = next(iter(parse_snapshots.values()))
         return {
             "paper_id": paper_id,
@@ -1540,7 +2341,11 @@ class AgentTaskApplicationService:
                 }
                 for item in ordered_profiles
             ],
-            "bundle_head_digest": file_sha256(layout.primary_bundle_path(paper_id)),
+            "bundle_head_digest": file_sha256(
+                layout.primary_bundle_path(paper_id)
+                if task_kind == "primary_semantic_processing"
+                else layout.review_bundle_path(paper_id)
+            ),
         }
 
     def _derive_basis_for_task(self, layout: WorkspaceLayout, task: Mapping[str, Any]) -> dict[str, Any]:
@@ -1612,6 +2417,42 @@ class AgentTaskApplicationService:
                 "Return only JSON matching the declared Primary result contract."
             )
             manifest_version = "p4b-agent-handoff@1.0"
+        elif task["task_kind"] == "review_semantic_processing":
+            active_memory = next(
+                (
+                    item
+                    for item in records_of_kind(entries, "review-memory")
+                    if item["paper_id"] == paper["paper_id"]
+                ),
+                None,
+            )
+            payload = {
+                "metadata": {
+                    "paper_id": paper["paper_id"],
+                    "bibliography": paper["bibliography"],
+                },
+                "parsed_excerpts": excerpts,
+                "operational_context": {
+                    "task_kind": task["task_kind"],
+                    "review_sections": list(REVIEW_SECTIONS),
+                    "source_adequacy": [dict(item) for item in task["input_basis"]["adequacy_profiles"]],
+                    "review_note_operations": [
+                        item for item in REVIEW_OPERATIONS if item != "basic_review_memory"
+                    ],
+                    "canonical_ids_agent_owned": False,
+                    "canonical_scientific_write": False,
+                    "review_units_background_only": True,
+                },
+            }
+            if "review_background" in task["effective_content_classes"] and active_memory is not None:
+                payload["review_background"] = active_memory
+            prompt_instruction = (
+                "Build a question-independent seven-section Review candidate. Every retained Unit must have "
+                "same-review source notes and a concrete workflow impact. Do not retain a note for an operation "
+                "whose capability_status is not yes. Review content is background only and never canonical Evidence. "
+                "Return only JSON matching the declared Review result contract."
+            )
+            manifest_version = "p4c-agent-handoff@1.0"
         else:
             payload = {
                 "metadata": {
