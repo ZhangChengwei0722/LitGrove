@@ -30,8 +30,8 @@ from research_kb.errors import (
 from research_kb.storage.json_io import read_json_document
 
 
-PREVIOUS_LAYOUT_CONTRACT_VERSION = "m3c-2a"
-CURRENT_LAYOUT_CONTRACT_VERSION = "p4b-1"
+PREVIOUS_LAYOUT_CONTRACT_VERSION = "p4b-1"
+CURRENT_LAYOUT_CONTRACT_VERSION = "p4c-1"
 LAYOUT_CONTRACT_VERSION = CURRENT_LAYOUT_CONTRACT_VERSION
 MARKER_RELATIVE_PATH = ".research-kb/workspace.json"
 M2A_1_MANAGED_DIRECTORIES = (
@@ -60,7 +60,11 @@ P4B_1_MANAGED_DIRECTORIES = M3C_2A_MANAGED_DIRECTORIES + (
     "primary_bundles",
     "primary_bundles/by_paper",
 )
-MANAGED_DIRECTORIES = P4B_1_MANAGED_DIRECTORIES
+P4C_1_MANAGED_DIRECTORIES = P4B_1_MANAGED_DIRECTORIES + (
+    "review_bundles",
+    "review_bundles/by_paper",
+)
+MANAGED_DIRECTORIES = P4C_1_MANAGED_DIRECTORIES
 
 
 @dataclass(frozen=True, slots=True)
@@ -377,9 +381,9 @@ def _layout_diagnostics(context: WorkspaceContext, *, require_initialized: bool)
     elif require_initialized:
         diagnostics.append(_not_initialized(context.workspace_id))
 
-    required_directories = M3C_2A_MANAGED_DIRECTORIES if marker_is_predecessor else MANAGED_DIRECTORIES
+    required_directories = P4B_1_MANAGED_DIRECTORIES if marker_is_predecessor else MANAGED_DIRECTORIES
     allowed_directories = (
-        M3C_2A_MANAGED_DIRECTORIES + ("primary_bundles", "primary_bundles/by_paper")
+        P4B_1_MANAGED_DIRECTORIES + ("review_bundles", "review_bundles/by_paper")
         if marker_is_predecessor
         else MANAGED_DIRECTORIES
     )
@@ -456,6 +460,7 @@ def _recognized_descendant(
         ("evidence/by_paper/", ".evidence.jsonl"),
         ("review_memories/by_paper/", ".review.json"),
         ("primary_bundles/by_paper/", ".primary.json"),
+        ("review_bundles/by_paper/", ".review-bundle.json"),
     )
     if any(relative.startswith(prefix) and "/" not in relative[len(prefix) :] and relative.endswith(suffix) for prefix, suffix in patterns):
         return True

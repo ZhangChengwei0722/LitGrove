@@ -81,11 +81,10 @@ def validate_task_state(state: Mapping[str, Any]) -> None:
         if status == "rejected" and decision.get("reason_code") != "user_rejected":
             raise _task_error("rejected decision requires the user-rejected reason", "/decision/reason_code")
         if status == "approved":
-            expected_reason = (
-                "primary_bundle_committed"
-                if state.get("task_kind") == "primary_semantic_processing"
-                else "route_confirmed"
-            )
+            expected_reason = {
+                "primary_semantic_processing": "primary_bundle_committed",
+                "review_semantic_processing": "review_bundle_committed",
+            }.get(state.get("task_kind"), "route_confirmed")
             if decision.get("reason_code") != expected_reason:
                 raise _task_error("approved decision reason does not match the Task kind", "/decision/reason_code")
     if status == "superseded":

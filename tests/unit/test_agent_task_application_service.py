@@ -11,10 +11,12 @@ from research_kb.catalog.models import canonical_digest
 from research_kb.bundle import load_workspace_entries, records_of_kind
 from research_kb.errors import ResearchKBError
 from research_kb.guardian import GuardianService
+from research_kb.mutation import MutationRequest
 from research_kb.services import (
     AgentTaskApplicationService,
     DeterministicIntakeApplicationService,
     DeterministicTrunkService,
+    ReviewMemoryService,
     WorkspaceSessionService,
 )
 from research_kb.services.pipeline_job import PipelineJobService
@@ -34,6 +36,16 @@ POLICY = {
 }
 APPROVED_CLASSES = ["metadata", "parsed_excerpt", "operational_context"]
 P4B_POLICY = {**POLICY, "registry_version": "p4b-v1"}
+P4C_POLICY = {
+    **POLICY,
+    "registry_version": "p4c-v1",
+    "allowed_content_classes": [
+        "metadata",
+        "parsed_excerpt",
+        "operational_context",
+        "review_background",
+    ],
+}
 SECTIONS = [
     "research_background_significance",
     "research_problem",
@@ -42,6 +54,15 @@ SECTIONS = [
     "innovation",
     "limitations",
     "future_outlook",
+]
+REVIEW_SECTIONS = [
+    "review_objective_scope",
+    "review_question_search_boundaries",
+    "taxonomy_field_structure",
+    "major_synthesis",
+    "methods_metrics_guardrails",
+    "gaps_frontiers",
+    "primary_leads_reuse",
 ]
 
 
@@ -257,6 +278,145 @@ def _primary_candidate(task: dict[str, object], quote: str, *, operation: str = 
                 ),
             }
             for section in SECTIONS
+        ],
+    }
+
+
+def _review_ready(tmp_path: Path):
+    text = "Synthetic review separates two fabricated response classes for later primary-paper reading."
+    layout = make_runtime_workspace(tmp_path, agent_policy=P4C_POLICY)
+    source = layout.source_roots["alpha-sources"] / "review-semantic.txt"
+    source.write_text(text, encoding="utf-8", newline="\n")
+    paper, _ = RegistryService(layout).add(
+        root_id="alpha-sources",
+        relative_path=source.name,
+        metadata={
+            "bibliography": {
+                "title": "Synthetic Review Semantic Study",
+                "authors": ["Fixture Author"],
+                "year": 2026,
+                "doi": None,
+            },
+            "fixture_origin": "synthetic_from_scratch",
+        },
+    )
+    origin = PipelineJobService(layout).create(
+        requested_route="local_source",
+        requested_depth="semantic_gate",
+        current_node="source_check",
+        input_refs=[paper["paper_id"]],
+        authority_snapshot={
+            "actor": "user",
+            "granted_operations": [
+                "advance_deterministic_trunk",
+                "assess_source_adequacy",
+                "observe_source",
+                "parse_run",
+            ],
+            "captured_at": "2026-07-31T08:00:00Z",
+        },
+        idempotency_key="synthetic-review-origin",
+        actor="user",
+        fixture_origin="synthetic_from_scratch",
+    )
+    completed = DeterministicTrunkService(layout).advance(
+        job_id=origin.state["job_id"],
+        paper_id=paper["paper_id"],
+        requested_operation="basic_review_memory",
+        adapter_name="synthetic-text",
+        actor="user",
+        document_route="review",
+        route_reason=None,
+    )
+    assert completed.state["status"] == "completed"
+    assert completed.state["current_node"] == "review_semantic_gate"
+    session = WorkspaceSessionService({"alpha": layout.config.path}).open("alpha")
+    intake = {"paper_id": paper["paper_id"], "pipeline": {"job_id": origin.state["job_id"]}}
+    service = AgentTaskApplicationService(clock=lambda: NOW)
+    created = service.create_from_pipeline(
+        session,
+        intake["pipeline"]["job_id"],
+        {
+            "paper_id": intake["paper_id"],
+            "task_kind": "review_semantic_processing",
+            "executor_id": "codex_cli",
+            "approved_content_classes": APPROVED_CLASSES,
+            "idempotency_key": "review-task-1",
+        },
+    )
+    return layout, session, intake, service, created, text
+
+
+def _review_candidate(
+    task: dict[str, object],
+    *,
+    operation: str = "continuous_text_evidence",
+    zero_units: bool = False,
+    content: str = "The fabricated review separates two response classes.",
+):
+    unit = {
+        "section_id": "taxonomy_field_structure",
+        "unit_type": "field_axis",
+        "content": content,
+        "source_notes": [
+            {
+                "pdf_page": 1,
+                "printed_page": None,
+                "section": "Synthetic taxonomy",
+                "figure_or_table": "Figure 1" if operation == "figure_table_evidence" else None,
+                "note_type": "paraphrase",
+                "text": "The synthetic review presents two fabricated response classes.",
+                "locator": None,
+                "reopen_priority": "high",
+                "requested_operation": operation,
+            }
+        ],
+        "workflow_impacts": [
+            {
+                "target": "primary_paper_reading",
+                "action": "Separate the two fabricated response classes during later reading.",
+            }
+        ],
+        "evidence_use": {
+            "can_support_canonical_evidence": False,
+            "can_guide_primary_grounding": True,
+            "primary_grounding_required_before": ["comparative_claim"],
+        },
+        "reuse_quality": {
+            "reuse_confidence": "medium",
+            "staleness_risk": "low",
+            "reason": "The taxonomy is explicit in the synthetic review.",
+        },
+        "primary_paper_lead": None,
+    }
+    units = {section: [] for section in REVIEW_SECTIONS}
+    if not zero_units:
+        units["taxonomy_field_structure"] = [unit]
+    return {
+        "contract_version": "p4c-review-semantic-candidate@1.0",
+        "task_id": task["task_id"],
+        "input_basis_digest": task["input_basis_digest"],
+        "review_subtype": "narrative_review",
+        "review_subtype_source": "agent_high_confidence",
+        "review_subtype_reason": "The synthetic document presents a secondary synthesis.",
+        "read_status": "targeted_read",
+        "scope_tags": ["synthetic_review"],
+        "one_sentence_reuse_value": "Provides a fabricated taxonomy for later primary-paper reading.",
+        "memory_value": {
+            "status": "low_value" if zero_units else "reusable",
+            "reason": "The source is redundant." if zero_units else "One actionable taxonomy is retained.",
+        },
+        "coverage_limits": {
+            "unread_sections": ["Synthetic appendix"],
+            "weakly_read_sections": [],
+            "reason": "The appendix was outside the targeted read.",
+        },
+        "sections": [
+            {"section_id": section, "units": units[section]}
+            for section in REVIEW_SECTIONS
+        ],
+        "non_reusable_notes": [
+            {"content": "A promotional sentence was omitted.", "reason": "promotional"}
         ],
     }
 
@@ -770,6 +930,227 @@ def test_primary_approval_recovers_bundle_before_job_and_task_receipts(tmp_path:
     final_bundle = read_json_document(layout.primary_bundle_path(created["task"]["paper_id"]), record_kind="primary-semantic-bundle")
     assert recovered["task"]["status"] == "approved"
     assert recovered["persistent_writes"] == 3
+
+
+def test_review_task_stages_previews_and_commits_background_bundle(tmp_path: Path) -> None:
+    layout, session, intake, service, created, _ = _review_ready(tmp_path)
+    prepared = service.prepare_handoff(
+        session,
+        created["task"]["task_id"],
+        _expected(created["task"]),
+        "codex_cli",
+    )
+    assert prepared["handoff"]["manifest_version"] == "p4c-agent-handoff@1.0"
+    assert prepared["handoff"]["payload"]["operational_context"]["review_sections"] == REVIEW_SECTIONS
+    submitted = service.submit_result(
+        session,
+        prepared["task"]["task_id"],
+        _expected(prepared["task"]),
+        prepared["lease"],
+        _review_candidate(prepared["task"]),
+    )
+    preview = service.preview_result(session, submitted["task"]["task_id"])
+    assert preview["candidate"]["background_only"] is True
+    assert preview["candidate"]["canonical_scientific_write"] is False
+    assert not layout.review_bundle_path(intake["paper_id"]).exists()
+
+    approved = service.approve_review_result(
+        session,
+        submitted["task"]["task_id"],
+        _expected(submitted["task"]),
+    )
+    replay = service.approve_review_result(
+        session,
+        approved["task"]["task_id"],
+        _expected(approved["task"]),
+    )
+    bundle = read_json_document(
+        layout.review_bundle_path(intake["paper_id"]),
+        record_kind="review-semantic-bundle",
+    )
+    memory = bundle["revisions"][0]["review_memory"]
+    entries = load_workspace_entries(layout)
+    assert approved["review_bundle"]["revision_number"] == 1
+    assert approved["review_bundle"]["review_unit_count"] == 1
+    assert replay["persistent_writes"] == 0
+    assert memory["background_only"] is True
+    assert memory["can_enter_canonical_evidence"] is False
+    assert memory["not_fact"] is True
+    assert not [item for item in records_of_kind(entries, "evidence") if item["paper_id"] == intake["paper_id"]]
+    assert not [item for item in records_of_kind(entries, "review-queue") if item["paper_id"] == intake["paper_id"]]
+    with pytest.raises(ResearchKBError) as legacy_bypass:
+        ReviewMemoryService(layout).promote(
+            MutationRequest(
+                operation="append",
+                record_kind="review-memory",
+                target_record_id=None,
+                paper_id=intake["paper_id"],
+                payload={},
+            )
+        )
+    assert "cannot bypass Review bundle revision authority" in legacy_bypass.value.diagnostic.message
+
+
+def test_review_submission_blocks_inadequate_figure_note_without_scientific_write(tmp_path: Path) -> None:
+    layout, session, intake, service, created, _ = _review_ready(tmp_path)
+    prepared = service.prepare_handoff(session, created["task"]["task_id"], _expected(created["task"]), "codex_cli")
+    blocked = service.submit_result(
+        session,
+        prepared["task"]["task_id"],
+        _expected(prepared["task"]),
+        prepared["lease"],
+        _review_candidate(prepared["task"], operation="figure_table_evidence"),
+    )
+
+    assert blocked["status"] == "blocked"
+    assert blocked["pipeline"]["wait_reason"] == "layout_parse_required"
+    assert blocked["canonical_scientific_write"] is False
+    assert not layout.review_bundle_path(intake["paper_id"]).exists()
+    entries = load_workspace_entries(layout)
+    assert not [item for item in records_of_kind(entries, "review-memory") if item["paper_id"] == intake["paper_id"]]
+    assert not [item for item in records_of_kind(entries, "review-queue") if item["paper_id"] == intake["paper_id"]]
+    leased = service.show_task(session, created["task"]["task_id"])["current_task"]
+    refreshed = service.refresh_review_task(session, leased["task_id"], _expected(leased))
+    replay = service.refresh_review_task(session, leased["task_id"], _expected(leased))
+    assert refreshed["task"]["status"] == "superseded"
+    assert refreshed["successor_task"]["status"] == "created"
+    assert refreshed["successor_task"]["lineage"]["predecessor_handoff_digest"] == prepared["lease"]["handoff_digest"]
+    assert replay["persistent_writes"] == 0
+    assert GuardianService(layout).check().report["status"] == "success"
+
+
+def test_review_quote_must_equal_task_bound_character_slice(tmp_path: Path) -> None:
+    _, session, _, service, created, text = _review_ready(tmp_path)
+    prepared = service.prepare_handoff(session, created["task"]["task_id"], _expected(created["task"]), "codex_cli")
+    candidate = _review_candidate(prepared["task"])
+    note = candidate["sections"][2]["units"][0]["source_notes"][0]
+    note.update(
+        {
+            "note_type": "quote_excerpt",
+            "text": "not the stored slice",
+            "locator": "page:1:char:0-16",
+        }
+    )
+    with pytest.raises(ResearchKBError):
+        service.submit_result(
+            session,
+            prepared["task"]["task_id"],
+            _expected(prepared["task"]),
+            prepared["lease"],
+            candidate,
+        )
+    note["text"] = text[:16]
+    submitted = service.submit_result(
+        session,
+        prepared["task"]["task_id"],
+        _expected(prepared["task"]),
+        prepared["lease"],
+        candidate,
+    )
+    assert submitted["task"]["status"] == "submitted"
+
+
+def test_zero_unit_low_value_review_memory_is_allowed(tmp_path: Path) -> None:
+    _, session, _, service, created, _ = _review_ready(tmp_path)
+    prepared = service.prepare_handoff(session, created["task"]["task_id"], _expected(created["task"]), "codex_cli")
+    submitted = service.submit_result(
+        session,
+        prepared["task"]["task_id"],
+        _expected(prepared["task"]),
+        prepared["lease"],
+        _review_candidate(prepared["task"], zero_units=True),
+    )
+    approved = service.approve_review_result(
+        session,
+        submitted["task"]["task_id"],
+        _expected(submitted["task"]),
+    )
+
+    assert approved["review_bundle"]["review_unit_count"] == 0
+
+
+def test_review_correction_appends_revision_with_new_memory_and_unit_ids(tmp_path: Path) -> None:
+    layout, session, intake, service, created, _ = _review_ready(tmp_path)
+    prepared = service.prepare_handoff(session, created["task"]["task_id"], _expected(created["task"]), "codex_cli")
+    submitted = service.submit_result(
+        session,
+        prepared["task"]["task_id"],
+        _expected(prepared["task"]),
+        prepared["lease"],
+        _review_candidate(prepared["task"]),
+    )
+    service.approve_review_result(session, submitted["task"]["task_id"], _expected(submitted["task"]))
+    first_bundle = read_json_document(layout.review_bundle_path(intake["paper_id"]), record_kind="review-semantic-bundle")
+    first_revision = first_bundle["revisions"][0]
+
+    created_correction = service.create_from_pipeline(
+        session,
+        intake["pipeline"]["job_id"],
+        {
+            "paper_id": intake["paper_id"],
+            "task_kind": "review_semantic_processing",
+            "executor_id": "codex_cli",
+            "approved_content_classes": [*APPROVED_CLASSES, "review_background"],
+            "idempotency_key": "review-correction-2",
+        },
+    )
+    prepared_correction = service.prepare_handoff(
+        session,
+        created_correction["task"]["task_id"],
+        _expected(created_correction["task"]),
+        "codex_cli",
+    )
+    assert prepared_correction["handoff"]["payload"]["review_background"]["review_memory_id"] == first_revision["review_memory"]["review_memory_id"]
+    submitted_correction = service.submit_result(
+        session,
+        prepared_correction["task"]["task_id"],
+        _expected(prepared_correction["task"]),
+        prepared_correction["lease"],
+        _review_candidate(
+            prepared_correction["task"],
+            content="The corrected fabricated review separates three response classes.",
+        ),
+    )
+    approved = service.approve_review_result(
+        session,
+        submitted_correction["task"]["task_id"],
+        _expected(submitted_correction["task"]),
+    )
+    corrected = read_json_document(layout.review_bundle_path(intake["paper_id"]), record_kind="review-semantic-bundle")
+    second_revision = corrected["revisions"][1]
+
+    assert approved["review_bundle"]["revision_number"] == 2
+    assert corrected["revisions"][0] == first_revision
+    assert second_revision["review_memory"]["review_memory_id"] != first_revision["review_memory"]["review_memory_id"]
+    assert second_revision["review_memory"]["sections"][2]["units"][0]["review_unit_id"] != first_revision["review_memory"]["sections"][2]["units"][0]["review_unit_id"]
+
+
+def test_review_approval_recovers_bundle_before_job_and_task_receipts(tmp_path: Path) -> None:
+    layout, session, _, service, created, _ = _review_ready(tmp_path)
+    prepared = service.prepare_handoff(session, created["task"]["task_id"], _expected(created["task"]), "codex_cli")
+    submitted = service.submit_result(
+        session,
+        prepared["task"]["task_id"],
+        _expected(prepared["task"]),
+        prepared["lease"],
+        _review_candidate(prepared["task"]),
+    )
+    stored_head = service._head(service._read_states(layout), submitted["task"]["task_id"])
+    bundle, writes = service._commit_or_recover_review_bundle(layout, stored_head)
+    assert writes == 1
+
+    recovered = service.approve_review_result(
+        session,
+        submitted["task"]["task_id"],
+        _expected(submitted["task"]),
+    )
+    final_bundle = read_json_document(
+        layout.review_bundle_path(created["task"]["paper_id"]),
+        record_kind="review-semantic-bundle",
+    )
+    assert recovered["task"]["status"] == "approved"
+    assert recovered["persistent_writes"] == 3
+    assert final_bundle == bundle
     assert len(final_bundle["revisions"]) == 1
     assert final_bundle["active_revision_id"] == bundle["active_revision_id"]
     assert GuardianService(layout).check().report["status"] == "success"

@@ -54,6 +54,11 @@ from research_kb.review_memory_provenance import (
     review_memory_freshness,
     validate_review_memory_provenance,
 )
+from research_kb.review_bundles import (
+    expand_active_review_entries,
+    mixed_review_authority_diagnostics,
+    review_bundle_diagnostics,
+)
 from research_kb.source_assets import (
     current_source_asset_heads,
     source_asset_chain_diagnostics,
@@ -61,7 +66,11 @@ from research_kb.source_assets import (
 
 
 CONFIG_KINDS = {"workspace", "domain-profile", "mutation-request"}
-RESULT_CONTRACT_KINDS = {"document-route-decision", "primary-semantic-candidate"}
+RESULT_CONTRACT_KINDS = {
+    "document-route-decision",
+    "primary-semantic-candidate",
+    "review-semantic-candidate",
+}
 HUMAN_ONLY_REVIEW_STATES = {"human_checked", "verified"}
 NON_SUPPORTING_UNIT_STATES = {"interpretive", "background_only", "needs_resolution"}
 
@@ -174,7 +183,9 @@ def validate_bundle(
         if not any(item.code in {UNSUPPORTED_VERSION, SCHEMA_VALIDATION_FAILED, UNKNOWN_SCHEMA_KIND} for item in record_diagnostics):
             normalized.append((kind, record))
     diagnostics.extend(mixed_primary_authority_diagnostics(normalized))
+    diagnostics.extend(mixed_review_authority_diagnostics(normalized))
     expanded = expand_active_primary_entries(normalized)
+    expanded = expand_active_review_entries(expanded)
     for kind, record in expanded[len(normalized):]:
         diagnostics.extend(validate_record(kind, record, registry=schema_registry, actor=actor))
     diagnostics.extend(_cross_record_diagnostics(expanded))
@@ -515,6 +526,8 @@ def _local_semantic_diagnostics(kind: str, record: dict[str, Any]) -> list[Diagn
             )
     if kind == "primary-semantic-bundle":
         diagnostics.extend(primary_bundle_diagnostics(record))
+    elif kind == "review-semantic-bundle":
+        diagnostics.extend(review_bundle_diagnostics(record))
     return diagnostics
 
 
@@ -787,6 +800,22 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                     historical_queues.add(queue_id)
                     defined["queue"].append(queue_id)
                     historical_queue_paper[queue_id] = paper_id
+        elif kind == "review-semantic-bundle":
+            defined["reviewrev"].extend(
+                revision.get("revision_id", "")
+                for revision in record.get("revisions", [])
+            )
+            active_revision_id = record.get("active_revision_id")
+            for revision in record.get("revisions", []):
+                if revision.get("revision_id") == active_revision_id:
+                    continue
+                memory = revision.get("review_memory", {})
+                defined["reviewmem"].append(memory.get("review_memory_id", ""))
+                for section in memory.get("sections", []):
+                    defined["reviewunit"].extend(
+                        unit.get("review_unit_id", "")
+                        for unit in section.get("units", [])
+                    )
         elif kind == "guardian-report":
             guardian_reports.append(record)
             defined["guardian"].append(record.get("guardian_report_id", ""))
@@ -1669,6 +1698,39 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                         set(adequacy_profiles),
                         "Source Adequacy profile",
                     )
+        elif kind == "review-semantic-bundle":
+            for index, revision in enumerate(record.get("revisions", [])):
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    f"/revisions/{index}/approval/task_id",
+                    revision.get("approval", {}).get("task_id"),
+                    agent_tasks,
+                    "Agent Task",
+                )
+                for profile_index, snapshot in enumerate(
+                    revision.get("input_snapshot", {}).get("adequacy_profiles", [])
+                ):
+                    _require_ref(
+                        diagnostics,
+                        kind,
+                        record_id,
+                        f"/revisions/{index}/input_snapshot/adequacy_profiles/{profile_index}/profile_id",
+                        snapshot.get("profile_id"),
+                        set(adequacy_profiles),
+                        "Source Adequacy profile",
+                    )
+                for binding_index, binding in enumerate(revision.get("provenance_bindings", [])):
+                    _require_ref(
+                        diagnostics,
+                        kind,
+                        record_id,
+                        f"/revisions/{index}/provenance_bindings/{binding_index}/profile_id",
+                        binding.get("profile_id"),
+                        set(adequacy_profiles),
+                        "Source Adequacy profile",
+                    )
         elif kind == "guardian-report":
             _require_ref(diagnostics, kind, record_id, "/workspace_id", record.get("workspace_id"), workspaces, "workspace")
             for index, finding in enumerate(record.get("findings", [])):
@@ -1728,6 +1790,7 @@ def _record_id(kind: str, record: dict[str, Any]) -> str | None:
         "source-adequacy-profile": "profile_id",
         "agent-task-state": "state_id",
         "primary-semantic-bundle": "paper_id",
+        "review-semantic-bundle": "paper_id",
     }
     field = fields.get(kind)
     value = record.get(field) if field else None

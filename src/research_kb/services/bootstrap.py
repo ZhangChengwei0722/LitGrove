@@ -361,6 +361,7 @@ class WorkspaceBootstrapService:
             ("evidence/by_paper", "*.evidence.jsonl"),
             ("review_memories/by_paper", "*.review.json"),
             ("primary_bundles/by_paper", "*.primary.json"),
+            ("review_bundles/by_paper", "*.review-bundle.json"),
             (".research-kb/transactions", "*.json"),
         ):
             directory = context.knowledge_root / Path(*relative.split("/"))
@@ -509,6 +510,22 @@ class WorkspaceBootstrapService:
                         )
                     )
 
+        review_bundle_directory = layout.knowledge_root / "review_bundles" / "by_paper"
+        if review_bundle_directory.is_dir():
+            for path in sorted(review_bundle_directory.glob("*.review-bundle.json")):
+                expected_paper_id = path.name[: -len(".review-bundle.json")]
+                bundle = read_json_document(path, record_kind="review-semantic-bundle")
+                if bundle.get("paper_id") != expected_paper_id:
+                    raise ResearchKBError(
+                        Diagnostic(
+                            WORKSPACE_LAYOUT_CONFLICT,
+                            "review-semantic-bundle",
+                            expected_paper_id,
+                            "/paper_id",
+                            "store filename does not match contained paper_id",
+                        )
+                    )
+
     @staticmethod
     def _verify_marker(context: WorkspaceContext) -> None:
         marker = read_json_document(context.marker_path, record_kind="workspace-marker")
@@ -637,6 +654,7 @@ def _journal_target_matches_store(target_store: str, relative_path: str) -> bool
         "evidence": ("evidence/by_paper/", ".evidence.jsonl"),
         "review_memories": ("review_memories/by_paper/", ".review.json"),
         "primary_bundles": ("primary_bundles/by_paper/", ".primary.json"),
+        "review_bundles": ("review_bundles/by_paper/", ".review-bundle.json"),
     }
     match = patterns.get(target_store)
     if match is None:

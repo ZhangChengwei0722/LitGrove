@@ -8,6 +8,7 @@ from research_kb.config.loader import load_config
 from research_kb.contracts.validator import validate_bundle
 from research_kb.errors import WORKSPACE_LAYOUT_CONFLICT, Diagnostic, ResearchKBError
 from research_kb.primary_bundles import active_primary_entries
+from research_kb.review_bundles import active_review_entries
 from research_kb.storage.json_io import read_json_document, read_jsonl
 from research_kb.workspace import WorkspaceLayout
 
@@ -101,6 +102,26 @@ def load_workspace_entries(
                 path.name[: -len(".primary.json")],
             )
             entries.append(("primary-semantic-bundle", bundle))
+    if (layout.knowledge_root / "review_bundles" / "by_paper").exists():
+        for path in sorted((layout.knowledge_root / "review_bundles" / "by_paper").glob("*.review-bundle.json")):
+            resolved = path.resolve()
+            if resolved in resolved_overrides:
+                override_entries = resolved_overrides[resolved]
+                bundles = [record for kind, record in override_entries if kind == "review-semantic-bundle"]
+                if len(bundles) != 1:
+                    raise ResearchKBError(
+                        Diagnostic(WORKSPACE_LAYOUT_CONFLICT, "review-semantic-bundle", None, "", "Review bundle override must contain one bundle")
+                    )
+                bundle = bundles[0]
+                consumed.add(resolved)
+            else:
+                bundle = read_json_document(path, record_kind="review-semantic-bundle")
+            _require_paper_filename_binding(
+                [("review-semantic-bundle", bundle)],
+                "review-semantic-bundle",
+                path.name[: -len(".review-bundle.json")],
+            )
+            entries.append(("review-semantic-bundle", bundle))
     add_jsonl(layout.review_queue_path, "review-queue", "queue_id")
     add_jsonl(layout.question_mappings_path, "question-mapping", "question_id")
     add_jsonl(layout.discovery_candidates_path, "discovery-candidate", "candidate_id")
@@ -155,6 +176,14 @@ def records_of_kind(entries: Iterable[BundleEntry], kind: str) -> list[dict[str,
             for entry_kind, bundle in materialized
             if entry_kind == "primary-semantic-bundle"
             for child_kind, child in active_primary_entries(bundle)
+            if child_kind == kind
+        )
+    if kind == "review-memory":
+        records.extend(
+            child
+            for entry_kind, bundle in materialized
+            if entry_kind == "review-semantic-bundle"
+            for child_kind, child in active_review_entries(bundle)
             if child_kind == kind
         )
     return records

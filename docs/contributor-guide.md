@@ -260,6 +260,19 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Keep historical Primary child IDs resolvable for audit and stale propagation, but expose only active-revision children to Catalog and factual downstream reads.
 - Recover bundle, Job and Task receipts idempotently after partial process failure. Never create a second revision for the same approved Task result.
 
+## Review Semantic Bundle Rules
+
+- Start Review semantic work only from a completed Review or mixed-document Review gate; never reopen the deterministic intake Job.
+- Keep `p4a-v1` and `p4b-v1` behavior compatible. Register Review processing only under `p4c-v1`.
+- Bind five Review operations, but block staging only when the base `basic_review_memory` gate or an operation actually consumed by a retained source note is inadequate.
+- Validate every retained source note against the Task-bound Parse. Exact quotes require a character slice; paraphrases require a resolvable page and section or explicit missing-section reason.
+- Accept semantic Review fields only. Core owns revision, Review Memory and Review Unit IDs plus all background/non-evidence constants.
+- Permit zero reusable Units only for an explicitly low-value, redundant, outdated or outside-scope Memory with a concrete reason and coverage limits.
+- Keep preview operational and non-canonical. Explicit user approval may write one Review bundle revision, but it never upgrades Review content into Evidence or factual support.
+- Reject legacy/P4-C coexistence and direct legacy Review mutation after a Review bundle exists.
+- Preserve every approved revision and predecessor digest. Corrections allocate new Memory and Unit IDs; only the active child enters Review Context and Catalog.
+- Recover bundle, Job and Task receipts idempotently. A blocked Review use creates no scientific review-queue substitute.
+
 ## Platform Rules
 
 Tests must include Windows-shaped and POSIX-shaped paths independent of the host. Persisted relative paths always use `/`.

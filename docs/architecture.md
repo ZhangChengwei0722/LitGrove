@@ -605,3 +605,32 @@ The file replacement, semantic Job completion and Task approval use idempotent r
 a retry after bundle replacement completes only missing Job or Task state. Corrections
 append a successor revision; stale or deliberately refreshed Tasks are superseded by a
 new Task with reciprocal lineage. No path edits an approved scientific revision in place.
+
+## P4-C Review Semantic Bundle
+
+Application Service interface `1.4` adds `review_semantic_processing` under the versioned
+`p4c-v1` Agent Task registry. Only a completed `review_semantic_gate` or
+`review_semantic_gate_mixed_document` may create the independent Review semantic Job.
+The Task binds the same source, Parse, five use-specific Source Adequacy, Job and bundle
+head identities as the Primary route, but consumes `basic_review_memory` for its base
+gate and note-specific capabilities only for retained source notes.
+
+User approval promotes one complete file:
+
+```text
+knowledge/review_bundles/by_paper/<paper_id>.review-bundle.json
+```
+
+Every revision contains a newly allocated Review Memory and newly allocated Review Unit
+IDs, the exact source/Parse/Profile input snapshot, one provenance binding for every
+retained source note and the user-approved Task receipt. Only the active Memory enters
+Review Context and Catalog. Historical Memory and Unit IDs remain audit-resolvable.
+Legacy Review Memory and P4-C bundle authority cannot coexist for one paper.
+
+Review content does not become factual through approval. Every retained Unit remains
+`background_only=true`, `can_enter_canonical_evidence=false` and `not_fact=true`.
+A blocked figure, formula or supplementary source note returns the semantic Job to its
+specific source/reparse wait and creates no Memory, Unit, Evidence or scientific review
+queue row. A zero-Unit low-value or redundant Memory is valid when its reason and
+coverage limits are explicit. Crash replay completes missing Job/Task receipts without
+creating a duplicate revision; corrections append and never edit historical revisions.

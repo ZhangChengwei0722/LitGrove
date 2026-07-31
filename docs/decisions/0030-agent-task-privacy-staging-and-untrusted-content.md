@@ -1,6 +1,6 @@
 # 0030 Agent Task Privacy, Staging And Untrusted Content
 
-Status: accepted; P4-A route-resolution runtime implemented
+Status: accepted; P4-A route, P4-B Primary and P4-C Review runtimes implemented
 
 ## Context
 
@@ -37,7 +37,7 @@ This table freezes P4 design input; it does not create task records or schemas i
 | `document_route_resolution` | `metadata`, `parsed_excerpt`, `operational_context` | `source_document` | Card/Review content cannot be called metadata. |
 | `source_adequacy_assessment` | `metadata`, `parsed_excerpt`, `operational_context` | `source_document` | Machine hard-failure observations cannot be omitted or overridden. |
 | `primary_semantic_processing` | `metadata`, `parsed_excerpt`, `operational_context` | `source_document`, `research_routing_context` | Review background cannot be promoted as Evidence. |
-| `review_semantic_processing` | `metadata`, `parsed_excerpt`, `operational_context` | `source_document`, `research_routing_context` | Review Units cannot be labeled canonical Evidence. |
+| `review_semantic_processing` | `metadata`, `parsed_excerpt`, `operational_context` | `review_background` | Review Units cannot be labeled canonical Evidence; configured external CLI executors do not receive source documents. |
 | `question_direction_mapping` | `paper_card_content`, `research_routing_context`, `operational_context` | `canonical_evidence`, `review_background`, `metadata` | Question/Direction context cannot be called metadata. |
 | `research_synthesis_drafting` | `paper_card_content`, `canonical_evidence`, `research_routing_context`, `operational_context` | `review_background`, `research_synthesis`, `metadata` | Background cannot enter factual evidence base. |
 | `semantic_review` | predecessor task's approved classes, `operational_context` | no additional class by default | A reviewer cannot expand predecessor scope. |
@@ -78,8 +78,8 @@ The App renders escaped text and sanitized Markdown under CSP. Allowed links use
 
 ## Consequences
 
-- P4-A materializes registry `p4a-v1`, append-only Task state, bounded embedded staging,
-  external handoff and explicit route-result approval for `document_route_resolution`.
-  Other registered task kinds remain fail-closed and deferred to their owning phases.
+- P4-A through P4-C materialize compatible registries `p4a-v1`, `p4b-v1` and `p4c-v1`,
+  append-only Task state, bounded staging and explicit route-specific approval. Other
+  registered task kinds remain fail-closed and deferred to their owning phases.
 - Deterministic adapter conformance is CI; bounded live Agent smoke is optional/non-deterministic and cannot gate CI on login, network, cost or model drift.
 - P0 creates no Agent Task, prompt bundle or staging runtime.

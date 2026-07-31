@@ -411,3 +411,33 @@ Existing Question Mapping and Research Synthesis references to the superseded re
 remain auditable but become stale and cannot provide current factual support until they
 are remapped.
 Legacy Primary records are never silently adopted or combined with a Primary bundle.
+
+### Review semantic processing and approval
+
+After deterministic intake reaches a completed Review or mixed-document Review gate,
+the App uses the P4-C service flow:
+
+```text
+completed review_semantic_gate | review_semantic_gate_mixed_document
+-> user requests a Review semantic Task and selects an external executor
+-> Core creates an independent semantic Job and assesses five requested uses
+-> basic Review Memory capability allowed: Task and bounded handoff are created
+-> external Agent returns seven Review sections and same-review source notes
+-> Core validates the common Review contract, exact quote/page provenance and consumed capabilities
+-> non-canonical App preview
+-> user revises, refreshes, rejects or approves
+-> Core allocates new Memory/Unit IDs and atomically appends one Review bundle revision
+-> semantic Job and Task receipts complete or recover idempotently
+```
+
+Unavailable figure, formula or supplementary capability blocks only a retained note that
+requests that operation. It does not block a text-only or zero-Unit Memory. Every retained
+Unit must have at least one reproducible source note and one concrete workflow impact.
+Quote excerpts must equal the Task-bound page-text slice; paraphrases retain page and
+section, or an explicit section-missing reason, without a character locator.
+
+Only the active Review Memory enters ordinary background reads and Catalog. Corrections
+allocate a new Memory ID and new Unit IDs while preserving older revisions for audit.
+Review content remains background-only after user approval and cannot create Evidence,
+factual Question Mapping, Research Synthesis support or a scientific review-queue row.
+Legacy Review Memory is never silently adopted or combined with Review bundle authority.
