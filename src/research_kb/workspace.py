@@ -108,6 +108,9 @@ class WorkspaceLayout:
     def review_memory_path(self, paper_id: str) -> Path:
         return self.knowledge_root / "review_memories" / "by_paper" / f"{paper_id}.review.json"
 
+    def primary_bundle_path(self, paper_id: str) -> Path:
+        return self.knowledge_root / "primary_bundles" / "by_paper" / f"{paper_id}.primary.json"
+
     def step7_store_path(self, record_kind: str) -> Path:
         filenames = {
             "step7-synthesis": "synthesis.jsonl",

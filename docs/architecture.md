@@ -569,3 +569,39 @@ fresh inputs. Privacy classes are explicit sets rather than an implied hierarchy
 policy, task-kind policy, user approval and executor capability must all admit every
 required class. Guardian validates state chains, event ownership and route-approval
 receipts.
+
+## P4-B Primary Semantic Bundle
+
+Application Service interface `1.3` adds `primary_semantic_processing` without changing
+the external-Agent boundary. An explicit user request creates an independent semantic
+Pipeline Job from a completed `primary_semantic_gate`; the terminal deterministic intake
+Job is never reopened and does not authorize scientific writes.
+
+The Task basis binds the paper record and live source digests, one Parse run and output
+digest, five operation-specific Source Adequacy Profiles, the semantic Job state and the
+current Primary bundle head. Handoff payloads contain only approved metadata, parsed
+excerpts and operational context. The Agent returns task-local aliases. Core validates
+the seven ordered sections, exact quote/page/locator trace-back and the capability needed
+by each requested Evidence operation before it writes non-canonical staging.
+
+User approval allocates canonical IDs and promotes one complete file:
+
+```text
+knowledge/primary_bundles/by_paper/<paper_id>.primary.json
+```
+
+Each file contains an immutable revision chain and one active revision. That active
+revision projects one Paper Card, zero or more Evidence records and zero or more
+scientific review-queue boundaries into existing logical reads. Historical revisions
+remain canonical audit history and reference targets but do not enter Catalog or factual
+downstream reads. A correction therefore leaves old Question Mapping and Research
+Synthesis references structurally resolvable while their active-projection freshness
+becomes stale.
+Legacy per-kind Primary records remain readable, but a paper cannot use legacy and P4-B
+authority at the same time.
+
+Source, Parse, Profile and bundle-head identity are checked again before replacement.
+The file replacement, semantic Job completion and Task approval use idempotent receipts:
+a retry after bundle replacement completes only missing Job or Task state. Corrections
+append a successor revision; stale or deliberately refreshed Tasks are superseded by a
+new Task with reciprocal lineage. No path edits an approved scientific revision in place.

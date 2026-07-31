@@ -246,6 +246,20 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - P4-A may advance only document routing. It must not create Paper Card, Evidence, Review Memory, scientific review-queue or Research Synthesis records.
 - Exercise registry, handoff, submit, preview and approval from the installed wheel; live model availability is never a deterministic CI condition.
 
+## Primary Semantic Bundle Rules
+
+- Start Primary semantic work only from a completed `primary_semantic_gate`; create a separate semantic Job with the exact scientific-write authority.
+- Keep `p4a-v1` route behavior compatible. Register Primary processing only under the versioned `p4b-v1` privacy/task registry.
+- Bind every Primary Task to exact paper, source, Parse, Source Adequacy, semantic Job and bundle-head digests. Reject stale submission and approval.
+- Require `basic_paper_card` for Card construction and the exact operation-specific capability for every Evidence candidate. A blocked use creates no scientific staging or review-queue substitute.
+- Accept only task-local aliases from Agents. Core owns Paper Card Unit, Evidence, queue and Primary revision IDs.
+- Validate Evidence against the Task-bound Parse, not whichever Parse is currently active at read time.
+- Keep preview operational and non-canonical. Only explicit user approval may write the complete Primary bundle revision.
+- Treat the per-paper Primary bundle as the sole P4-B authority. Reject legacy/P4-B coexistence and block legacy Record Service mutation after a bundle exists.
+- Preserve every approved revision and predecessor digest. Corrections append; refresh supersedes a stale Task with reciprocal successor lineage.
+- Keep historical Primary child IDs resolvable for audit and stale propagation, but expose only active-revision children to Catalog and factual downstream reads.
+- Recover bundle, Job and Task receipts idempotently after partial process failure. Never create a second revision for the same approved Task result.
+
 ## Platform Rules
 
 Tests must include Windows-shaped and POSIX-shaped paths independent of the host. Persisted relative paths always use `/`.

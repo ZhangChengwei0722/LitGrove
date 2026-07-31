@@ -446,11 +446,23 @@ def mapping_freshness_diagnostics(
     updated_at = mapping["updated_at"]
     diagnostics: list[Diagnostic] = []
     for link in mapping["paper_links"]:
-        upstream = [cards.get(link["paper_id"])]
+        card = cards.get(link["paper_id"])
+        active_unit_ids = {
+            unit["unit_id"]
+            for section in (card or {}).get("sections", [])
+            for unit in section.get("units", [])
+        }
+        missing_active_refs = (
+            card is None
+            or any(value not in active_unit_ids for value in link["selected_card_unit_ids"])
+            or any(value not in evidence for value in link["evidence_ids"])
+            or any(value not in queues for value in link["boundary_refs"])
+        )
+        upstream = [card]
         upstream.extend(evidence.get(value) for value in link["evidence_ids"])
         upstream.extend(queues.get(value) for value in link["boundary_refs"])
         mapping_time = _parse_timestamp(updated_at)
-        if any(
+        if missing_active_refs or any(
             item is not None and _parse_timestamp(item["updated_at"]) > mapping_time
             for item in upstream
         ):
@@ -460,7 +472,7 @@ def mapping_freshness_diagnostics(
                     "question-mapping",
                     mapping["question_id"],
                     "/updated_at",
-                    "question mapping is older than a linked Paper Card, evidence, or review queue record",
+                    "question mapping is older than or no longer active in its linked Paper Card, evidence, or review queue records",
                     severity="warning",
                 )
             )

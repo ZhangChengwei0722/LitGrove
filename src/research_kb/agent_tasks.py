@@ -9,11 +9,11 @@ from research_kb.catalog.models import canonical_digest
 from research_kb.errors import INCOMPLETE_TRANSACTION, SCHEMA_VALIDATION_FAILED, Diagnostic, ResearchKBError
 
 
-TERMINAL_STATUSES = frozenset({"revision_requested", "rejected", "approved", "cancelled"})
+TERMINAL_STATUSES = frozenset({"revision_requested", "superseded", "rejected", "approved", "cancelled"})
 ALLOWED_TRANSITIONS = {
-    "created": frozenset({"leased", "cancelled"}),
-    "leased": frozenset({"submitted", "cancelled"}),
-    "submitted": frozenset({"revision_requested", "rejected", "approved"}),
+    "created": frozenset({"leased", "superseded", "cancelled"}),
+    "leased": frozenset({"submitted", "superseded", "cancelled"}),
+    "submitted": frozenset({"revision_requested", "superseded", "rejected", "approved"}),
 }
 _STABLE_FIELDS = (
     "schema_version",
@@ -80,8 +80,24 @@ def validate_task_state(state: Mapping[str, Any]) -> None:
             raise _task_error("non-revision decision cannot carry feedback", "/decision/feedback")
         if status == "rejected" and decision.get("reason_code") != "user_rejected":
             raise _task_error("rejected decision requires the user-rejected reason", "/decision/reason_code")
-        if status == "approved" and decision.get("reason_code") != "route_confirmed":
-            raise _task_error("approved decision requires the route-confirmed reason", "/decision/reason_code")
+        if status == "approved":
+            expected_reason = (
+                "primary_bundle_committed"
+                if state.get("task_kind") == "primary_semantic_processing"
+                else "route_confirmed"
+            )
+            if decision.get("reason_code") != expected_reason:
+                raise _task_error("approved decision reason does not match the Task kind", "/decision/reason_code")
+    if status == "superseded":
+        decision = state.get("decision")
+        if not isinstance(decision, dict):
+            raise _task_error("superseded Agent Task requires one decision", "/status")
+        if decision.get("action") != "superseded" or decision.get("reason_code") != "input_refreshed":
+            raise _task_error("superseded Agent Task requires the input-refreshed decision", "/decision")
+        if decision.get("successor_task_id") is None or decision.get("applied_job_state_id") is not None:
+            raise _task_error("superseded Agent Task requires only a successor Task reference", "/decision")
+        if decision.get("feedback") is not None:
+            raise _task_error("superseded Agent Task cannot carry feedback", "/decision/feedback")
     result = state.get("staged_result")
     if isinstance(result, dict):
         if result.get("task_id") != state.get("task_id"):
@@ -169,9 +185,11 @@ def agent_task_chain_diagnostics(states: Iterable[dict[str, Any]]) -> list[Diagn
                     key=lambda item: (item.get("revision", 0), item.get("state_id", "")),
                 )
                 predecessor_head = predecessor_states[-1] if predecessor_states else None
+                result_lineage = "predecessor_result_digest" in lineage
+                expected_status = "revision_requested" if result_lineage else "superseded"
                 if (
                     predecessor_head is None
-                    or predecessor_head.get("status") != "revision_requested"
+                    or predecessor_head.get("status") != expected_status
                     or predecessor_head.get("decision", {}).get("successor_task_id") != state.get("task_id")
                 ):
                     diagnostics.append(
@@ -181,7 +199,7 @@ def agent_task_chain_diagnostics(states: Iterable[dict[str, Any]]) -> list[Diagn
                             "Agent Task successor lineage is not reciprocated by its predecessor",
                         )
                     )
-                elif canonical_digest(predecessor_head.get("staged_result")) != lineage.get("predecessor_result_digest"):
+                elif result_lineage and canonical_digest(predecessor_head.get("staged_result")) != lineage.get("predecessor_result_digest"):
                     diagnostics.append(
                         _chain_diagnostic(
                             state,
@@ -189,12 +207,26 @@ def agent_task_chain_diagnostics(states: Iterable[dict[str, Any]]) -> list[Diagn
                             "Agent Task successor result digest does not match its predecessor",
                         )
                     )
-                elif predecessor_head.get("decision", {}).get("feedback") != lineage.get("feedback"):
+                elif result_lineage and predecessor_head.get("decision", {}).get("feedback") != lineage.get("feedback"):
                     diagnostics.append(
                         _chain_diagnostic(
                             state,
                             "/lineage/feedback",
                             "Agent Task successor feedback does not match its predecessor decision",
+                        )
+                    )
+                elif not result_lineage and (
+                    (predecessor_head.get("lease") or {}).get(
+                        "handoff_digest",
+                        predecessor_head.get("input_basis_digest"),
+                    )
+                    != lineage.get("predecessor_handoff_digest")
+                ):
+                    diagnostics.append(
+                        _chain_diagnostic(
+                            state,
+                            "/lineage/predecessor_handoff_digest",
+                            "Agent Task refreshed successor handoff digest does not match its predecessor",
                         )
                     )
 

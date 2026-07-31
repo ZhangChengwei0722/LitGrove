@@ -125,7 +125,7 @@ def main() -> int:
             raise SystemExit("base wheel capability report lacks the Europe PMC connector")
         if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["approved_discovery_candidate_handoff"] is not True or capability["features"]["legal_oa_resolution"] is not True or capability["features"]["explicit_oa_acquisition"] is not True or capability["features"]["manuscript_projection"] is not True or capability["features"]["pipeline_jobs"] is not True or capability["features"]["source_asset_runtime"] is not True or capability["features"]["registry_identity_correction"] is not True or capability["features"]["source_adequacy"] is not True or capability["features"]["deterministic_trunk"] is not True or capability["features"]["deterministic_intake_application"] is not True:
             raise SystemExit("base wheel capability report lacks Review Memory, Step 7 or discovery runtime")
-        if capability["features"]["agent_task_staging"] is not True or capability["agent_task_registry_version"] != "p4a-v1":
+        if capability["features"]["agent_task_staging"] is not True or capability["agent_task_registry_version"] != "p4b-v1":
             raise SystemExit("base wheel capability report lacks P4-A Agent Task staging")
         subprocess.run(
             [
@@ -277,7 +277,7 @@ def main() -> int:
                 "line_ending": "lf",
             },
             "agent_policy": {
-                "registry_version": "p4a-v1",
+                "registry_version": "p4b-v1",
                 "allowed_content_classes": ["metadata", "parsed_excerpt", "operational_context"],
                 "execution_scope": "cloud_allowed",
                 "max_prompt_bytes": 262_144,
@@ -305,8 +305,8 @@ def main() -> int:
         if outputs != ["planned", "initialized", "no_change"]:
             raise SystemExit(f"unexpected workspace init results: {outputs}")
         marker = json.loads((workspace_root / "knowledge" / ".research-kb" / "workspace.json").read_text(encoding="utf-8"))
-        if marker["layout_contract_version"] != "m3c-2a":
-            raise SystemExit("wheel workspace did not initialize at m3c-2a")
+        if marker["layout_contract_version"] != "p4b-1":
+            raise SystemExit("wheel workspace did not initialize at p4b-1")
         if not (workspace_root / "knowledge" / "questions").is_dir():
             raise SystemExit("wheel workspace lacks questions directory")
         if (workspace_root / "knowledge" / "questions" / "mappings.jsonl").exists():
@@ -315,6 +315,10 @@ def main() -> int:
             raise SystemExit("wheel workspace lacks review memory directories")
         if any((workspace_root / "knowledge" / "review_memories" / "by_paper").iterdir()):
             raise SystemExit("workspace init created a review memory record")
+        if not (workspace_root / "knowledge" / "primary_bundles" / "by_paper").is_dir():
+            raise SystemExit("wheel workspace lacks Primary bundle directories")
+        if any((workspace_root / "knowledge" / "primary_bundles" / "by_paper").iterdir()):
+            raise SystemExit("workspace init created a Primary bundle record")
         if not (workspace_root / "knowledge" / "step7").is_dir():
             raise SystemExit("wheel workspace lacks Step 7 directory")
         if any((workspace_root / "knowledge" / "step7").iterdir()):
@@ -955,10 +959,10 @@ def main() -> int:
                     "WorkspaceSessionService, SourceAssetService, RegistryIdentityCorrectionService, "
                     "AgentTaskApplicationService, DeterministicIntakeApplicationService, "
                     "DeterministicTrunkService, PipelineJobService; "
-                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.2'; "
+                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.3'; "
                     f"session = WorkspaceSessionService({{'wheel': Path({str(config_path)!r})}}).open('wheel'); "
                     "limits = DeterministicIntakeApplicationService().limits(session); "
-                    "assert limits['interface_version'] == '1.2'; "
+                    "assert limits['interface_version'] == '1.3'; "
                     "assert limits['ingress_modes'] == ['upload', 'watched_inbox']; "
                     "layout = session._layout; "
                     "job = PipelineJobService(layout).create(requested_route='local_source', "
@@ -970,7 +974,7 @@ def main() -> int:
                     "assert waiting.state['status'] == 'waiting_user'; "
                     "tasks = AgentTaskApplicationService(); "
                     "registry = tasks.registry(session); "
-                    "assert registry['registry_version'] == 'p4a-v1'; "
+                    "assert registry['registry_version'] == 'p4b-v1'; "
                     "assert registry['embedded_agent_runtime'] is False; "
                     f"created = tasks.create_from_pipeline(session, job['job_id'], {{'paper_id':{paper_id!r},'task_kind':'document_route_resolution','executor_id':'codex_cli','approved_content_classes':['metadata','parsed_excerpt','operational_context'],'idempotency_key':'installed-wheel-route-task'}}); "
                     "expected = {'state_id':created['task']['state_id'],'state_digest':created['task']['state_digest']}; "
@@ -983,6 +987,49 @@ def main() -> int:
                     "approved = tasks.approve_route_result(session, submitted['task']['task_id'], expected); "
                     "assert approved['task']['status'] == 'approved'; "
                     "assert approved['pipeline']['current_node'] == 'primary_semantic_gate'"
+                ),
+            ],
+            cwd=temporary,
+            check=True,
+        )
+        primary_bundle_source = sources / "wheel-primary-bundle.txt"
+        primary_bundle_source.write_text(
+            "The invented Primary bundle response increased.\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        subprocess.run(
+            [
+                str(python),
+                "-c",
+                (
+                    "from pathlib import Path; "
+                    "from research_kb.guardian import GuardianService; "
+                    "from research_kb.services import AgentTaskApplicationService, DeterministicTrunkService, PipelineJobService, RegistryService, WorkspaceSessionService; "
+                    f"session = WorkspaceSessionService({{'wheel': Path({str(config_path)!r})}}).open('wheel'); "
+                    "layout = session._layout; "
+                    f"paper, _ = RegistryService(layout).add(root_id='wheel-sources', relative_path={primary_bundle_source.name!r}, metadata={{'bibliography':{{'title':'Synthetic Primary Bundle Study','authors':['Fixture Author'],'year':2026,'doi':None}},'fixture_origin':'synthetic_from_scratch'}}); "
+                    "origin = PipelineJobService(layout).create(requested_route='local_source', requested_depth='semantic_gate', current_node='source_check', input_refs=[paper['paper_id']], authority_snapshot={'actor':'user','granted_operations':['advance_deterministic_trunk','assess_source_adequacy','observe_source','parse_run'],'captured_at':'2026-07-31T00:00:00Z'}, idempotency_key='installed-wheel-primary-origin', actor='user', fixture_origin='synthetic_from_scratch').state; "
+                    "completed = DeterministicTrunkService(layout).advance(job_id=origin['job_id'], paper_id=paper['paper_id'], requested_operation='basic_paper_card', adapter_name='synthetic-text', actor='user', document_route='primary', route_reason=None); "
+                    "assert completed.state['status'] == 'completed' and completed.state['current_node'] == 'primary_semantic_gate'; "
+                    "tasks = AgentTaskApplicationService(); "
+                    "created = tasks.create_from_pipeline(session, origin['job_id'], {'paper_id':paper['paper_id'],'task_kind':'primary_semantic_processing','executor_id':'claude_code_cli','approved_content_classes':['metadata','parsed_excerpt','operational_context'],'idempotency_key':'installed-wheel-primary-task'}); "
+                    "expected = {'state_id':created['task']['state_id'],'state_digest':created['task']['state_digest']}; "
+                    "prepared = tasks.prepare_handoff(session, created['task']['task_id'], expected, 'claude_code_cli'); "
+                    "section_ids = prepared['handoff']['payload']['operational_context']['paper_card_sections']; "
+                    "source_page = {'pdf_page':1,'printed_page':None,'section':'Synthetic results','figure_or_table':None}; "
+                    "sections = [{'section_id':section_id,'units':[]} for section_id in section_ids]; "
+                    "sections[3]['units'] = [{'statement':'The invented Primary bundle response increased.','statement_type':'reported_result','grounding_status':'grounded','evidence_aliases':['ev_result'],'boundary_aliases':[],'source_page':source_page,'confidence':'high'}]; "
+                    "candidate = {'contract_version':'p4b-primary-semantic-candidate@1.0','task_id':prepared['task']['task_id'],'input_basis_digest':prepared['task']['input_basis_digest'],'evidence':[{'alias':'ev_result','claim':'The invented Primary bundle response increased.','evidence_type':'reported_result','quote':'The invented Primary bundle response increased.','source_page':source_page,'locator':'page:1:block:1','support_scope':'The installed-wheel synthetic source only.','what_it_does_not_support':['Other sources'],'requested_operation':'continuous_text_evidence'}],'review_boundaries':[],'sections':sections}; "
+                    "expected = {'state_id':prepared['task']['state_id'],'state_digest':prepared['task']['state_digest']}; "
+                    "submitted = tasks.submit_result(session, prepared['task']['task_id'], expected, prepared['lease'], candidate); "
+                    "assert tasks.preview_result(session, submitted['task']['task_id'])['candidate']['canonical_scientific_write'] is False; "
+                    "expected = {'state_id':submitted['task']['state_id'],'state_digest':submitted['task']['state_digest']}; "
+                    "approved = tasks.approve_primary_result(session, submitted['task']['task_id'], expected); "
+                    "assert approved['task']['status'] == 'approved'; "
+                    "assert approved['primary_bundle']['revision_number'] == 1 and approved['primary_bundle']['evidence_count'] == 1; "
+                    "assert layout.primary_bundle_path(paper['paper_id']).is_file(); "
+                    "assert GuardianService(layout).check().report['status'] == 'success'"
                 ),
             ],
             cwd=temporary,

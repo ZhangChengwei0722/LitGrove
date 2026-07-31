@@ -12,7 +12,7 @@
         "state_digest": {"$ref": "#/$defs/digest"}
       }
     },
-    "input_basis": {
+    "route_input_basis": {
       "type": "object",
       "additionalProperties": false,
       "required": ["paper_id", "paper_record_digest", "job_id", "job_state_id", "job_state_digest", "source_digest", "parse_run_id", "parse_output_digest", "adequacy_profile_id", "adequacy_profile_digest", "requested_operation"],
@@ -30,7 +30,40 @@
         "requested_operation": {"enum": ["basic_paper_card", "basic_review_memory"]}
       }
     },
-    "lineage": {
+    "primary_input_basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paper_id", "paper_record_digest", "origin_job_id", "job_id", "job_state_id", "job_state_digest", "source_digest", "parse_run_id", "parse_output_digest", "adequacy_profiles", "bundle_head_digest"],
+      "properties": {
+        "paper_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+        "paper_record_digest": {"$ref": "#/$defs/digest"},
+        "origin_job_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/job_id"},
+        "job_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/job_id"},
+        "job_state_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/job_state_id"},
+        "job_state_digest": {"$ref": "#/$defs/digest"},
+        "source_digest": {"$ref": "#/$defs/digest"},
+        "parse_run_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/event_id"},
+        "parse_output_digest": {"$ref": "#/$defs/digest"},
+        "adequacy_profiles": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["requested_operation", "profile_id", "profile_digest", "capability_status"],
+            "properties": {
+              "requested_operation": {"enum": ["basic_paper_card", "continuous_text_evidence", "figure_table_evidence", "formula_layout_analysis", "supplementary_analysis"]},
+              "profile_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_adequacy_id"},
+              "profile_digest": {"$ref": "#/$defs/digest"},
+              "capability_status": {"enum": ["yes", "no", "uncertain"]}
+            }
+          }
+        },
+        "bundle_head_digest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "result_lineage": {
       "type": "object",
       "additionalProperties": false,
       "required": ["predecessor_task_id", "predecessor_result_digest", "feedback"],
@@ -38,6 +71,16 @@
         "predecessor_task_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/agent_task_id"},
         "predecessor_result_digest": {"$ref": "#/$defs/digest"},
         "feedback": {"type": "string", "minLength": 1, "maxLength": 4000}
+      }
+    },
+    "refresh_lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["predecessor_task_id", "predecessor_handoff_digest", "refresh_reason"],
+      "properties": {
+        "predecessor_task_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/agent_task_id"},
+        "predecessor_handoff_digest": {"$ref": "#/$defs/digest"},
+        "refresh_reason": {"const": "input_refreshed"}
       }
     },
     "lease": {
@@ -55,8 +98,8 @@
       "additionalProperties": false,
       "required": ["action", "reason_code", "feedback", "successor_task_id", "applied_job_state_id", "decided_at"],
       "properties": {
-        "action": {"enum": ["revision_requested", "rejected", "approved"]},
-        "reason_code": {"type": ["string", "null"], "enum": [null, "user_rejected", "route_confirmed"]},
+        "action": {"enum": ["revision_requested", "superseded", "rejected", "approved"]},
+        "reason_code": {"type": ["string", "null"], "enum": [null, "input_refreshed", "user_rejected", "route_confirmed", "primary_bundle_committed"]},
         "feedback": {"type": ["string", "null"], "maxLength": 4000},
         "successor_task_id": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/agent_task_id"}, {"type": "null"}]},
         "applied_job_state_id": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/job_state_id"}, {"type": "null"}]},
@@ -74,28 +117,51 @@
     "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
     "revision": {"type": "integer", "minimum": 1},
     "predecessor": {"anyOf": [{"$ref": "#/$defs/predecessor"}, {"type": "null"}]},
-    "task_kind": {"const": "document_route_resolution"},
-    "result_contract": {"const": "p4a-document-route-decision@1.0"},
-    "privacy_registry_version": {"const": "p4a-v1"},
+    "task_kind": {"enum": ["document_route_resolution", "primary_semantic_processing"]},
+    "result_contract": {"enum": ["p4a-document-route-decision@1.0", "p4b-primary-semantic-candidate@1.0"]},
+    "privacy_registry_version": {"enum": ["p4a-v1", "p4b-v1"]},
     "executor_id": {"enum": ["codex_cli", "claude_code_cli"]},
     "execution_scope": {"const": "cloud_allowed"},
     "effective_content_classes": {
       "type": "array",
       "minItems": 3,
       "uniqueItems": true,
-      "items": {"enum": ["metadata", "parsed_excerpt", "operational_context"]}
+      "items": {"enum": ["metadata", "parsed_excerpt", "operational_context", "research_routing_context"]}
     },
-    "input_basis": {"$ref": "#/$defs/input_basis"},
+    "input_basis": {"oneOf": [{"$ref": "#/$defs/route_input_basis"}, {"$ref": "#/$defs/primary_input_basis"}]},
     "input_basis_digest": {"$ref": "#/$defs/digest"},
     "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 200},
-    "lineage": {"anyOf": [{"$ref": "#/$defs/lineage"}, {"type": "null"}]},
-    "status": {"enum": ["created", "leased", "submitted", "revision_requested", "rejected", "approved", "cancelled"]},
+    "lineage": {"anyOf": [{"$ref": "#/$defs/result_lineage"}, {"$ref": "#/$defs/refresh_lineage"}, {"type": "null"}]},
+    "status": {"enum": ["created", "leased", "submitted", "revision_requested", "superseded", "rejected", "approved", "cancelled"]},
     "lease": {"anyOf": [{"$ref": "#/$defs/lease"}, {"type": "null"}]},
-    "staged_result": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:document-route-decision"}, {"type": "null"}]},
+    "staged_result": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:document-route-decision"}, {"$ref": "urn:research-kb:schema:1.0:primary-semantic-candidate"}, {"type": "null"}]},
     "decision": {"anyOf": [{"$ref": "#/$defs/decision"}, {"type": "null"}]},
     "terminal_receipt": {"type": "boolean"},
     "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
     "updated_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
     "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"task_kind": {"const": "document_route_resolution"}}, "required": ["task_kind"]},
+      "then": {
+        "properties": {
+          "result_contract": {"const": "p4a-document-route-decision@1.0"},
+          "input_basis": {"$ref": "#/$defs/route_input_basis"},
+          "staged_result": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:document-route-decision"}, {"type": "null"}]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"task_kind": {"const": "primary_semantic_processing"}}, "required": ["task_kind"]},
+      "then": {
+        "properties": {
+          "result_contract": {"const": "p4b-primary-semantic-candidate@1.0"},
+          "privacy_registry_version": {"const": "p4b-v1"},
+          "input_basis": {"$ref": "#/$defs/primary_input_basis"},
+          "staged_result": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:primary-semantic-candidate"}, {"type": "null"}]}
+        }
+      }
+    }
+  ]
 }

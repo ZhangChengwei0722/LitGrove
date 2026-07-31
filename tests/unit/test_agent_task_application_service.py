@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from research_kb.catalog.models import canonical_digest
+from research_kb.bundle import load_workspace_entries, records_of_kind
 from research_kb.errors import ResearchKBError
 from research_kb.guardian import GuardianService
 from research_kb.services import (
@@ -17,7 +18,8 @@ from research_kb.services import (
     WorkspaceSessionService,
 )
 from research_kb.services.pipeline_job import PipelineJobService
-from research_kb.storage.json_io import read_jsonl, serialize_jsonl
+from research_kb.services.registry import RegistryService
+from research_kb.storage.json_io import read_json_document, read_jsonl, serialize_jsonl
 from tests.pdf_helpers import write_synthetic_pdf
 from tests.runtime_helpers import make_runtime_workspace
 
@@ -31,14 +33,29 @@ POLICY = {
     "max_result_bytes": 65_536,
 }
 APPROVED_CLASSES = ["metadata", "parsed_excerpt", "operational_context"]
+P4B_POLICY = {**POLICY, "registry_version": "p4b-v1"}
+SECTIONS = [
+    "research_background_significance",
+    "research_problem",
+    "method_principle_advantages",
+    "conclusions_applications",
+    "innovation",
+    "limitations",
+    "future_outlook",
+]
 
 
-def _route_wait(tmp_path: Path, *, text: str = "Synthetic route-ambiguous primary text."):
+def _route_wait(
+    tmp_path: Path,
+    *,
+    text: str = "Synthetic route-ambiguous primary text.",
+    policy: dict = POLICY,
+):
     layout = make_runtime_workspace(
         tmp_path,
         local_inbox="./sources/inbox",
         create_local_inbox=True,
-        agent_policy=POLICY,
+        agent_policy=policy,
     )
     session = WorkspaceSessionService({"alpha": layout.config.path}).open("alpha")
     source = write_synthetic_pdf(tmp_path / "route-input.pdf", [text])
@@ -91,6 +108,156 @@ def _decision(task: dict[str, object], route: str = "primary", route_reason: str
         "route_reason": route_reason,
         "confidence": "high",
         "rationale": "The synthetic document structure matches the selected route.",
+    }
+
+
+def _primary_ready(tmp_path: Path):
+    text = "Synthetic intervention reduced the measured signal by 42 percent in the fabricated assay."
+    layout = make_runtime_workspace(tmp_path, agent_policy=P4B_POLICY)
+    source = layout.source_roots["alpha-sources"] / "primary-semantic.txt"
+    source.write_text(text, encoding="utf-8", newline="\n")
+    paper, _ = RegistryService(layout).add(
+        root_id="alpha-sources",
+        relative_path=source.name,
+        metadata={
+            "bibliography": {
+                "title": "Synthetic Primary Semantic Study",
+                "authors": ["Fixture Author"],
+                "year": 2026,
+                "doi": None,
+            },
+            "fixture_origin": "synthetic_from_scratch",
+        },
+    )
+    origin = PipelineJobService(layout).create(
+        requested_route="local_source",
+        requested_depth="semantic_gate",
+        current_node="source_check",
+        input_refs=[paper["paper_id"]],
+        authority_snapshot={
+            "actor": "user",
+            "granted_operations": [
+                "advance_deterministic_trunk",
+                "assess_source_adequacy",
+                "observe_source",
+                "parse_run",
+            ],
+            "captured_at": "2026-07-31T08:00:00Z",
+        },
+        idempotency_key="synthetic-primary-origin",
+        actor="user",
+        fixture_origin="synthetic_from_scratch",
+    )
+    completed = DeterministicTrunkService(layout).advance(
+        job_id=origin.state["job_id"],
+        paper_id=paper["paper_id"],
+        requested_operation="basic_paper_card",
+        adapter_name="synthetic-text",
+        actor="user",
+        document_route="primary",
+        route_reason=None,
+    )
+    assert completed.state["status"] == "completed"
+    assert completed.state["current_node"] == "primary_semantic_gate"
+    session = WorkspaceSessionService({"alpha": layout.config.path}).open("alpha")
+    intake = {"paper_id": paper["paper_id"], "pipeline": {"job_id": origin.state["job_id"]}}
+    service = AgentTaskApplicationService(clock=lambda: NOW)
+    created = service.create_from_pipeline(
+        session,
+        intake["pipeline"]["job_id"],
+        {
+            "paper_id": intake["paper_id"],
+            "task_kind": "primary_semantic_processing",
+            "executor_id": "codex_cli",
+            "approved_content_classes": APPROVED_CLASSES,
+            "idempotency_key": "primary-task-1",
+        },
+    )
+    return layout, session, intake, service, created, text
+
+
+def _primary_candidate(task: dict[str, object], quote: str, *, operation: str = "continuous_text_evidence"):
+    return {
+        "contract_version": "p4b-primary-semantic-candidate@1.0",
+        "task_id": task["task_id"],
+        "input_basis_digest": task["input_basis_digest"],
+        "evidence": [
+            {
+                "alias": "ev_result",
+                "claim": "The synthetic intervention reduced the measured signal by 42 percent.",
+                "evidence_type": "reported_result",
+                "quote": quote,
+                "source_page": {
+                    "pdf_page": 1,
+                    "printed_page": None,
+                    "section": "Synthetic results",
+                    "figure_or_table": None,
+                },
+                "locator": "page:1:block:1",
+                "support_scope": "The fabricated assay result only.",
+                "what_it_does_not_support": ["Other assays or biological systems"],
+                "requested_operation": operation,
+            }
+        ],
+        "review_boundaries": [
+            {
+                "alias": "bd_generalization",
+                "issue_type": "overclaim",
+                "claim_candidate": "The result applies universally.",
+                "reason": "Only one fabricated assay was represented.",
+                "source_page": {
+                    "pdf_page": 1,
+                    "printed_page": None,
+                    "section": "Synthetic results",
+                    "figure_or_table": None,
+                },
+                "locator": "page:1:block:1",
+                "resolution_status": "needs_resolution",
+            }
+        ],
+        "sections": [
+            {
+                "section_id": section,
+                "units": (
+                    [
+                        {
+                            "statement": "The synthetic intervention reduced the measured signal by 42 percent.",
+                            "statement_type": "reported_result",
+                            "grounding_status": "grounded",
+                            "evidence_aliases": ["ev_result"],
+                            "boundary_aliases": [],
+                            "source_page": {
+                                "pdf_page": 1,
+                                "printed_page": None,
+                                "section": "Synthetic results",
+                                "figure_or_table": None,
+                            },
+                            "confidence": "high",
+                        }
+                    ]
+                    if section == "conclusions_applications"
+                    else [
+                        {
+                            "statement": "Universal generalization remains unresolved.",
+                            "statement_type": "limitation",
+                            "grounding_status": "needs_resolution",
+                            "evidence_aliases": [],
+                            "boundary_aliases": ["bd_generalization"],
+                            "source_page": {
+                                "pdf_page": 1,
+                                "printed_page": None,
+                                "section": "Synthetic results",
+                                "figure_or_table": None,
+                            },
+                            "confidence": "medium",
+                        }
+                    ]
+                    if section == "limitations"
+                    else []
+                ),
+            }
+            for section in SECTIONS
+        ],
     }
 
 
@@ -358,3 +525,251 @@ def test_guardian_reports_tampered_agent_task_chain_without_crashing(tmp_path: P
         and "predecessor" in item["message"]
         for item in report["findings"]
     )
+
+
+def test_primary_task_stages_previews_and_commits_one_atomic_bundle(tmp_path: Path) -> None:
+    layout, session, intake, service, created, text = _primary_ready(tmp_path)
+
+    replay = service.create_from_pipeline(
+        session,
+        intake["pipeline"]["job_id"],
+        {
+            "paper_id": intake["paper_id"],
+            "task_kind": "primary_semantic_processing",
+            "executor_id": "codex_cli",
+            "approved_content_classes": APPROVED_CLASSES,
+            "idempotency_key": "primary-task-1",
+        },
+    )
+    assert replay["task"] == created["task"]
+    assert replay["persistent_writes"] == 0
+    prepared = service.prepare_handoff(session, created["task"]["task_id"], _expected(created["task"]), "codex_cli")
+    assert prepared["handoff"]["manifest_version"] == "p4b-agent-handoff@1.0"
+    assert prepared["handoff"]["payload"]["operational_context"]["paper_card_sections"] == SECTIONS
+    submitted = service.submit_result(
+        session,
+        prepared["task"]["task_id"],
+        _expected(prepared["task"]),
+        prepared["lease"],
+        _primary_candidate(prepared["task"], text),
+    )
+    preview = service.preview_result(session, submitted["task"]["task_id"])
+
+    assert preview["candidate"]["content_type"] == "application/json"
+    assert preview["candidate"]["canonical_scientific_write"] is False
+    assert not layout.primary_bundle_path(intake["paper_id"]).exists()
+    approved = service.approve_primary_result(
+        session,
+        submitted["task"]["task_id"],
+        _expected(submitted["task"]),
+    )
+    replay_approval = service.approve_primary_result(
+        session,
+        approved["task"]["task_id"],
+        _expected(approved["task"]),
+    )
+
+    bundle = read_json_document(layout.primary_bundle_path(intake["paper_id"]), record_kind="primary-semantic-bundle")
+    entries = load_workspace_entries(layout)
+    assert approved["primary_bundle"]["revision_number"] == 1
+    assert replay_approval["persistent_writes"] == 0
+    assert len(bundle["revisions"]) == 1
+    assert len(records_of_kind(entries, "paper-card")) == 1
+    assert len(records_of_kind(entries, "evidence")) == 1
+    assert len([item for item in records_of_kind(entries, "review-queue") if item["paper_id"] == intake["paper_id"]]) == 1
+    assert not layout.paper_card_path(intake["paper_id"]).exists()
+    assert not layout.evidence_path(intake["paper_id"]).exists()
+    assert GuardianService(layout).check().report["status"] == "success"
+
+
+@pytest.mark.parametrize("operation", ["figure_table_evidence", "supplementary_analysis"])
+def test_primary_submission_blocks_inadequate_operation_without_staging(
+    tmp_path: Path,
+    operation: str,
+) -> None:
+    layout, session, _, service, created, text = _primary_ready(tmp_path)
+    prepared = service.prepare_handoff(session, created["task"]["task_id"], _expected(created["task"]), "codex_cli")
+
+    blocked = service.submit_result(
+        session,
+        prepared["task"]["task_id"],
+        _expected(prepared["task"]),
+        prepared["lease"],
+        _primary_candidate(prepared["task"], text, operation=operation),
+    )
+
+    assert blocked["status"] == "blocked"
+    assert blocked["source_adequacy"]["requested_operation"] == operation
+    assert blocked["canonical_scientific_write"] is False
+    leased = service.show_task(session, created["task"]["task_id"])["current_task"]
+    assert leased["status"] == "leased"
+    assert not layout.primary_bundle_path(created["task"]["paper_id"]).exists()
+    refreshed = service.refresh_primary_task(
+        session,
+        created["task"]["task_id"],
+        _expected(leased),
+    )
+    replay = service.refresh_primary_task(
+        session,
+        created["task"]["task_id"],
+        _expected(leased),
+    )
+    assert refreshed["task"]["status"] == "superseded"
+    assert refreshed["successor_task"]["status"] == "created"
+    assert refreshed["successor_task"]["lineage"]["predecessor_handoff_digest"] == prepared["lease"]["handoff_digest"]
+    assert replay["persistent_writes"] == 0
+    assert replay["successor_task"] == refreshed["successor_task"]
+    assert GuardianService(layout).check().report["status"] == "success"
+
+
+def test_submitted_primary_task_can_refresh_inputs_without_losing_audit_result(tmp_path: Path) -> None:
+    layout, session, _, service, created, text = _primary_ready(tmp_path)
+    prepared = service.prepare_handoff(session, created["task"]["task_id"], _expected(created["task"]), "codex_cli")
+    submitted = service.submit_result(
+        session,
+        prepared["task"]["task_id"],
+        _expected(prepared["task"]),
+        prepared["lease"],
+        _primary_candidate(prepared["task"], text),
+    )
+    jobs = PipelineJobService(layout)
+    job = jobs.show(submitted["task"]["job_id"])["current_state"]
+    jobs.transition(
+        job["job_id"],
+        expected_state_id=job["state_id"],
+        expected_state_digest=canonical_digest(job),
+        status="running",
+        current_node="source_adequacy_reassessed",
+        wait_reason=None,
+        output_refs=job["output_refs"],
+        retry_increment=0,
+        recovery_action=None,
+        actor="user",
+    )
+
+    refreshed = service.refresh_primary_task(
+        session,
+        submitted["task"]["task_id"],
+        _expected(submitted["task"]),
+    )
+    history = [
+        item
+        for item in read_jsonl(layout.agent_tasks_path, record_kind="agent-task-state")
+        if item["task_id"] == submitted["task"]["task_id"]
+    ]
+
+    assert refreshed["task"]["status"] == "superseded"
+    assert refreshed["successor_task"]["status"] == "created"
+    assert history[-1]["staged_result"] == _primary_candidate(prepared["task"], text)
+    assert GuardianService(layout).check().report["status"] == "success"
+
+
+def test_primary_correction_appends_revision_and_preserves_first_revision(tmp_path: Path) -> None:
+    layout, session, intake, service, created, text = _primary_ready(tmp_path)
+    prepared = service.prepare_handoff(session, created["task"]["task_id"], _expected(created["task"]), "codex_cli")
+    submitted = service.submit_result(
+        session,
+        prepared["task"]["task_id"],
+        _expected(prepared["task"]),
+        prepared["lease"],
+        _primary_candidate(prepared["task"], text),
+    )
+    service.approve_primary_result(session, submitted["task"]["task_id"], _expected(submitted["task"]))
+    first_bundle = read_json_document(layout.primary_bundle_path(intake["paper_id"]), record_kind="primary-semantic-bundle")
+    first_revision = first_bundle["revisions"][0]
+    first_digest = canonical_digest(first_revision)
+
+    correction = service.create_from_pipeline(
+        session,
+        intake["pipeline"]["job_id"],
+        {
+            "paper_id": intake["paper_id"],
+            "task_kind": "primary_semantic_processing",
+            "executor_id": "claude_code_cli",
+            "approved_content_classes": APPROVED_CLASSES,
+            "idempotency_key": "primary-correction-2",
+        },
+    )
+    prepared_correction = service.prepare_handoff(
+        session,
+        correction["task"]["task_id"],
+        _expected(correction["task"]),
+        "claude_code_cli",
+    )
+    candidate = _primary_candidate(prepared_correction["task"], text)
+    candidate["sections"][3]["units"][0]["statement"] = "The measured signal was reduced by 42 percent in this fabricated assay only."
+    submitted_correction = service.submit_result(
+        session,
+        prepared_correction["task"]["task_id"],
+        _expected(prepared_correction["task"]),
+        prepared_correction["lease"],
+        candidate,
+    )
+    approved = service.approve_primary_result(
+        session,
+        submitted_correction["task"]["task_id"],
+        _expected(submitted_correction["task"]),
+    )
+
+    corrected = read_json_document(layout.primary_bundle_path(intake["paper_id"]), record_kind="primary-semantic-bundle")
+    assert approved["primary_bundle"]["revision_number"] == 2
+    assert len(corrected["revisions"]) == 2
+    assert corrected["revisions"][0] == first_revision
+    assert canonical_digest(corrected["revisions"][0]) == first_digest
+    assert corrected["revisions"][1]["predecessor"] == {
+        "revision_id": first_revision["revision_id"],
+        "revision_digest": first_digest,
+    }
+    assert GuardianService(layout).check().report["status"] == "success"
+
+
+def test_primary_submission_rejects_quote_outside_task_bound_parse(tmp_path: Path) -> None:
+    layout, session, _, service, created, _ = _primary_ready(tmp_path)
+    prepared = service.prepare_handoff(session, created["task"]["task_id"], _expected(created["task"]), "codex_cli")
+
+    with pytest.raises(ResearchKBError, match="absent from the linked stored page text"):
+        service.submit_result(
+            session,
+            prepared["task"]["task_id"],
+            _expected(prepared["task"]),
+            prepared["lease"],
+            _primary_candidate(prepared["task"], "A quote that is not present."),
+        )
+
+    assert service.show_task(session, created["task"]["task_id"])["current_task"]["status"] == "leased"
+    assert not layout.primary_bundle_path(created["task"]["paper_id"]).exists()
+
+
+def test_primary_approval_recovers_bundle_before_job_and_task_receipts(tmp_path: Path) -> None:
+    layout, session, _, service, created, text = _primary_ready(tmp_path)
+    prepared = service.prepare_handoff(session, created["task"]["task_id"], _expected(created["task"]), "codex_cli")
+    submitted = service.submit_result(
+        session,
+        prepared["task"]["task_id"],
+        _expected(prepared["task"]),
+        prepared["lease"],
+        _primary_candidate(prepared["task"], text),
+    )
+    stored_head = service._head(service._read_states(layout), submitted["task"]["task_id"])
+    bundle, writes = service._commit_or_recover_primary_bundle(layout, stored_head)
+    assert writes == 1
+    assert len(bundle["revisions"]) == 1
+    interrupted = GuardianService(layout).check().report
+    assert interrupted["status"] == "failure"
+    assert any(
+        "approval receipt" in finding["message"]
+        for finding in interrupted["findings"]
+    )
+
+    recovered = service.approve_primary_result(
+        session,
+        submitted["task"]["task_id"],
+        _expected(submitted["task"]),
+    )
+
+    final_bundle = read_json_document(layout.primary_bundle_path(created["task"]["paper_id"]), record_kind="primary-semantic-bundle")
+    assert recovered["task"]["status"] == "approved"
+    assert recovered["persistent_writes"] == 3
+    assert len(final_bundle["revisions"]) == 1
+    assert final_bundle["active_revision_id"] == bundle["active_revision_id"]
+    assert GuardianService(layout).check().report["status"] == "success"

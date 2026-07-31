@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from research_kb.bundle import records_of_kind
 from research_kb.errors import (
     DUPLICATE_ID,
     SCHEMA_VALIDATION_FAILED,
@@ -325,7 +326,7 @@ class _Indexes:
 
 def _indexes(entries: list[tuple[str, dict[str, Any]]]) -> _Indexes:
     profile = next((record for kind, record in entries if kind == "domain-profile"), None)
-    cards = {record["paper_id"]: record for kind, record in entries if kind == "paper-card"}
+    cards = {record["paper_id"]: record for record in records_of_kind(entries, "paper-card")}
     units = {
         unit["unit_id"]: (card["paper_id"], unit)
         for card in cards.values()
@@ -336,8 +337,8 @@ def _indexes(entries: list[tuple[str, dict[str, Any]]]) -> _Indexes:
         profile=profile,
         cards=cards,
         units=units,
-        evidence={record["evidence_id"]: record for kind, record in entries if kind == "evidence"},
-        queues={record["queue_id"]: record for kind, record in entries if kind == "review-queue"},
+        evidence={record["evidence_id"]: record for record in records_of_kind(entries, "evidence")},
+        queues={record["queue_id"]: record for record in records_of_kind(entries, "review-queue")},
         questions={record["question_id"]: record for kind, record in entries if kind == "question-mapping"},
         candidates={record["candidate_id"]: record for kind, record in entries if kind in STEP7_RECORD_KINDS},
     )

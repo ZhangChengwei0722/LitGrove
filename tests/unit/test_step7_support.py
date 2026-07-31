@@ -166,3 +166,48 @@ def test_current_candidate_has_no_freshness_reasons() -> None:
     entries = _entries("beta")
     candidate = _one(entries, "step7-insight")
     assert candidate_freshness(candidate, entries) == {"state": "current", "reasons": []}
+
+
+def test_support_closure_reads_active_primary_bundle_children() -> None:
+    entries = _entries()
+    candidate = _one(entries, "step7-synthesis")
+    paper_id = candidate["paper_card_base"][0]["paper_id"]
+    card = next(record for kind, record in entries if kind == "paper-card" and record["paper_id"] == paper_id)
+    evidence = [record for kind, record in entries if kind == "evidence" and record["paper_id"] == paper_id]
+    queues = [record for kind, record in entries if kind == "review-queue" and record["paper_id"] == paper_id]
+    entries = [
+        (kind, record)
+        for kind, record in entries
+        if not (
+            record.get("paper_id") == paper_id
+            and kind in {"paper-card", "evidence", "review-queue"}
+        )
+    ]
+    revision_id = "primaryrev_a1111111-1111-4111-8111-111111111111"
+    entries.append(
+        (
+            "primary-semantic-bundle",
+            {
+                "paper_id": paper_id,
+                "active_revision_id": revision_id,
+                "revisions": [
+                    {
+                        "revision_id": revision_id,
+                        "paper_card": card,
+                        "evidence": evidence,
+                        "review_queue": queues,
+                    }
+                ],
+            },
+        )
+    )
+
+    closure = derive_support_closure(
+        entries,
+        question_id=candidate["question_id"],
+        paper_card_base=candidate["paper_card_base"],
+        record_kind="step7-synthesis",
+    )
+
+    assert set(closure.evidence_base) == set(candidate["evidence_base"])
+    assert set(closure.review_queue_refs) == set(candidate["review_queue_refs"])

@@ -40,6 +40,8 @@ SCHEMA_FILES: dict[str, str] = {
     "source-adequacy-profile": "source-adequacy-profile.schema.json",
     "agent-task-state": "agent-task-state.schema.json",
     "document-route-decision": "document-route-decision.schema.json",
+    "primary-semantic-bundle": "primary-semantic-bundle.schema.json",
+    "primary-semantic-candidate": "primary-semantic-candidate.schema.json",
     "mutation-request": "mutation-request.schema.json",
     "transaction-journal": "transaction-journal.schema.json",
 }

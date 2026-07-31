@@ -175,7 +175,7 @@ def test_needs_resolution_and_stale_freshness_are_independent() -> None:
     diagnostic = (
         "- `RKBC-014` | `question-mapping` | "
         f'`{question_id}` | `/updated_at` | '
-        "question mapping is older than a linked Paper Card, evidence, or review queue record"
+        "question mapping is older than or no longer active in its linked Paper Card, evidence, or review queue records"
     )
     assert diagnostic in rendered
     assert "paper-card" not in rendered.split("## Freshness Diagnostics", 1)[1]

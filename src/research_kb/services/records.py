@@ -100,6 +100,18 @@ class RecordService:
         entries = load_workspace_entries(self.layout)
         validate_workspace_entries(entries)
         paper = self._resolve_paper(entries, request)
+        if request.record_kind in {"paper-card", "evidence", "review-queue"} and self.layout.primary_bundle_path(
+            paper["paper_id"]
+        ).is_file():
+            raise ResearchKBError(
+                Diagnostic(
+                    DUPLICATE_PAPER_CARD,
+                    request.record_kind,
+                    paper["paper_id"],
+                    "/paper_id",
+                    "legacy Primary mutation is blocked after a P4-B Primary bundle exists",
+                )
+            )
         if request.record_kind in {"paper-card", "evidence"} and any(
             record["paper_id"] == paper["paper_id"]
             for record in records_of_kind(entries, "review-memory")

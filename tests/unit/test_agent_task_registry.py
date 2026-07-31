@@ -15,13 +15,13 @@ POLICY = {
 }
 
 
-def test_registry_publishes_only_route_resolution_as_available() -> None:
+def test_registry_publishes_route_and_primary_processing_as_available() -> None:
     projection = registry_projection()
 
     available = [item["task_kind"] for item in projection["task_kinds"] if item["runtime_status"] == "available"]
 
-    assert projection["registry_version"] == "p4a-v1"
-    assert available == ["document_route_resolution"]
+    assert projection["registry_version"] == "p4b-v1"
+    assert available == ["document_route_resolution", "primary_semantic_processing"]
     assert projection["embedded_agent_runtime"] is False
 
 

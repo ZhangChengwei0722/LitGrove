@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:primary-semantic-candidate",
+  "$defs": {
+    "alias": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$"},
+    "evidence_candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alias", "claim", "evidence_type", "quote", "source_page", "locator", "support_scope", "what_it_does_not_support", "requested_operation"],
+      "properties": {
+        "alias": {"$ref": "#/$defs/alias"},
+        "claim": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "evidence_type": {"enum": ["reported_result", "method", "control", "limitation", "safety", "efficacy", "mechanism", "other"]},
+        "quote": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "source_page": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_page"},
+        "locator": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "support_scope": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "what_it_does_not_support": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}},
+        "requested_operation": {"enum": ["continuous_text_evidence", "figure_table_evidence", "formula_layout_analysis", "supplementary_analysis"]}
+      }
+    },
+    "boundary_candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alias", "issue_type", "claim_candidate", "reason", "source_page", "locator", "resolution_status"],
+      "properties": {
+        "alias": {"$ref": "#/$defs/alias"},
+        "issue_type": {"enum": ["unsupported", "ambiguous", "overclaim", "contradiction", "source_reopen", "locator_missing"]},
+        "claim_candidate": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "reason": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "source_page": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_page"}, {"type": "null"}]},
+        "locator": {"type": ["string", "null"]},
+        "resolution_status": {"enum": ["needs_resolution", "resolved_by_narrowing", "needs_source_reopen"]}
+      }
+    },
+    "card_unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement", "statement_type", "grounding_status", "evidence_aliases", "boundary_aliases", "source_page", "confidence"],
+      "properties": {
+        "statement": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+        "statement_type": {"enum": ["reported_result", "author_conclusion", "method_description", "limitation", "interpretation", "future_direction", "background"]},
+        "grounding_status": {"enum": ["grounded", "revised", "interpretive", "background_only", "needs_resolution"]},
+        "evidence_aliases": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/alias"}},
+        "boundary_aliases": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/alias"}},
+        "source_page": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_page"}, {"type": "null"}]},
+        "confidence": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/confidence"}
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "task_id", "input_basis_digest", "evidence", "review_boundaries", "sections"],
+  "properties": {
+    "contract_version": {"const": "p4b-primary-semantic-candidate@1.0"},
+    "task_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/agent_task_id"},
+    "input_basis_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "evidence": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/evidence_candidate"}},
+    "review_boundaries": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/boundary_candidate"}},
+    "sections": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["section_id", "units"],
+        "properties": {
+          "section_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+          "units": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/card_unit"}}
+        }
+      }
+    }
+  }
+}
