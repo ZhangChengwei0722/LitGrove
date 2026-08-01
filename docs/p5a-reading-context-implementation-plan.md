@@ -93,5 +93,5 @@ exact source PDF by the matched manifestation and use the Evidence page/quote.
 ## Stop Boundaries
 
 Do not add PDF byte streaming, PDF.js, UPDF launch, report-only Agent Tasks, Direction or
-Field Map context, Research Synthesis, Discovery, Exchange, Obsidian, Q001/private-workspace
+Field Map context, Research Synthesis, Discovery, Exchange, Obsidian, and legacy private-workspace
 access, migration, legacy cutover or generated-workspace cleanup.

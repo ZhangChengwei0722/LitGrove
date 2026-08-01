@@ -149,6 +149,7 @@ class CapabilityService:
                 "deterministic_trunk": True,
                 "deterministic_intake_application": True,
                 "agent_task_staging": True,
+                "reading_application": True,
                 "embedded_agent_runtime": False,
             },
             "agent_task_registry_version": PRIVACY_REGISTRY_VERSION,

@@ -37,5 +37,5 @@ Portable Skill release snapshot required by the integrated App work surface.
 - embedded Agent execution, process supervision, credentials and model APIs;
 - knowledge-query/report-only Agent Tasks, PDF.js/UPDF, discovery UI and acquisition UI;
 - Direction, Field Map, Question proposal, Research Synthesis processing and Exchange;
-- Q001/private-workspace integration, migration and legacy cutover;
+- legacy private-question/workspace integration, migration and legacy cutover;
 - generated-workspace cleanup before P11 and overall completion.

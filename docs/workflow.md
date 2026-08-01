@@ -451,3 +451,23 @@ The same inspect-before-prepare order applies to document-route and Primary sema
 Tasks. Inspection never returns a prompt or lease. If the App restarts after leasing, it
 may prepare again from the current leased state; Core returns the identical manifest and
 lease only while the Task input basis and stored handoff digest remain current.
+
+### Reading and Evidence trace context
+
+P5-A adds a deterministic read path after Primary or Review approval:
+
+```text
+paper ID
+-> complete Paper Card or Review Memory
+-> source / parse / adequacy badges
+-> optional Question context
+-> Card Unit Evidence IDs
+-> revision-bound Evidence trace descriptor
+```
+
+Reading never creates a canonical or operational record. Missing or changed source bytes
+do not hide an already committed semantic record, but they disable current trace-back.
+Evidence lookup searches every Primary bundle revision and reports whether that revision is
+active or historical. The bound parse run remains visible even when only a newer parse is
+materialized. The result contains no path, source reference, fingerprint or source body;
+PDF bytes and UPDF handoff remain a separate P5-B trusted-backend capability.
