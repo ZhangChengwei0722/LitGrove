@@ -270,6 +270,8 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Permit zero reusable Units only for an explicitly low-value, redundant, outdated or outside-scope Memory with a concrete reason and coverage limits.
 - Keep preview operational and non-canonical. Explicit user approval may write one Review bundle revision, but it never upgrades Review content into Evidence or factual support.
 - Reject legacy/P4-C coexistence and direct legacy Review mutation after a Review bundle exists.
+- Keep App handoff inspection zero-write and lease-free. Leased replay must reproduce the
+  stored handoff digest and must not allocate a second lease.
 - Preserve every approved revision and predecessor digest. Corrections allocate new Memory and Unit IDs; only the active child enters Review Context and Catalog.
 - Recover bundle, Job and Task receipts idempotently. A blocked Review use creates no scientific review-queue substitute.
 

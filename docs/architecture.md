@@ -634,3 +634,16 @@ specific source/reparse wait and creates no Memory, Unit, Evidence or scientific
 queue row. A zero-Unit low-value or redundant Memory is valid when its reason and
 coverage limits are explicit. Crash replay completes missing Job/Task receipts without
 creating a duplicate revision; corrections append and never edit historical revisions.
+
+## P4-D0 App Handoff Inspection And Recovery
+
+Application Service interface `1.5` adds a zero-write `inspect_handoff` read before prompt
+creation. It returns the exact already privacy-filtered payload, effective content classes,
+result contract and byte facts, but no prompt or lease. The App can therefore show what
+will leave the workspace before the user creates an external Codex/Claude handoff.
+
+`prepare_handoff` also accepts the exact current leased state as an idempotent recovery
+request. Core rebuilds the manifest from current inputs, rechecks source/Parse/Profile and
+bundle-head freshness, and requires the stored handoff digest to match. The original
+predecessor-state replay remains valid for a lost first response. Neither recovery form
+creates another lease or persistent write.

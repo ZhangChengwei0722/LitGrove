@@ -421,7 +421,9 @@ the App uses the P4-C service flow:
 completed review_semantic_gate | review_semantic_gate_mixed_document
 -> user requests a Review semantic Task and selects an external executor
 -> Core creates an independent semantic Job and assesses five requested uses
--> basic Review Memory capability allowed: Task and bounded handoff are created
+-> basic Review Memory capability allowed: Task is created
+-> App inspects the exact zero-write payload and user confirms the handoff
+-> Core prepares or idempotently recovers the bounded prompt and lease
 -> external Agent returns seven Review sections and same-review source notes
 -> Core validates the common Review contract, exact quote/page provenance and consumed capabilities
 -> non-canonical App preview
@@ -441,3 +443,8 @@ allocate a new Memory ID and new Unit IDs while preserving older revisions for a
 Review content remains background-only after user approval and cannot create Evidence,
 factual Question Mapping, Research Synthesis support or a scientific review-queue row.
 Legacy Review Memory is never silently adopted or combined with Review bundle authority.
+
+The same inspect-before-prepare order applies to document-route and Primary semantic
+Tasks. Inspection never returns a prompt or lease. If the App restarts after leasing, it
+may prepare again from the current leased state; Core returns the identical manifest and
+lease only while the Task input basis and stored handoff digest remain current.

@@ -321,6 +321,41 @@ class AgentTaskApplicationService:
         self._append_states(layout, states, [state], operation="agent_task_create", actor="user")
         return self._mutation_result(state, persistent_writes=job_writes + 1)
 
+    def inspect_handoff(
+        self,
+        session: WorkspaceSession,
+        task_id: str,
+        expected_state: Mapping[str, Any],
+        executor_id: str,
+    ) -> dict[str, Any]:
+        layout = _session_layout(session)
+        head = self._head(self._read_states(layout), task_id)
+        expected = _normalize_expected(expected_state)
+        if head["status"] not in {"created", "leased"}:
+            raise _request_error(
+                head["state_id"],
+                "/status",
+                "Agent Task handoff inspection requires a created or leased Task",
+            )
+        self._require_expected(head, expected, status=head["status"])
+        manifest = self._validated_handoff_manifest(layout, head, executor_id)
+        return {
+            "status": "success",
+            "interface_version": APPLICATION_SERVICE_INTERFACE_VERSION,
+            "task": _task_projection(head),
+            "handoff_preview": {
+                "manifest_version": manifest["manifest_version"],
+                "executor_id": manifest["executor_id"],
+                "result_contract": manifest["result_contract"],
+                "effective_content_classes": list(manifest["effective_content_classes"]),
+                "payload": manifest["payload"],
+                "payload_digest": canonical_digest(manifest["payload"]),
+                "prompt_bytes": len(manifest["prompt"].encode("utf-8")),
+            },
+            "persistent_writes": 0,
+            "canonical_scientific_write": False,
+        }
+
     def prepare_handoff(
         self,
         session: WorkspaceSession,
@@ -332,17 +367,15 @@ class AgentTaskApplicationService:
         states = self._read_states(layout)
         head = self._head(states, task_id)
         expected = _normalize_expected(expected_state)
-        if head["status"] == "leased" and head.get("predecessor", {}).get("state_id") == expected["state_id"]:
-            self._require_replay_expected(head, expected)
-            manifest = self._handoff_manifest(layout, head)
-            if head["executor_id"] != executor_id or head["lease"]["handoff_digest"] != canonical_digest(manifest):
-                raise _conflict(head["state_id"], "prepared Agent Task replay does not match the current lease")
+        if head["status"] == "leased":
+            if head.get("predecessor", {}).get("state_id") == expected["state_id"]:
+                self._require_replay_expected(head, expected)
+            else:
+                self._require_expected(head, expected, status="leased")
+            manifest = self._validated_handoff_manifest(layout, head, executor_id)
             return self._handoff_result(head, manifest, persistent_writes=0)
         self._require_expected(head, expected, status="created")
-        if head["executor_id"] != executor_id:
-            raise _request_error(head["state_id"], "/executor_id", "handoff executor does not match the Task")
-        self._require_current_basis(layout, head)
-        manifest = self._handoff_manifest(layout, head)
+        manifest = self._validated_handoff_manifest(layout, head, executor_id)
         handoff_digest = canonical_digest(manifest)
         issued_at = timestamp(self.clock)
         lease = {
@@ -360,6 +393,27 @@ class AgentTaskApplicationService:
         leased = self._next_state(head, status="leased", lease=lease)
         self._append_states(layout, states, [leased], operation="agent_task_lease", actor="user")
         return self._handoff_result(leased, manifest, persistent_writes=1)
+
+    def _validated_handoff_manifest(
+        self,
+        layout: WorkspaceLayout,
+        task: Mapping[str, Any],
+        executor_id: str,
+    ) -> dict[str, Any]:
+        if task["executor_id"] != executor_id:
+            raise _request_error(
+                task["state_id"],
+                "/executor_id",
+                "handoff executor does not match the Task",
+            )
+        self._require_current_basis(layout, task)
+        manifest = self._handoff_manifest(layout, task)
+        if task["status"] == "leased" and task["lease"]["handoff_digest"] != canonical_digest(manifest):
+            raise _conflict(
+                task["state_id"],
+                "prepared Agent Task replay does not match the current lease",
+            )
+        return manifest
 
     def submit_result(
         self,
