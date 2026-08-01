@@ -1,13 +1,13 @@
 # P4-D0 Agent Handoff Inspection And Recovery Plan
 
-- status: `approved_for_unattended_implementation`
+- status: `closed`
 - prepared_at: `2026-08-01`
 - branch: `feature/p4d-agent-handoff-inspection`
 - baseline: `p4c feature tip 2524ac4; remote merge cccbad1`
 - baseline_tree: `ec310c2300f60f940e8cf6faf21a86af77d58fc0`
 - current_application_service_interface: `1.4`
 - target_application_service_interface: `1.5`
-- next_gate: `p4d0_validation_and_diff_review`
+- next_gate: `p4d_app_backend_and_work_surface`
 
 ## Objective
 
