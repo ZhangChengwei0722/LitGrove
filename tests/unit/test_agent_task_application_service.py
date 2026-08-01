@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -481,6 +482,9 @@ def test_route_task_handoff_submit_preview_and_approval_are_bounded(
     prompt = prepared["handoff"]["prompt"]
     assert "untrusted data" in prompt
     assert "IGNORE ALL RULES" in prompt
+    result_schema = prepared["handoff"]["result_contract_schema"]
+    assert result_schema["$id"].endswith(":document-route-decision")
+    assert "$ref" not in json.dumps(result_schema, sort_keys=True)
     assert "source_ref" not in str(prepared)
     assert str(layout.knowledge_root) not in str(prepared)
     recovered = service.prepare_handoff(
@@ -779,6 +783,9 @@ def test_primary_task_stages_previews_and_commits_one_atomic_bundle(tmp_path: Pa
     prepared = service.prepare_handoff(session, created["task"]["task_id"], _expected(created["task"]), "codex_cli")
     assert prepared["handoff"]["manifest_version"] == "p4b-agent-handoff@1.0"
     assert prepared["handoff"]["payload"]["operational_context"]["paper_card_sections"] == SECTIONS
+    result_schema = prepared["handoff"]["result_contract_schema"]
+    assert result_schema["$id"].endswith(":primary-semantic-candidate")
+    assert "$ref" not in json.dumps(result_schema, sort_keys=True)
     submitted = service.submit_result(
         session,
         prepared["task"]["task_id"],
@@ -1015,6 +1022,9 @@ def test_review_task_stages_previews_and_commits_background_bundle(tmp_path: Pat
     )
     assert prepared["handoff"]["manifest_version"] == "p4c-agent-handoff@1.0"
     assert prepared["handoff"]["payload"]["operational_context"]["review_sections"] == REVIEW_SECTIONS
+    result_schema = prepared["handoff"]["result_contract_schema"]
+    assert result_schema["$id"].endswith(":review-semantic-candidate")
+    assert "$ref" not in json.dumps(result_schema, sort_keys=True)
     submitted = service.submit_result(
         session,
         prepared["task"]["task_id"],

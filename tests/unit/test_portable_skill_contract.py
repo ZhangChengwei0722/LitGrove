@@ -12,6 +12,7 @@ SKILL_ROOT = ROOT / "skills" / "research-kb"
 EXPECTED_FILES = {
     "SKILL.md",
     "agents/openai.yaml",
+    "references/app-agent-task-response-workflow.md",
     "references/authority-and-failure-boundaries.md",
     "references/cli-contract.md",
     "references/discovery-workflow.md",
@@ -71,14 +72,14 @@ def test_skill_frontmatter_and_progressive_disclosure_contract() -> None:
         "query",
         "comparison",
         "trace-back",
-        "step 7",
+        "research synthesis",
         "discovery",
         "manuscript",
     ):
         assert trigger in description
     assert len((SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8").splitlines()) < 500
     for reference in sorted(path for path in EXPECTED_FILES if path.startswith("references/")):
-        target = reference.replace("task" + "-", "task%2D")
+        target = reference.replace("task-report", "task%2Dreport")
         assert f"]({target})" in body
 
 
@@ -90,7 +91,7 @@ def test_openai_metadata_is_exact_and_mentions_skill() -> None:
             "display_name": "Research KB",
             "short_description": "Discover, ingest, query, and audit traceable research",
             "default_prompt": (
-                "Use $research-kb to discover papers, ingest local research, audit an exact manuscript against explicit criteria, answer traceable knowledge-base questions, or maintain Step 7 candidates."
+                "Use $research-kb to answer an exact App handoff, discover papers, ingest local research, audit an exact manuscript, answer traceable knowledge-base questions, or maintain Research Synthesis candidates."
             ),
         }
     }
@@ -298,12 +299,35 @@ def test_skill_routes_modes_before_mutation_and_preserves_query_ephemerality() -
         "full_workflow_step7_refresh",
         "manuscript_projection",
         "manuscript_audit",
+        "app_agent_task_response",
     ):
         assert f"`{mode}`" in body
     assert "Classify the invocation mode before any mutation" in body
     assert "Ordinary knowledge queries never persist" in body
     assert "Allow only `already_present` plus the planned `acquire_workspace_lock` action" in body
     assert "Exact reruns write nothing" in body
+
+
+def test_app_agent_task_response_is_schema_bound_and_has_no_workspace_authority() -> None:
+    _, body = _skill_parts()
+    workflow = (SKILL_ROOT / "references" / "app-agent-task-response-workflow.md").read_text(
+        encoding="utf-8"
+    )
+
+    for required in (
+        "`app_agent_task_response`",
+        "result_contract_schema",
+        "task_id",
+        "input_basis_digest",
+        "effective_content_classes",
+        "one bare JSON object",
+        "Do not call the CLI",
+        "App preview and explicit user approval",
+    ):
+        assert required in body + workflow
+    assert "Do not copy or infer a different Core schema" in workflow
+    assert "The handoff must not contain a lease" in workflow
+    assert "A valid low-value or redundant review may return zero reusable Units" in workflow
 
 
 def test_manuscript_projection_mode_stops_before_semantic_audit() -> None:

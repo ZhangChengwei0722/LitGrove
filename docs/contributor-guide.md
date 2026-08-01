@@ -287,6 +287,7 @@ Windows is the required live acceptance platform. macOS compatibility remains a 
 - Keep `SKILL.md` concise and link every detailed reference directly from it.
 - Do not add Skill-local scripts, assets, schemas, state, README files or private fixtures without a later approved design.
 - Keep executable command examples aligned with `capability show` and public CLI help.
+- Refresh the repo-owned release snapshot only with `python tools/sync_portable_skill.py --source <authoring-source> --apply`; use `--check` in review and record the normalized tree digest.
 - Run `tests/unit/test_portable_skill_contract.py` plus the active official `quick_validate.py`.
 - Regenerate `agents/openai.yaml` with official tooling and require byte-identical output.
 - Forward-test with fresh Agents, raw synthetic tasks and clean temporary workspaces; do not disclose expected routing.

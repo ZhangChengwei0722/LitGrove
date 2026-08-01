@@ -647,3 +647,10 @@ request. Core rebuilds the manifest from current inputs, rechecks source/Parse/P
 bundle-head freshness, and requires the stored handoff digest to match. The original
 predecessor-state replay remains valid for a lost first response. Neither recovery form
 creates another lease or persistent write.
+
+Application Service interface `1.6` makes the manual external handoff self-contained by
+adding a fully resolved `result_contract_schema` to the handoff manifest. It contains
+only schema fragments reachable from the declared result contract, carries no source
+path or lease and remains inside the existing prompt-byte budget. This preserves Core as
+the schema authority while allowing Codex CLI or Claude Code CLI to return valid JSON
+without copying scientific contracts into the Portable Skill.
