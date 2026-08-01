@@ -45,4 +45,3 @@ complete isolated PDF-extra smoke then passed.
 - route, Primary and Review staging/approval behavior remains compatible;
 - no CLI command, HTTP endpoint, embedded Agent runtime, credential path, scheduler,
   private workspace or real PDF was introduced or accessed.
-
