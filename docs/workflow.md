@@ -366,7 +366,7 @@ After a route-ambiguous deterministic intake, the App uses the P4-A service flow
 waiting_user route_ambiguous Job
 -> user selects executor and exact content classes
 -> Agent Task created; Job becomes waiting_agent
--> portable prompt manifest prepared under one CAS lease
+-> portable manifest with exact payload and resolved result schema prepared under one CAS lease
 -> external Codex CLI or Claude Code CLI returns bounded JSON
 -> Core rejects stale basis or stages the untrusted result
 -> App renders escaped preview
@@ -376,6 +376,9 @@ waiting_user route_ambiguous Job
 
 No method launches an Agent or exposes a source path. A Task is bound to one exact Job
 state, paper record, live source digest, Parse output and current Source Adequacy profile.
+The user transfers the complete manifest rather than a prompt-only fragment; the
+external Agent preserves `task_id` and `input_basis_digest`, follows the embedded schema
+and returns one bare candidate JSON object to the App.
 Revision creates a new Task with reciprocal lineage and refreshed inputs. Staging is
 operational and non-canonical; P4-A route approval creates no Paper Card, Evidence,
 Review Memory or scientific review-queue item.
@@ -421,7 +424,9 @@ the App uses the P4-C service flow:
 completed review_semantic_gate | review_semantic_gate_mixed_document
 -> user requests a Review semantic Task and selects an external executor
 -> Core creates an independent semantic Job and assesses five requested uses
--> basic Review Memory capability allowed: Task and bounded handoff are created
+-> basic Review Memory capability allowed: Task is created
+-> App inspects the exact zero-write payload and user confirms the handoff
+-> Core prepares or idempotently recovers the bounded prompt and lease
 -> external Agent returns seven Review sections and same-review source notes
 -> Core validates the common Review contract, exact quote/page provenance and consumed capabilities
 -> non-canonical App preview
@@ -441,3 +446,8 @@ allocate a new Memory ID and new Unit IDs while preserving older revisions for a
 Review content remains background-only after user approval and cannot create Evidence,
 factual Question Mapping, Research Synthesis support or a scientific review-queue row.
 Legacy Review Memory is never silently adopted or combined with Review bundle authority.
+
+The same inspect-before-prepare order applies to document-route and Primary semantic
+Tasks. Inspection never returns a prompt or lease. If the App restarts after leasing, it
+may prepare again from the current leased state; Core returns the identical manifest and
+lease only while the Task input basis and stored handoff digest remain current.

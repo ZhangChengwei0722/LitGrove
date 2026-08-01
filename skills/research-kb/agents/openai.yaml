@@ -1,4 +1,4 @@
 interface:
   display_name: "Research KB"
   short_description: "Discover, ingest, query, and audit traceable research"
-  default_prompt: "Use $research-kb to discover papers, ingest local research, audit an exact manuscript against explicit criteria, answer traceable knowledge-base questions, or maintain Step 7 candidates."
+  default_prompt: "Use $research-kb to answer an exact App handoff, discover papers, ingest local research, audit an exact manuscript, answer traceable knowledge-base questions, or maintain Research Synthesis candidates."

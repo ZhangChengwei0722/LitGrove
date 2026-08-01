@@ -270,6 +270,8 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Permit zero reusable Units only for an explicitly low-value, redundant, outdated or outside-scope Memory with a concrete reason and coverage limits.
 - Keep preview operational and non-canonical. Explicit user approval may write one Review bundle revision, but it never upgrades Review content into Evidence or factual support.
 - Reject legacy/P4-C coexistence and direct legacy Review mutation after a Review bundle exists.
+- Keep App handoff inspection zero-write and lease-free. Leased replay must reproduce the
+  stored handoff digest and must not allocate a second lease.
 - Preserve every approved revision and predecessor digest. Corrections allocate new Memory and Unit IDs; only the active child enters Review Context and Catalog.
 - Recover bundle, Job and Task receipts idempotently. A blocked Review use creates no scientific review-queue substitute.
 
@@ -285,6 +287,7 @@ Windows is the required live acceptance platform. macOS compatibility remains a 
 - Keep `SKILL.md` concise and link every detailed reference directly from it.
 - Do not add Skill-local scripts, assets, schemas, state, README files or private fixtures without a later approved design.
 - Keep executable command examples aligned with `capability show` and public CLI help.
+- Refresh the repo-owned release snapshot only with `python tools/sync_portable_skill.py --source <authoring-source> --apply`; use `--check` in review and record the normalized tree digest.
 - Run `tests/unit/test_portable_skill_contract.py` plus the active official `quick_validate.py`.
 - Regenerate `agents/openai.yaml` with official tooling and require byte-identical output.
 - Forward-test with fresh Agents, raw synthetic tasks and clean temporary workspaces; do not disclose expected routing.
