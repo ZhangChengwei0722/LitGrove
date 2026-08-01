@@ -676,3 +676,18 @@ source fingerprint, raw parsed page body, Agent lease or mutation authority. Rev
 is always background-only. Only `grounded` and `revised` Primary Card Units are projected
 as eligible factual inputs; interpretation, background and unresolved Units remain visible
 but excluded.
+
+## P5-B Evidence Source Access
+
+Application Service interface `1.8` adds a backend-only, non-persistent Evidence source
+handle. Core resolves the exact Evidence owner and immutable Primary revision, binds the
+workspace identity, expected source fingerprint, source ref, PDF page and locator, and
+returns only a redacted descriptor for App use. Historical Evidence may use an available
+exact historical manifestation; an active head never substitutes different bytes.
+
+Every source open reloads canonical records, rechecks Evidence/revision/source lineage,
+validates the live source ref, opens a regular file, enforces the `512 MiB` budget, hashes
+the opened descriptor, requires the expected SHA-256 and PDF header signature, and rewinds
+that same descriptor. The backend path is available only on the opened Core value for an
+explicit trusted local-reader adapter. No handle, path, source ref or fingerprint is
+durable or browser-authoritative.

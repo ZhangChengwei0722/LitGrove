@@ -125,6 +125,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "deterministic_intake_application": True,
             "agent_task_staging": True,
             "reading_application": True,
+            "reading_evidence_source_access": True,
             "embedded_agent_runtime": False,
         },
         "agent_task_registry_version": "p4c-v1",

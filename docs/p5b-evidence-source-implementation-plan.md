@@ -22,7 +22,7 @@ validated source to a local reader without receiving path authority from the bro
   exact source ref, PDF page and locator;
 - allow an exact historical manifestation when the active source head has changed;
 - on each read, reload canonical records, verify handle lineage, open the regular file,
-  enforce `512 MiB`, hash the opened bytes, require the expected digest and `%PDF-`
+  enforce `512 MiB`, hash the opened bytes, require the expected digest and PDF header
   signature, then rewind the same descriptor;
 - expose no browser response, durable record, schema, ID namespace or write path;
 - keep source ref, fingerprint and absolute path backend-only;
