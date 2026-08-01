@@ -470,4 +470,18 @@ do not hide an already committed semantic record, but they disable current trace
 Evidence lookup searches every Primary bundle revision and reports whether that revision is
 active or historical. The bound parse run remains visible even when only a newer parse is
 materialized. The result contains no path, source reference, fingerprint or source body;
-PDF bytes and UPDF handoff remain a separate P5-B trusted-backend capability.
+P5-B adds the separate trusted-backend flow:
+
+```text
+Evidence ID
+-> exact owning Primary revision
+-> exact source manifestation
+-> non-persistent Core handle
+-> canonical/source lineage revalidation
+-> opened and hashed PDF descriptor
+-> App-owned opaque session handle or explicit local-reader handoff
+```
+
+The browser never supplies or receives a source path. Each open revalidates the Core handle
+and returns the already-open descriptor so a later path reopen cannot bypass the checked
+fingerprint, regular-file, size or PDF-signature boundary.

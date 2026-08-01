@@ -29,7 +29,12 @@ from research_kb.services.review_context import ReviewContextService
 from research_kb.services.review_memory import ReviewMemoryService
 from research_kb.services.privacy_scan import PrivacyScanService
 from research_kb.services.question_read import QuestionQueryService, WorkspaceQuestionReadingViewService
-from research_kb.services.reading_application import ReadingApplicationService
+from research_kb.services.reading_application import (
+    EvidenceSourceHandle,
+    OpenedEvidenceSource,
+    PreparedEvidenceSource,
+    ReadingApplicationService,
+)
 from research_kb.services.recovery import TransactionRecoveryService
 from research_kb.services.step7_candidate import Step7CandidateService
 from research_kb.services.step7_context import Step7ContextService
@@ -78,6 +83,9 @@ __all__ = [
     "PipelineJobService",
     "PrivacyScanService",
     "QuestionQueryService",
+    "EvidenceSourceHandle",
+    "OpenedEvidenceSource",
+    "PreparedEvidenceSource",
     "ReadingApplicationService",
     "ReviewContextService",
     "ReviewMemoryService",

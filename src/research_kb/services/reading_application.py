@@ -1,15 +1,23 @@
 from __future__ import annotations
 
+import hashlib
+import os
+import stat
 from collections.abc import Iterable, Mapping, Sequence
 from copy import deepcopy
-from typing import Any
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, BinaryIO
 
 from research_kb.application import APPLICATION_SERVICE_INTERFACE_VERSION
 from research_kb.bundle import BundleEntry, load_workspace_entries, records_of_kind, validate_workspace_entries
 from research_kb.catalog.models import canonical_digest
 from research_kb.errors import (
     DUPLICATE_ID,
+    INPUT_TOO_LARGE,
+    PARSE_SOURCE_UNSUPPORTED,
     SCHEMA_VALIDATION_FAILED,
+    SNAPSHOT_MISMATCH,
     UNRESOLVED_REFERENCE,
     Diagnostic,
     ResearchKBError,
@@ -18,12 +26,65 @@ from research_kb.identifiers import Namespace, validate_id
 from research_kb.services.question_mapping import mapping_freshness_diagnostics
 from research_kb.services.workspace_session import WorkspaceSession
 from research_kb.source_adequacy import profile_freshness, required_capability
-from research_kb.source_resolution import inspect_source_ref
+from research_kb.source_resolution import SourceRefObservation, inspect_source_ref
 from research_kb.workspace import WorkspaceLayout
 
 
 MAX_COMPARE_PAPERS = 4
+MAX_EVIDENCE_SOURCE_BYTES = 512 * 1024 * 1024
 FACTUAL_UNIT_STATUSES = frozenset({"grounded", "revised"})
+PDF_SIGNATURE = bytes((37, 80, 68, 70, 45))
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceSourceHandle:
+    workspace_id: str = field(repr=False)
+    evidence_id: str
+    paper_id: str
+    evidence_digest: str = field(repr=False)
+    revision_id: str | None
+    revision_digest: str | None = field(repr=False)
+    expected_fingerprint: str = field(repr=False)
+    source_root_id: str = field(repr=False)
+    source_relative_path: str = field(repr=False)
+    pdf_page: int
+    locator: str
+    source_currentness: str
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedEvidenceSource:
+    handle: EvidenceSourceHandle = field(repr=False)
+    descriptor: dict[str, Any]
+
+
+@dataclass(slots=True)
+class OpenedEvidenceSource:
+    stream: BinaryIO = field(repr=False)
+    path: Path = field(repr=False)
+    size_bytes: int
+    pdf_page: int
+    locator: str
+
+    def close(self) -> None:
+        self.stream.close()
+
+    def __enter__(self) -> OpenedEvidenceSource:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()
+
+
+@dataclass(frozen=True, slots=True)
+class _EvidenceBinding:
+    evidence: dict[str, Any]
+    paper: dict[str, Any]
+    revision: dict[str, Any] | None
+    revision_projection: dict[str, Any]
+    expected_fingerprint: str
+    bound_parse_run_id: str | None
+    active: bool
 
 
 class ReadingApplicationService:
@@ -147,69 +208,327 @@ class ReadingApplicationService:
         normalized_id = validate_id(evidence_id, Namespace.EVIDENCE)
         entries = load_workspace_entries(layout)
         validate_workspace_entries(entries)
-        matches = _evidence_matches(entries, normalized_id)
-        if not matches:
-            raise ResearchKBError(
-                Diagnostic(
-                    UNRESOLVED_REFERENCE,
-                    "evidence",
-                    normalized_id,
-                    "/evidence_id",
-                    "evidence does not exist",
-                )
-            )
-        if len(matches) != 1:
-            raise ResearchKBError(
-                Diagnostic(
-                    DUPLICATE_ID,
-                    "evidence",
-                    normalized_id,
-                    "/evidence_id",
-                    "evidence ID resolves to more than one provenance owner",
-                )
-            )
-
-        evidence, revision, bundle = matches[0]
-        paper = _paper(entries, evidence["paper_id"])
-        if revision is None:
-            expected_fingerprint = evidence["source_fingerprint"]["value"]
-            bound_parse_run_id = _materialized_parse_run(entries, evidence["paper_id"])
-            revision_projection = {
-                "authority_mode": "legacy_unversioned",
-                "revision_id": None,
-                "revision_number": None,
-                "revision_status": "active",
-            }
-            active = True
-        else:
-            expected_fingerprint = revision["input_snapshot"]["source_fingerprint"]["value"]
-            bound_parse_run_id = revision["input_snapshot"]["parse_run_id"]
-            active = bundle is not None and revision["revision_id"] == bundle["active_revision_id"]
-            revision_projection = {
-                "authority_mode": "revisioned_bundle",
-                "revision_id": revision["revision_id"],
-                "revision_number": revision["revision_number"],
-                "revision_status": "active" if active else "historical",
-            }
-
-        source = _stable_source_projection(layout, entries, paper, expected_fingerprint)
-        parse = _parse_projection(entries, evidence["paper_id"], bound_parse_run_id)
+        binding = _evidence_binding(entries, normalized_id)
+        source = _stable_source_projection(
+            layout,
+            entries,
+            binding.paper,
+            binding.expected_fingerprint,
+        )
+        parse = _parse_projection(
+            entries,
+            binding.evidence["paper_id"],
+            binding.bound_parse_run_id,
+        )
         return {
             "status": "success",
             "interface_version": "1.0",
             "application_service_interface_version": APPLICATION_SERVICE_INTERFACE_VERSION,
-            "evidence": _safe_evidence(evidence),
-            "primary_revision": revision_projection,
+            "evidence": _safe_evidence(binding.evidence),
+            "primary_revision": binding.revision_projection,
             "source": source,
             "parse": parse,
             "factual_support_eligible": (
-                active
+                binding.active
                 and source["trace_back_available"]
                 and source["source_currentness"] == "current"
             ),
             "persistent_writes": 0,
             "canonical_scientific_write": False,
         }
+
+    def prepare_evidence_source(
+        self,
+        session: WorkspaceSession,
+        evidence_id: str,
+    ) -> PreparedEvidenceSource:
+        layout = _session_layout(session)
+        normalized_id = validate_id(evidence_id, Namespace.EVIDENCE)
+        entries = load_workspace_entries(layout)
+        validate_workspace_entries(entries)
+        binding = _evidence_binding(entries, normalized_id)
+        source = _stable_source_projection(
+            layout,
+            entries,
+            binding.paper,
+            binding.expected_fingerprint,
+        )
+        observation = _exact_source_observation(
+            layout,
+            entries,
+            binding.paper,
+            binding.expected_fingerprint,
+        )
+        handle = EvidenceSourceHandle(
+            workspace_id=session.workspace_id,
+            evidence_id=binding.evidence["evidence_id"],
+            paper_id=binding.evidence["paper_id"],
+            evidence_digest=canonical_digest(binding.evidence),
+            revision_id=None if binding.revision is None else binding.revision["revision_id"],
+            revision_digest=None if binding.revision is None else canonical_digest(binding.revision),
+            expected_fingerprint=binding.expected_fingerprint,
+            source_root_id=observation.source_ref.root_id,
+            source_relative_path=observation.source_ref.relative_path,
+            pdf_page=binding.evidence["source_page"]["pdf_page"],
+            locator=binding.evidence["locator"],
+            source_currentness=source["source_currentness"],
+        )
+        with self.open_evidence_source(session, handle) as opened:
+            size_bytes = opened.size_bytes
+        return PreparedEvidenceSource(
+            handle=handle,
+            descriptor={
+                "status": "success",
+                "interface_version": "1.0",
+                "application_service_interface_version": APPLICATION_SERVICE_INTERFACE_VERSION,
+                "evidence_id": handle.evidence_id,
+                "paper_id": handle.paper_id,
+                "pdf_page": handle.pdf_page,
+                "locator": handle.locator,
+                "media_type": "application/pdf",
+                "size_bytes": size_bytes,
+                "source_currentness": handle.source_currentness,
+                "persistent_writes": 0,
+                "canonical_scientific_write": False,
+            },
+        )
+
+    def open_evidence_source(
+        self,
+        session: WorkspaceSession,
+        handle: EvidenceSourceHandle,
+    ) -> OpenedEvidenceSource:
+        if not isinstance(handle, EvidenceSourceHandle):
+            raise _source_error(SNAPSHOT_MISMATCH, None, "Evidence source handle is invalid")
+        if handle.workspace_id != session.workspace_id:
+            raise _source_error(
+                SNAPSHOT_MISMATCH,
+                handle.evidence_id,
+                "Evidence source handle belongs to a different workspace",
+            )
+        layout = _session_layout(session)
+        entries = load_workspace_entries(layout)
+        validate_workspace_entries(entries)
+        binding = _evidence_binding(entries, handle.evidence_id)
+        _validate_source_handle_binding(handle, binding)
+        candidates, _ = _source_candidates(
+            entries,
+            binding.paper,
+            binding.expected_fingerprint,
+        )
+        if (handle.source_root_id, handle.source_relative_path) not in candidates:
+            raise _source_error(
+                SNAPSHOT_MISMATCH,
+                handle.evidence_id,
+                "Evidence source handle ref is no longer part of its provenance lineage",
+            )
+        observation = inspect_source_ref(
+            layout,
+            root_id=handle.source_root_id,
+            relative_path=handle.source_relative_path,
+        )
+        if observation.availability != "available":
+            raise _source_error(
+                UNRESOLVED_REFERENCE,
+                handle.evidence_id,
+                "Evidence source is unavailable",
+            )
+        if observation.live_sha256 != handle.expected_fingerprint:
+            raise _source_error(
+                SNAPSHOT_MISMATCH,
+                handle.evidence_id,
+                "Evidence source fingerprint changed before source access",
+            )
+        return _open_validated_pdf(observation.path, handle)
+
+
+def _evidence_binding(entries: list[BundleEntry], evidence_id: str) -> _EvidenceBinding:
+    matches = _evidence_matches(entries, evidence_id)
+    if not matches:
+        raise ResearchKBError(
+            Diagnostic(
+                UNRESOLVED_REFERENCE,
+                "evidence",
+                evidence_id,
+                "/evidence_id",
+                "evidence does not exist",
+            )
+        )
+    if len(matches) != 1:
+        raise ResearchKBError(
+            Diagnostic(
+                DUPLICATE_ID,
+                "evidence",
+                evidence_id,
+                "/evidence_id",
+                "evidence ID resolves to more than one provenance owner",
+            )
+        )
+    evidence, revision, bundle = matches[0]
+    paper = _paper(entries, evidence["paper_id"])
+    if revision is None:
+        return _EvidenceBinding(
+            evidence=evidence,
+            paper=paper,
+            revision=None,
+            revision_projection={
+                "authority_mode": "legacy_unversioned",
+                "revision_id": None,
+                "revision_number": None,
+                "revision_status": "active",
+            },
+            expected_fingerprint=evidence["source_fingerprint"]["value"],
+            bound_parse_run_id=_materialized_parse_run(entries, evidence["paper_id"]),
+            active=True,
+        )
+    active = bundle is not None and revision["revision_id"] == bundle["active_revision_id"]
+    return _EvidenceBinding(
+        evidence=evidence,
+        paper=paper,
+        revision=revision,
+        revision_projection={
+            "authority_mode": "revisioned_bundle",
+            "revision_id": revision["revision_id"],
+            "revision_number": revision["revision_number"],
+            "revision_status": "active" if active else "historical",
+        },
+        expected_fingerprint=revision["input_snapshot"]["source_fingerprint"]["value"],
+        bound_parse_run_id=revision["input_snapshot"]["parse_run_id"],
+        active=active,
+    )
+
+
+def _exact_source_observation(
+    layout: WorkspaceLayout,
+    entries: list[BundleEntry],
+    paper: Mapping[str, Any],
+    expected_fingerprint: str,
+) -> SourceRefObservation:
+    candidates, _ = _source_candidates(entries, paper, expected_fingerprint)
+    for root_id, relative_path in candidates:
+        observation = inspect_source_ref(
+            layout,
+            root_id=root_id,
+            relative_path=relative_path,
+        )
+        if (
+            observation.availability == "available"
+            and observation.live_sha256 == expected_fingerprint
+        ):
+            return observation
+    raise _source_error(
+        UNRESOLVED_REFERENCE,
+        paper["paper_id"],
+        "Exact Evidence source manifestation is unavailable or changed",
+    )
+
+
+def _validate_source_handle_binding(
+    handle: EvidenceSourceHandle,
+    binding: _EvidenceBinding,
+) -> None:
+    revision_id = None if binding.revision is None else binding.revision["revision_id"]
+    revision_digest = None if binding.revision is None else canonical_digest(binding.revision)
+    if (
+        handle.paper_id != binding.evidence["paper_id"]
+        or handle.evidence_digest != canonical_digest(binding.evidence)
+        or handle.revision_id != revision_id
+        or handle.revision_digest != revision_digest
+        or handle.expected_fingerprint != binding.expected_fingerprint
+        or handle.pdf_page != binding.evidence["source_page"]["pdf_page"]
+        or handle.locator != binding.evidence["locator"]
+    ):
+        raise _source_error(
+            SNAPSHOT_MISMATCH,
+            handle.evidence_id,
+            "Evidence source handle lineage changed before source access",
+        )
+
+
+def _open_validated_pdf(path: Path, handle: EvidenceSourceHandle) -> OpenedEvidenceSource:
+    try:
+        path_metadata = os.lstat(path)
+        if not _safe_regular_file(path_metadata):
+            raise _source_error(
+                UNRESOLVED_REFERENCE,
+                handle.evidence_id,
+                "Evidence source is not a safe regular file",
+            )
+        stream = path.open("rb")
+    except OSError as error:
+        raise _source_error(
+            UNRESOLVED_REFERENCE,
+            handle.evidence_id,
+            "Evidence source could not be opened",
+        ) from error
+    try:
+        before = os.fstat(stream.fileno())
+        if not _safe_regular_file(before) or not _same_file_identity(path_metadata, before):
+            raise _source_error(
+                UNRESOLVED_REFERENCE,
+                handle.evidence_id,
+                "Evidence source identity changed before source access",
+            )
+        if before.st_size > MAX_EVIDENCE_SOURCE_BYTES:
+            raise _source_error(
+                INPUT_TOO_LARGE,
+                handle.evidence_id,
+                "Evidence source exceeds the PDF access size budget",
+            )
+        digest = hashlib.sha256()
+        signature = stream.read(len(PDF_SIGNATURE))
+        digest.update(signature)
+        while chunk := stream.read(1024 * 1024):
+            digest.update(chunk)
+        after = os.fstat(stream.fileno())
+        if (
+            before.st_size != after.st_size
+            or before.st_mtime_ns != after.st_mtime_ns
+            or digest.hexdigest() != handle.expected_fingerprint
+        ):
+            raise _source_error(
+                SNAPSHOT_MISMATCH,
+                handle.evidence_id,
+                "Evidence source fingerprint changed before source access",
+            )
+        if signature != PDF_SIGNATURE:
+            raise _source_error(
+                PARSE_SOURCE_UNSUPPORTED,
+                handle.evidence_id,
+                "Evidence source is not a PDF document",
+            )
+        stream.seek(0)
+        return OpenedEvidenceSource(
+            stream=stream,
+            path=path,
+            size_bytes=before.st_size,
+            pdf_page=handle.pdf_page,
+            locator=handle.locator,
+        )
+    except Exception:
+        stream.close()
+        raise
+
+
+def _safe_regular_file(metadata: os.stat_result) -> bool:
+    return (
+        stat.S_ISREG(metadata.st_mode)
+        and getattr(metadata, "st_nlink", 1) == 1
+        and not (
+            getattr(metadata, "st_file_attributes", 0)
+            & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+        )
+    )
+
+
+def _same_file_identity(left: os.stat_result, right: os.stat_result) -> bool:
+    return (left.st_dev, left.st_ino) == (right.st_dev, right.st_ino)
+
+
+def _source_error(code: str, evidence_id: str | None, message: str) -> ResearchKBError:
+    return ResearchKBError(
+        Diagnostic(code, "reading-evidence-source", evidence_id, "/evidence_id", message)
+    )
 
 
 def _paper(entries: list[BundleEntry], paper_id: str) -> dict[str, Any]:
@@ -400,29 +719,11 @@ def _source_projection(
     paper: Mapping[str, Any],
     expected_fingerprint: str,
 ) -> dict[str, Any]:
-    candidates: list[tuple[str, str]] = []
-    paper_assets = [
-        item
-        for item in records_of_kind(entries, "source-asset-state")
-        if item.get("paper_id") == paper["paper_id"]
-        and item.get("asset_role") == "main_pdf"
-    ]
-    states = sorted(
-        (
-            item
-            for item in paper_assets
-            if item.get("source_fingerprint", {}).get("value") == expected_fingerprint
-        ),
-        key=lambda item: item["revision"],
-        reverse=True,
+    unique_candidates, paper_assets = _source_candidates(
+        entries,
+        paper,
+        expected_fingerprint,
     )
-    candidates.extend(
-        (item["source_ref"]["root_id"], item["source_ref"]["relative_path"])
-        for item in states
-    )
-    if not paper_assets and paper["source_fingerprint"]["value"] == expected_fingerprint:
-        candidates.append((paper["source_ref"]["root_id"], paper["source_ref"]["relative_path"]))
-    unique_candidates = list(dict.fromkeys(candidates))
     if not unique_candidates:
         return {
             "source_availability": "missing",
@@ -499,6 +800,36 @@ def _source_projection(
         "source_currentness": "unavailable",
         "trace_back_available": False,
     }
+
+
+def _source_candidates(
+    entries: list[BundleEntry],
+    paper: Mapping[str, Any],
+    expected_fingerprint: str,
+) -> tuple[list[tuple[str, str]], list[dict[str, Any]]]:
+    candidates: list[tuple[str, str]] = []
+    paper_assets = [
+        item
+        for item in records_of_kind(entries, "source-asset-state")
+        if item.get("paper_id") == paper["paper_id"]
+        and item.get("asset_role") == "main_pdf"
+    ]
+    states = sorted(
+        (
+            item
+            for item in paper_assets
+            if item.get("source_fingerprint", {}).get("value") == expected_fingerprint
+        ),
+        key=lambda item: item["revision"],
+        reverse=True,
+    )
+    candidates.extend(
+        (item["source_ref"]["root_id"], item["source_ref"]["relative_path"])
+        for item in states
+    )
+    if not paper_assets and paper["source_fingerprint"]["value"] == expected_fingerprint:
+        candidates.append((paper["source_ref"]["root_id"], paper["source_ref"]["relative_path"]))
+    return list(dict.fromkeys(candidates)), paper_assets
 
 
 def _public_availability(value: str) -> str:
@@ -587,4 +918,11 @@ def _request_error(path: str, message: str) -> ResearchKBError:
     )
 
 
-__all__ = ["MAX_COMPARE_PAPERS", "ReadingApplicationService"]
+__all__ = [
+    "EvidenceSourceHandle",
+    "MAX_COMPARE_PAPERS",
+    "MAX_EVIDENCE_SOURCE_BYTES",
+    "OpenedEvidenceSource",
+    "PreparedEvidenceSource",
+    "ReadingApplicationService",
+]
