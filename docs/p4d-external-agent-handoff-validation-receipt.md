@@ -47,5 +47,5 @@
 - CC Switch mirror run `20260802-012719` changed only `research-kb`; 21 other enabled
   Skills remained byte-identical.
 
-No Q001, private workspace, real PDF, migration, new scientific schema, Agent runtime,
+No legacy private question, private workspace, real PDF, migration, new scientific schema, Agent runtime,
 credential store or provider integration was introduced or accessed.

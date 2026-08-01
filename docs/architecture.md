@@ -654,3 +654,25 @@ only schema fragments reachable from the declared result contract, carries no so
 path or lease and remains inside the existing prompt-byte budget. This preserves Core as
 the schema authority while allowing Codex CLI or Claude Code CLI to return valid JSON
 without copying scientific contracts into the Portable Skill.
+
+## P5-A Reading Context Application Service
+
+Application Service interface `1.7` adds a read-only `ReadingApplicationService` behind
+the same opaque `WorkspaceSession`. `show_paper` returns the whole seven-section Paper
+Card or Review Memory, current source/Parse/Source Adequacy states and optional Question
+links. `compare_papers` only batches two to four ordered paper reading inputs; it performs
+no semantic comparison. `trace_evidence` locates an Evidence ID in the exact Primary
+revision that owns it and returns page, locator, quote, revision state and safe source/Parse
+availability.
+
+The reading surface deliberately separates semantic readability from current trace-back.
+A committed Card or Review Memory remains visible when source bytes are missing, changed
+or relink-required, while `trace_back_available` becomes false. A same-digest relink can
+remain current. A superseded Evidence ID stays bound to its historical revision and parse
+run; the materialized active Parse is reported separately and never substituted.
+
+The service is JSON-safe and zero-write. It exposes no local path, portable source ref,
+source fingerprint, raw parsed page body, Agent lease or mutation authority. Review Memory
+is always background-only. Only `grounded` and `revised` Primary Card Units are projected
+as eligible factual inputs; interpretation, background and unresolved Units remain visible
+but excluded.
