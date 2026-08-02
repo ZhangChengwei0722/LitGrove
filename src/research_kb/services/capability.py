@@ -154,6 +154,7 @@ class CapabilityService:
                 "reading_application": True,
                 "reading_evidence_source_access": True,
                 "research_organization_application": True,
+                "organization_proposal_agent_tasks": True,
                 "embedded_agent_runtime": False,
             },
             "agent_task_registry_version": PRIVACY_REGISTRY_VERSION,

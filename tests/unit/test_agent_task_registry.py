@@ -20,10 +20,11 @@ def test_registry_publishes_route_and_primary_processing_as_available() -> None:
 
     available = [item["task_kind"] for item in projection["task_kinds"] if item["runtime_status"] == "available"]
 
-    assert projection["registry_version"] == "p5c-v1"
+    assert projection["registry_version"] == "p7b-v1"
     assert available == [
         "document_route_resolution",
         "knowledge_query_report",
+        "organization_proposal",
         "primary_semantic_processing",
         "review_semantic_processing",
     ]

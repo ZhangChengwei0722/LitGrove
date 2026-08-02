@@ -66,13 +66,14 @@ def validate_task_state(state: Mapping[str, Any]) -> None:
             raise _task_error("revision decision requires a successor task", "/decision/successor_task_id")
         if status != "revision_requested" and decision.get("successor_task_id") is not None:
             raise _task_error("non-revision decision cannot name a successor task", "/decision/successor_task_id")
-        report_only_approval = (
-            status == "approved" and state.get("task_kind") == "knowledge_query_report"
-        )
-        if status == "approved" and not report_only_approval and decision.get("applied_job_state_id") is None:
+        no_job_approval = status == "approved" and state.get("task_kind") in {
+            "knowledge_query_report",
+            "organization_proposal",
+        }
+        if status == "approved" and not no_job_approval and decision.get("applied_job_state_id") is None:
             raise _task_error("approved scientific or route decision requires an applied Job state", "/decision/applied_job_state_id")
-        if report_only_approval and decision.get("applied_job_state_id") is not None:
-            raise _task_error("approved Knowledge Query report cannot name an applied Job state", "/decision/applied_job_state_id")
+        if no_job_approval and decision.get("applied_job_state_id") is not None:
+            raise _task_error("approved direct Task cannot name an applied Job state", "/decision/applied_job_state_id")
         if status != "approved" and decision.get("applied_job_state_id") is not None:
             raise _task_error("non-approval decision cannot name an applied Job state", "/decision/applied_job_state_id")
         if status == "revision_requested":
@@ -90,6 +91,7 @@ def validate_task_state(state: Mapping[str, Any]) -> None:
                 "primary_semantic_processing": "primary_bundle_committed",
                 "review_semantic_processing": "review_bundle_committed",
                 "knowledge_query_report": "report_accepted",
+                "organization_proposal": "organization_revision_committed",
             }.get(state.get("task_kind"), "route_confirmed")
             if decision.get("reason_code") != expected_reason:
                 raise _task_error("approved decision reason does not match the Task kind", "/decision/reason_code")

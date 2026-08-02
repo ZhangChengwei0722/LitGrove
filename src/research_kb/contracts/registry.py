@@ -51,6 +51,7 @@ SCHEMA_FILES: dict[str, str] = {
     "review-semantic-bundle": "review-semantic-bundle.schema.json",
     "review-semantic-candidate": "review-semantic-candidate.schema.json",
     "knowledge-query-report": "knowledge-query-report.schema.json",
+    "organization-proposal": "organization-proposal.schema.json",
     "mutation-request": "mutation-request.schema.json",
     "transaction-journal": "transaction-journal.schema.json",
 }

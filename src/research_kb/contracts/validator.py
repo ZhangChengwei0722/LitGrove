@@ -75,6 +75,7 @@ RESULT_CONTRACT_KINDS = {
     "primary-semantic-candidate",
     "review-semantic-candidate",
     "knowledge-query-report",
+    "organization-proposal",
 }
 HUMAN_ONLY_REVIEW_STATES = {"human_checked", "verified"}
 NON_SUPPORTING_UNIT_STATES = {"interpretive", "background_only", "needs_resolution"}
@@ -1625,7 +1626,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
         elif kind == "agent-task-state":
             _require_ref(diagnostics, kind, record_id, "/workspace_id", record.get("workspace_id"), workspaces, "workspace")
             basis = record.get("input_basis", {})
-            if record.get("task_kind") == "knowledge_query_report":
+            if record.get("task_kind") in {"knowledge_query_report", "organization_proposal"}:
                 for index, paper_id in enumerate(basis.get("paper_ids", [])):
                     _require_ref(
                         diagnostics,
@@ -1676,7 +1677,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                     set(adequacy_profiles),
                     "Source Adequacy profile",
                 )
-            if record.get("task_kind") != "knowledge_query_report" and basis.get("origin_job_id") is not None:
+            if record.get("task_kind") not in {"knowledge_query_report", "organization_proposal"} and basis.get("origin_job_id") is not None:
                 _require_ref(
                     diagnostics,
                     kind,

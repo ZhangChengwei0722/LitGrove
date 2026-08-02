@@ -629,6 +629,67 @@ class GuardianService:
                         )
                     )
                 continue
+            if task["task_kind"] == "organization_proposal":
+                staged = task.get("staged_result")
+                if "job_id" in basis or "job_state_id" in basis:
+                    diagnostics.append(
+                        Diagnostic(
+                            INVALID_AUTHORITY,
+                            "agent-task-state",
+                            task["state_id"],
+                            "/input_basis",
+                            "organization proposal Task must remain independent of Pipeline Job authority",
+                        )
+                    )
+                if task["status"] == "approved":
+                    if (
+                        task["decision"].get("reason_code") != "organization_revision_committed"
+                        or task["decision"].get("applied_job_state_id") is not None
+                    ):
+                        diagnostics.append(
+                            Diagnostic(
+                                INVALID_AUTHORITY,
+                                "agent-task-state",
+                                task["state_id"],
+                                "/decision",
+                                "approved organization proposal must not claim a Pipeline Job",
+                            )
+                        )
+                    result_digest = canonical_digest(staged)
+                    bundle_kind, id_field = {
+                        "direction": ("direction-bundle", "direction_id"),
+                        "field_map_entry": ("field-map-bundle", "field_map_entry_id"),
+                        "question": ("question-revision-bundle", "question_id"),
+                    }[basis["target_kind"]]
+                    bundles = [record for kind, record in entries if kind == bundle_kind]
+                    matching_revisions = [
+                        revision
+                        for bundle in bundles
+                        for revision in bundle.get("revisions", [])
+                        if revision.get("approval", {}).get("task_id") == task["task_id"]
+                        and revision.get("approval", {}).get("task_result_digest") == result_digest
+                    ]
+                    snapshot = basis.get("target_snapshot")
+                    snapshot_revisions = [
+                        revision
+                        for bundle in bundles
+                        if snapshot is not None and bundle.get(id_field) == snapshot["target_id"]
+                        for revision in bundle.get("revisions", [])
+                        if revision.get("revision_id") == snapshot["revision_id"]
+                    ]
+                    if len(matching_revisions) != 1 and not (
+                        not matching_revisions and len(snapshot_revisions) == 1
+                    ):
+                        diagnostics.append(
+                            Diagnostic(
+                                GROUNDING_MISMATCH,
+                                "agent-task-state",
+                                task["state_id"],
+                                "/decision",
+                                "approved organization proposal lacks one matching revision or no-change basis snapshot",
+                            )
+                        )
+                continue
             basis_job = job_by_state.get(basis["job_state_id"])
             if basis_job is not None and canonical_digest(basis_job) != basis["job_state_digest"]:
                 diagnostics.append(

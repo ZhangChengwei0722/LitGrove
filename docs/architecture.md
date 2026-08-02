@@ -742,3 +742,41 @@ the legacy CLI list contract. `inspect_acquired` is a read-only handoff into the
 defined intake contract; it does not register, parse or create a Pipeline Job. Discovery
 candidates remain excluded from Catalog projection, so selection and acquisition do not
 invalidate or rebuild Catalog.
+
+## P7-A Research Organization Kernel
+
+Application Service interface `1.11` adds generic Direction, Field Map Entry and Question
+revision stores plus session-bound bounded reads. Each target has one stable ID and an
+append-only revision chain. Core owns target, revision and link identities; corrections
+append and never rewrite accepted history.
+
+Organization links resolve only active semantic Units. Factual Primary links require a
+current grounded or revised Unit and derive their canonical Evidence closure inside Core.
+Primary interpretation and Review Units may be linked only as explicit background;
+Review links remain `background_only=true`, `can_enter_canonical_evidence=false` and
+`not_fact=true`. Field Map Direction references bind exact Direction revisions, and all
+links project current or stale-upstream state without rewriting canonical records.
+
+The P7-A writer accepts only explicit user-authored or user-approved payloads. It does not
+run an Agent, infer Tags, create Screening decisions or generate Research Synthesis.
+
+## P7-B Organization Proposal Agent Tasks
+
+Application Service interface `1.12` and additive privacy registry `p7b-v1` add one direct
+`organization_proposal` Task kind. It has no Pipeline Job owner. One Task binds exactly one
+new or existing Direction, Field Map Entry or Question, one ordered selection of up to 25
+papers and an optional background-only Review context choice.
+
+Core constructs the handoff from active Primary/Review semantic revisions, current
+admissible Units, derived Evidence closure and bounded organization context. Existing
+Field Map Direction references are prioritized before context truncation. The Agent sees
+no paths, source refs, parsed pages, leases or writer authority and cannot allocate
+canonical IDs.
+
+Submission and approval both require the exact Task basis to remain current. Returned
+source links must close over the handoff allowlist; target-specific link roles are schema
+closed. Unresolved conflicts can be previewed but block approval. Explicit user approval
+calls exactly one P7-A writer. A semantic duplicate writes no organization revision but
+does retain an append-only Task receipt; replay resolves the basis-bound historical
+revision. A canonical write completed before its Task receipt is recovered by exact Task
+and result digests without creating another revision.
