@@ -34,6 +34,11 @@ from research_kb.errors import (
     ResearchKBError,
 )
 from research_kb.identity_corrections import project_registry_identity
+from research_kb.organization_bundles import (
+    ORGANIZATION_BUNDLE_SPECS,
+    active_organization_record,
+    organization_bundle_diagnostics,
+)
 from research_kb.source_assets import current_source_asset_heads
 from research_kb.storage.json_io import (
     atomic_write_bytes,
@@ -441,7 +446,24 @@ def _load_exact_workspace_record(layout, row: dict[str, Any]) -> dict[str, Any] 
             row["record_id"],
         )
     if kind == "question-mapping":
+        successor = layout.question_revision_bundle_path(row["record_id"])
+        if successor.is_file():
+            return _read_organization_child(successor, "question-revision-bundle")
         return _find_jsonl_record(layout.question_mappings_path, "question_id", row["record_id"])
+    if kind == "direction":
+        bundle = _read_bound_json(
+            layout.direction_bundle_path(row["record_id"]),
+            "direction_id",
+            row["record_id"],
+        )
+        return None if bundle is None else _validated_organization_child(bundle, "direction-bundle")
+    if kind == "field-map-entry":
+        bundle = _read_bound_json(
+            layout.field_map_bundle_path(row["record_id"]),
+            "field_map_entry_id",
+            row["record_id"],
+        )
+        return None if bundle is None else _validated_organization_child(bundle, "field-map-bundle")
     if kind in {
         "step7-synthesis",
         "step7-review-angle",
@@ -624,6 +646,27 @@ def _read_bound_json(path: Path, id_field: str, expected_id: str) -> dict[str, A
         return None
     record = read_json_document(path, record_kind="catalog-detail")
     return record if record.get(id_field) == expected_id else None
+
+
+def _read_organization_child(path: Path, kind: str) -> dict[str, Any] | None:
+    bundle = read_json_document(path, record_kind=kind)
+    return _validated_organization_child(bundle, kind)
+
+
+def _validated_organization_child(bundle: dict[str, Any], kind: str) -> dict[str, Any] | None:
+    diagnostics = validate_record(kind, bundle, actor="stored")
+    target_field, child_field, _ = ORGANIZATION_BUNDLE_SPECS[kind]
+    diagnostics.extend(
+        organization_bundle_diagnostics(
+            bundle,
+            bundle_kind=kind,
+            target_id_field=target_field,
+            child_field=child_field,
+        )
+    )
+    if diagnostics:
+        raise ResearchKBError(diagnostics[0])
+    return active_organization_record(bundle, child_field=child_field)
 
 
 def _find_jsonl_record(path: Path, id_field: str, expected_id: str) -> dict[str, Any] | None:

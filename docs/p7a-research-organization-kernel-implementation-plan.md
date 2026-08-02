@@ -4,7 +4,7 @@
 - prepared_at: `2026-08-03`
 - branch: `feature/p7a-organization-kernel`
 - baseline: `origin/main@d37f42540a683b7c02b624ef04a0fbd1dc8c5fce`
-- parent_design: `E:\蛋白质降解\docs\superpowers\specs\2026-08-03-local-research-workspace-manager-p7-organization-and-screening-design.md`
+- parent_design: `bounded P7 organization and screening design maintained outside this shared repository`
 - target_application_service_interface: `1.11`
 - agent_registry_change: false
 - canonical_schema_change: true
@@ -233,7 +233,7 @@ Do not add in P7-A:
 - Obsidian, Exchange, citation graph or related-paper navigation;
 - discovery/provider changes;
 - persistent review-conflict database;
-- Q001/private workspace/real PDF access;
+- legacy scientific workspace or real PDF access;
 - migration, legacy cutover, cleanup or deletion.
 
 If a legacy Question cannot be represented without migration, fail closed and record the

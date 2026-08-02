@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:organization-link",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "organization_link_id", "source_kind", "paper_id", "source_unit_id", "source_revision_id", "role", "rationale", "evidence_ids", "background_only", "can_enter_canonical_evidence", "not_fact"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "organization_link_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/organization_link_id"},
+    "source_kind": {"enum": ["primary_unit", "review_unit"]},
+    "paper_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+    "review_memory_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/review_memory_id"},
+    "source_unit_id": {"oneOf": [{"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/unit_id"}, {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/review_unit_id"}]},
+    "source_revision_id": {"oneOf": [{"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/primary_revision_id"}, {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/review_revision_id"}]},
+    "role": {"enum": ["factual_example", "background_context", "question_background"]},
+    "rationale": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+    "evidence_ids": {"type": "array", "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/evidence_id"}, "uniqueItems": true},
+    "background_only": {"type": "boolean"},
+    "can_enter_canonical_evidence": {"const": false},
+    "not_fact": {"type": "boolean"}
+  },
+  "allOf": [
+    {"if": {"properties": {"source_kind": {"const": "primary_unit"}}}, "then": {"properties": {"review_memory_id": false, "source_unit_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/unit_id"}, "source_revision_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/primary_revision_id"}}}},
+    {"if": {"properties": {"source_kind": {"const": "review_unit"}}}, "then": {"required": ["review_memory_id"], "properties": {"source_unit_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/review_unit_id"}, "source_revision_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/review_revision_id"}, "role": {"enum": ["background_context", "question_background"]}, "evidence_ids": {"maxItems": 0}, "background_only": {"const": true}, "not_fact": {"const": true}}}},
+    {"if": {"properties": {"role": {"const": "factual_example"}}}, "then": {"properties": {"source_kind": {"const": "primary_unit"}, "evidence_ids": {"minItems": 1}, "background_only": {"const": false}, "not_fact": {"const": false}}}},
+    {"if": {"properties": {"role": {"enum": ["background_context", "question_background"]}}}, "then": {"properties": {"evidence_ids": {"maxItems": 0}, "background_only": {"const": true}, "not_fact": {"const": true}}}}
+  ]
+}

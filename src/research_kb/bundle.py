@@ -9,6 +9,7 @@ from research_kb.contracts.validator import validate_bundle
 from research_kb.errors import WORKSPACE_LAYOUT_CONFLICT, Diagnostic, ResearchKBError
 from research_kb.primary_bundles import active_primary_entries
 from research_kb.review_bundles import active_review_entries
+from research_kb.organization_bundles import expand_active_organization_entries
 from research_kb.storage.json_io import read_json_document, read_jsonl
 from research_kb.workspace import WorkspaceLayout
 
@@ -122,6 +123,32 @@ def load_workspace_entries(
                 path.name[: -len(".review-bundle.json")],
             )
             entries.append(("review-semantic-bundle", bundle))
+    for root, pattern, kind, id_field in (
+        (layout.knowledge_root / "organization" / "directions" / "by_id", "*.direction-bundle.json", "direction-bundle", "direction_id"),
+        (layout.knowledge_root / "organization" / "field_map" / "by_id", "*.field-map-bundle.json", "field-map-bundle", "field_map_entry_id"),
+        (layout.knowledge_root / "organization" / "questions" / "by_id", "*.question-revision-bundle.json", "question-revision-bundle", "question_id"),
+    ):
+        if not root.exists():
+            continue
+        for path in sorted(root.glob(pattern)):
+            resolved = path.resolve()
+            if resolved in resolved_overrides:
+                override_entries = resolved_overrides[resolved]
+                bundles = [record for entry_kind, record in override_entries if entry_kind == kind]
+                if len(bundles) != 1:
+                    raise ResearchKBError(
+                        Diagnostic(WORKSPACE_LAYOUT_CONFLICT, kind, None, "", "organization bundle override must contain one bundle")
+                    )
+                record = bundles[0]
+                consumed.add(resolved)
+            else:
+                record = read_json_document(path, record_kind=kind)
+            expected_id = path.name[: -len(pattern[1:])]
+            if record.get(id_field) != expected_id:
+                raise ResearchKBError(
+                    Diagnostic(WORKSPACE_LAYOUT_CONFLICT, kind, expected_id, f"/{id_field}", "store filename does not match contained target ID")
+                )
+            entries.append((kind, record))
     add_jsonl(layout.review_queue_path, "review-queue", "queue_id")
     add_jsonl(layout.question_mappings_path, "question-mapping", "question_id")
     add_jsonl(layout.discovery_candidates_path, "discovery-candidate", "candidate_id")
@@ -168,7 +195,7 @@ def validate_workspace_entries(entries: list[BundleEntry], *, actor: str = "stor
 
 
 def records_of_kind(entries: Iterable[BundleEntry], kind: str) -> list[dict[str, Any]]:
-    materialized = list(entries)
+    materialized = expand_active_organization_entries(list(entries))
     records = [record for entry_kind, record in materialized if entry_kind == kind]
     if kind in {"paper-card", "evidence", "review-queue"}:
         records.extend(

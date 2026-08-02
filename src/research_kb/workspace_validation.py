@@ -30,8 +30,8 @@ from research_kb.errors import (
 from research_kb.storage.json_io import read_json_document
 
 
-PREVIOUS_LAYOUT_CONTRACT_VERSION = "p4b-1"
-CURRENT_LAYOUT_CONTRACT_VERSION = "p4c-1"
+PREVIOUS_LAYOUT_CONTRACT_VERSION = "p4c-1"
+CURRENT_LAYOUT_CONTRACT_VERSION = "p7a-1"
 LAYOUT_CONTRACT_VERSION = CURRENT_LAYOUT_CONTRACT_VERSION
 MARKER_RELATIVE_PATH = ".research-kb/workspace.json"
 M2A_1_MANAGED_DIRECTORIES = (
@@ -64,7 +64,16 @@ P4C_1_MANAGED_DIRECTORIES = P4B_1_MANAGED_DIRECTORIES + (
     "review_bundles",
     "review_bundles/by_paper",
 )
-MANAGED_DIRECTORIES = P4C_1_MANAGED_DIRECTORIES
+P7A_1_MANAGED_DIRECTORIES = P4C_1_MANAGED_DIRECTORIES + (
+    "organization",
+    "organization/directions",
+    "organization/directions/by_id",
+    "organization/field_map",
+    "organization/field_map/by_id",
+    "organization/questions",
+    "organization/questions/by_id",
+)
+MANAGED_DIRECTORIES = P7A_1_MANAGED_DIRECTORIES
 
 
 @dataclass(frozen=True, slots=True)
@@ -381,12 +390,8 @@ def _layout_diagnostics(context: WorkspaceContext, *, require_initialized: bool)
     elif require_initialized:
         diagnostics.append(_not_initialized(context.workspace_id))
 
-    required_directories = P4B_1_MANAGED_DIRECTORIES if marker_is_predecessor else MANAGED_DIRECTORIES
-    allowed_directories = (
-        P4B_1_MANAGED_DIRECTORIES + ("review_bundles", "review_bundles/by_paper")
-        if marker_is_predecessor
-        else MANAGED_DIRECTORIES
-    )
+    required_directories = P4C_1_MANAGED_DIRECTORIES if marker_is_predecessor else MANAGED_DIRECTORIES
+    allowed_directories = MANAGED_DIRECTORIES
     expected_names = {
         _normalized_name(Path(value).parts[0]): Path(value).parts[0]
         for value in allowed_directories
@@ -424,7 +429,7 @@ def _layout_diagnostics(context: WorkspaceContext, *, require_initialized: bool)
                 relative,
                 allowed_directories,
                 is_directory=is_directory,
-                allow_discovery_store=not marker_is_predecessor,
+                allow_discovery_store=True,
             ):
                 diagnostics.append(_layout_error(context.workspace_id, "managed layout contains an unknown descendant"))
     if marker_is_predecessor and require_initialized and not any(
@@ -461,6 +466,9 @@ def _recognized_descendant(
         ("review_memories/by_paper/", ".review.json"),
         ("primary_bundles/by_paper/", ".primary.json"),
         ("review_bundles/by_paper/", ".review-bundle.json"),
+        ("organization/directions/by_id/", ".direction-bundle.json"),
+        ("organization/field_map/by_id/", ".field-map-bundle.json"),
+        ("organization/questions/by_id/", ".question-revision-bundle.json"),
     )
     if any(relative.startswith(prefix) and "/" not in relative[len(prefix) :] and relative.endswith(suffix) for prefix, suffix in patterns):
         return True

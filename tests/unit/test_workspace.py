@@ -14,6 +14,20 @@ def test_workspace_layout_resolves_domain_neutral_paths(tmp_path: Path) -> None:
     assert layout.target_relative_path(layout.evidence_path("paper-example")) == "evidence/by_paper/paper-example.evidence.jsonl"
 
 
+def test_workspace_layout_resolves_research_organization_bundle_paths(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+
+    assert layout.target_relative_path(layout.direction_bundle_path("direction-example")) == (
+        "organization/directions/by_id/direction-example.direction-bundle.json"
+    )
+    assert layout.target_relative_path(layout.field_map_bundle_path("fieldmap-example")) == (
+        "organization/field_map/by_id/fieldmap-example.field-map-bundle.json"
+    )
+    assert layout.target_relative_path(layout.question_revision_bundle_path("question-example")) == (
+        "organization/questions/by_id/question-example.question-revision-bundle.json"
+    )
+
+
 def test_workspace_rejects_write_outside_knowledge_root(tmp_path: Path) -> None:
     layout = make_runtime_workspace(tmp_path)
     with pytest.raises(ResearchKBError) as caught:

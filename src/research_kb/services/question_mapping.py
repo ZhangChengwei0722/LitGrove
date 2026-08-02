@@ -68,6 +68,23 @@ class QuestionMappingService:
         entries = load_workspace_entries(self.layout)
         validate_workspace_entries(entries)
         self._validate_payload(request)
+        if (
+            request.operation == "replace"
+            and any(
+                kind == "question-revision-bundle"
+                and record.get("question_id") == request.target_record_id
+                for kind, record in entries
+            )
+        ):
+            raise ResearchKBError(
+                Diagnostic(
+                    INVALID_AUTHORITY,
+                    "question-mapping",
+                    request.target_record_id,
+                    "/question_id",
+                    "legacy Question writer is disabled after a P7 successor exists",
+                )
+            )
         if request.operation == "append":
             record = self._append_record(request, entries)
         else:
@@ -258,7 +275,6 @@ class QuestionMappingService:
             boundary_ids = self._unique_string_ids(source.get("boundary_refs", []), base + "/boundary_refs")
             expanded_evidence: set[str] = set()
             expanded_boundaries = set(boundary_ids)
-            needs_resolution = False
             for unit_id in unit_ids:
                 owner_and_unit = units.get(unit_id)
                 if owner_and_unit is None:
@@ -270,13 +286,18 @@ class QuestionMappingService:
                     raise ResearchKBError(
                         Diagnostic(GROUNDING_MISMATCH, "question-mapping", None, base + "/selected_card_unit_ids", "selected Card Unit belongs to another paper")
                     )
-                needs_resolution = needs_resolution or unit["grounding_status"] == "needs_resolution"
+                if unit["grounding_status"] not in {"grounded", "revised"}:
+                    raise ResearchKBError(
+                        Diagnostic(
+                            GROUNDING_MISMATCH,
+                            "question-mapping",
+                            None,
+                            base + "/selected_card_unit_ids",
+                            "new factual mappings require grounded or revised Card Units",
+                        )
+                    )
                 expanded_evidence.update(unit["evidence_ids"])
                 expanded_boundaries.update(unit["boundary_refs"])
-            if needs_resolution and mapping_status != "needs_resolution":
-                raise ResearchKBError(
-                    Diagnostic(GROUNDING_MISMATCH, "question-mapping", None, "/payload/mapping_status", "needs-resolution unit requires needs_resolution mapping status")
-                )
             for evidence_id in expanded_evidence:
                 item = evidence.get(evidence_id)
                 if item is None:

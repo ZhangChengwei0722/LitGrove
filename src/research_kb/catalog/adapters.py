@@ -17,6 +17,7 @@ from research_kb.identity_corrections import project_registry_identity
 from research_kb.pipeline_jobs import current_pipeline_states
 from research_kb.primary_bundles import expand_active_primary_entries
 from research_kb.review_bundles import expand_active_review_entries
+from research_kb.organization_bundles import expand_active_organization_entries
 from research_kb.source_assets import current_source_asset_heads
 
 
@@ -65,7 +66,7 @@ class CatalogAdapterRegistry:
         self,
         adapters: Iterable[CatalogRecordAdapter] | None = None,
         *,
-        registry_version: str = "1.0",
+        registry_version: str = "1.1",
         ignored_record_kinds: Iterable[str] = (),
     ):
         selected = tuple(_default_adapters() if adapters is None else adapters)
@@ -95,6 +96,9 @@ class CatalogAdapterRegistry:
                 "registry-identity-correction",
                 "primary-semantic-bundle",
                 "review-semantic-bundle",
+                "direction-bundle",
+                "field-map-bundle",
+                "question-revision-bundle",
                 *ignored_record_kinds,
             }
         )
@@ -124,7 +128,11 @@ class CatalogAdapterRegistry:
         workspace_id: str,
     ) -> CatalogSnapshot:
         selected_entries = _select_catalog_entries(
-            tuple(expand_active_review_entries(expand_active_primary_entries(entries)))
+            tuple(
+                expand_active_organization_entries(
+                    expand_active_review_entries(expand_active_primary_entries(entries))
+                )
+            )
         )
         source_records: list[CatalogSourceRecord] = []
         documents: list[CatalogDocument] = []
@@ -221,7 +229,13 @@ class CatalogAdapterRegistry:
         self,
         entries: Iterable[tuple[str, dict[str, Any]]],
     ) -> tuple[tuple[str, dict[str, Any]], ...]:
-        return _select_catalog_entries(tuple(entries))
+        return _select_catalog_entries(
+            tuple(
+                expand_active_organization_entries(
+                    expand_active_review_entries(expand_active_primary_entries(entries))
+                )
+            )
+        )
 
 
 def _default_adapters() -> tuple[CatalogRecordAdapter, ...]:
@@ -231,6 +245,8 @@ def _default_adapters() -> tuple[CatalogRecordAdapter, ...]:
         _adapter("evidence", "evidence_id", _project_evidence, _evidence_detail),
         _adapter("review-memory", "review_memory_id", _project_review, _review_detail),
         _adapter("question-mapping", "question_id", _project_question, _question_detail),
+        _adapter("direction", "direction_id", _project_direction, _direction_detail),
+        _adapter("field-map-entry", "field_map_entry_id", _project_field_map, _field_map_detail),
         _adapter("step7-synthesis", "candidate_id", _project_step7, _step7_detail),
         _adapter("step7-review-angle", "candidate_id", _project_step7, _step7_detail),
         _adapter("step7-insight", "candidate_id", _project_step7, _step7_detail),
@@ -422,6 +438,51 @@ def _project_question(record: Record, workspace_id: str, digest: str) -> tuple[C
             summary=record["scope"],
             statuses=(f"mapping:{record['mapping_status']}",),
             search_text=_join([record["question_text"], record["scope"], *rationales]),
+            digest=digest,
+        ),
+    )
+
+
+def _project_direction(record: Record, workspace_id: str, digest: str) -> tuple[CatalogDocument, ...]:
+    del workspace_id
+    return (
+        _document(
+            record_kind="direction",
+            record_id=str(record["direction_id"]),
+            child_id=None,
+            item_kind="research_direction",
+            authority_layer="canonical",
+            paper_id=None,
+            question_id=None,
+            title=record["name"],
+            summary=record["scope"],
+            statuses=(f"direction:{record['status']}",),
+            search_text=_join([record["name"], record["scope"], *record["gap_notes"]]),
+            digest=digest,
+        ),
+    )
+
+
+def _project_field_map(record: Record, workspace_id: str, digest: str) -> tuple[CatalogDocument, ...]:
+    del workspace_id
+    return (
+        _document(
+            record_kind="field-map-entry",
+            record_id=str(record["field_map_entry_id"]),
+            child_id=None,
+            item_kind="field_map_entry",
+            authority_layer="canonical",
+            paper_id=None,
+            question_id=None,
+            title=record["title"],
+            summary=record["definition"],
+            statuses=(
+                f"field_map:{record['status']}",
+                f"consensus:{record['consensus_level']}",
+            ),
+            search_text=_join(
+                [record["title"], record["definition"], record["entry_type"], *record["aspect_notes"]]
+            ),
             digest=digest,
         ),
     )
@@ -749,6 +810,33 @@ def _question_detail(record: Record, child_id: str | None) -> dict[str, Any]:
             "created_at",
             "updated_at",
         )
+    }
+
+
+def _direction_detail(record: Record, child_id: str | None) -> dict[str, Any]:
+    del child_id
+    return {
+        "direction_id": record["direction_id"],
+        "name": record["name"],
+        "scope": record["scope"],
+        "status": record["status"],
+        "links": record["links"],
+        "gap_notes": record["gap_notes"],
+    }
+
+
+def _field_map_detail(record: Record, child_id: str | None) -> dict[str, Any]:
+    del child_id
+    return {
+        "field_map_entry_id": record["field_map_entry_id"],
+        "title": record["title"],
+        "entry_type": record["entry_type"],
+        "definition": record["definition"],
+        "status": record["status"],
+        "consensus_level": record["consensus_level"],
+        "direction_refs": record["direction_refs"],
+        "links": record["links"],
+        "aspect_notes": record["aspect_notes"],
     }
 
 

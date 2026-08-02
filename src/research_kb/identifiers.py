@@ -36,6 +36,12 @@ class Namespace(StrEnum):
     AGENT_TASK_STATE = "taskstate"
     PRIMARY_REVISION = "primaryrev"
     REVIEW_REVISION = "reviewrev"
+    DIRECTION = "direction"
+    FIELD_MAP = "fieldmap"
+    ORGANIZATION_REVISION = "orgrev"
+    ORGANIZATION_LINK = "orglink"
+    QUESTION_REVISION = "questionrev"
+    QUESTION_BACKGROUND = "qbackground"
 
 
 UUID4_PATTERN = r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"

@@ -57,8 +57,8 @@ def test_two_domains_promote_and_read_question_mappings_without_source_changes(
     assert first_output["record_kind"] == "question-mapping"
     assert first_output["target"] == "questions/mappings.jsonl"
 
-    second_request = _append_request([_link(first, "interpretive_unit")])
-    second_request.payload["question_text"] = "What interpretation remains for the fabricated response?"
+    second_request = _append_request([_link(first, "grounded_unit")])
+    second_request.payload["question_text"] = "What grounded result remains for the fabricated response?"
     second_mapping, _ = QuestionMappingService(layout).promote(second_request, actor="agent")
 
     mappings = read_jsonl(
@@ -71,9 +71,9 @@ def test_two_domains_promote_and_read_question_mappings_without_source_changes(
     first_mapping = next(item for item in mappings if item["question_id"] == first_output["record_id"])
     assert len(first_mapping["paper_links"]) == 2
     assert second_mapping["paper_links"][0]["selected_card_unit_ids"] == [
-        first["interpretive_unit"]["unit_id"]
+        first["grounded_unit"]["unit_id"]
     ]
-    assert second_mapping["paper_links"][0]["evidence_ids"] == []
+    assert second_mapping["paper_links"][0]["evidence_ids"] == [first["evidence"]["evidence_id"]]
 
     assert main(["question", "list", "--workspace", str(layout.config.path)]) == 0
     listed = json.loads(capsys.readouterr().out)

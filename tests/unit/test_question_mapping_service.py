@@ -9,6 +9,7 @@ from research_kb.mutation import MutationRequest
 from research_kb.parse.synthetic_text import SyntheticTextAdapter
 from research_kb.services.parse import ParseService
 from research_kb.services.question_mapping import QuestionMappingService
+from research_kb.services.research_organization import ResearchOrganizationService
 from research_kb.services.records import RecordService
 from research_kb.services.registry import RegistryService
 from research_kb.storage.json_io import read_jsonl
@@ -250,7 +251,7 @@ def test_append_rejects_cross_paper_unit_and_boundary(tmp_path: Path) -> None:
     assert caught.value.diagnostic.code == "RKBC-009"
 
 
-def test_needs_resolution_unit_requires_mapping_status(tmp_path: Path) -> None:
+def test_needs_resolution_unit_is_not_admissible_for_new_mapping(tmp_path: Path) -> None:
     layout = make_runtime_workspace(tmp_path)
     prepared = _prepare_paper(layout, "one.txt")
 
@@ -261,24 +262,24 @@ def test_needs_resolution_unit_requires_mapping_status(tmp_path: Path) -> None:
         )
     assert caught.value.diagnostic.code == "RKBC-009"
 
-    record, _ = QuestionMappingService(layout).promote(
-        _append_request([_link(prepared, "needs_resolution_unit")], mapping_status="needs_resolution"),
-        actor="agent",
-    )
-    assert record["paper_links"][0]["evidence_ids"] == []
-    assert record["paper_links"][0]["boundary_refs"] == [prepared["queue"]["queue_id"]]
+    with pytest.raises(ResearchKBError) as caught:
+        QuestionMappingService(layout).promote(
+            _append_request([_link(prepared, "needs_resolution_unit")], mapping_status="needs_resolution"),
+            actor="agent",
+        )
+    assert caught.value.diagnostic.code == "RKBC-009"
 
 
-def test_interpretive_unit_contributes_no_evidence(tmp_path: Path) -> None:
+def test_interpretive_unit_is_not_admissible_for_new_mapping(tmp_path: Path) -> None:
     layout = make_runtime_workspace(tmp_path)
     prepared = _prepare_paper(layout, "one.txt")
 
-    record, _ = QuestionMappingService(layout).promote(
-        _append_request([_link(prepared, "interpretive_unit")]),
-        actor="agent",
-    )
-
-    assert record["paper_links"][0]["evidence_ids"] == []
+    with pytest.raises(ResearchKBError) as caught:
+        QuestionMappingService(layout).promote(
+            _append_request([_link(prepared, "interpretive_unit")]),
+            actor="agent",
+        )
+    assert caught.value.diagnostic.code == "RKBC-009"
 
 
 def test_replace_preserves_ids_and_forbids_link_removal(tmp_path: Path) -> None:
@@ -400,3 +401,56 @@ def test_first_mapping_write_detects_concurrent_store_creation(tmp_path: Path) -
 
     assert caught.value.diagnostic.code == "RKBC-017"
     assert layout.question_mappings_path.read_bytes() == competing_bytes
+
+
+def test_legacy_writer_is_disabled_after_p7_question_successor(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    prepared = _prepare_paper(layout, "successor.txt")
+    legacy, _ = QuestionMappingService(layout).promote(
+        _append_request([_link(prepared)]),
+        actor="agent",
+    )
+    ResearchOrganizationService(layout).promote_question(
+        {
+            "question_text": legacy["question_text"],
+            "scope": legacy["scope"],
+            "mapping_status": legacy["mapping_status"],
+            "factual_links": [
+                {
+                    key: link[key]
+                    for key in (
+                        "paper_id",
+                        "selected_card_unit_ids",
+                        "role_in_question",
+                        "relevance_rationale",
+                        "boundary_refs",
+                    )
+                }
+                for link in legacy["paper_links"]
+            ],
+            "background_links": [],
+        },
+        question_id=legacy["question_id"],
+        approval={
+            "receipt_id": "user-authored-successor",
+            "approved_by": "user",
+            "approved_at": "2026-01-01T00:00:00Z",
+            "origin": "user_authored",
+        },
+        actor="user",
+    )
+
+    with pytest.raises(ResearchKBError) as caught:
+        QuestionMappingService(layout).promote(
+            MutationRequest(
+                operation="replace",
+                record_kind="question-mapping",
+                target_record_id=legacy["question_id"],
+                paper_id=None,
+                payload={"mapping_status": "ai_checked"},
+                question_origin="existing_question",
+            ),
+            actor="agent",
+        )
+
+    assert caught.value.diagnostic.code == "RKBC-006"

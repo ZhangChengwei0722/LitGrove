@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:direction",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "direction_id", "name", "scope", "status", "links", "gap_notes"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "direction_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/direction_id"},
+    "name": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+    "scope": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+    "status": {"enum": ["active", "archived"]},
+    "links": {"type": "array", "items": {"$ref": "urn:research-kb:schema:1.0:organization-link"}},
+    "gap_notes": {"type": "array", "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}, "uniqueItems": true}
+  }
+}

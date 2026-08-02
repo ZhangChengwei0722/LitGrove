@@ -114,6 +114,15 @@ class WorkspaceLayout:
     def review_bundle_path(self, paper_id: str) -> Path:
         return self.knowledge_root / "review_bundles" / "by_paper" / f"{paper_id}.review-bundle.json"
 
+    def direction_bundle_path(self, direction_id: str) -> Path:
+        return self.knowledge_root / "organization" / "directions" / "by_id" / f"{direction_id}.direction-bundle.json"
+
+    def field_map_bundle_path(self, field_map_entry_id: str) -> Path:
+        return self.knowledge_root / "organization" / "field_map" / "by_id" / f"{field_map_entry_id}.field-map-bundle.json"
+
+    def question_revision_bundle_path(self, question_id: str) -> Path:
+        return self.knowledge_root / "organization" / "questions" / "by_id" / f"{question_id}.question-revision-bundle.json"
+
     def step7_store_path(self, record_kind: str) -> Path:
         filenames = {
             "step7-synthesis": "synthesis.jsonl",
