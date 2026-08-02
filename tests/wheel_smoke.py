@@ -311,8 +311,8 @@ def main() -> int:
         if outputs != ["planned", "initialized", "no_change"]:
             raise SystemExit(f"unexpected workspace init results: {outputs}")
         marker = json.loads((workspace_root / "knowledge" / ".research-kb" / "workspace.json").read_text(encoding="utf-8"))
-        if marker["layout_contract_version"] != "p4c-1":
-            raise SystemExit("wheel workspace did not initialize at p4c-1")
+        if marker["layout_contract_version"] != "p7a-1":
+            raise SystemExit("wheel workspace did not initialize at p7a-1")
         if not (workspace_root / "knowledge" / "questions").is_dir():
             raise SystemExit("wheel workspace lacks questions directory")
         if (workspace_root / "knowledge" / "questions" / "mappings.jsonl").exists():
@@ -969,10 +969,10 @@ def main() -> int:
                     "WorkspaceSessionService, SourceAssetService, RegistryIdentityCorrectionService, "
                     "AgentTaskApplicationService, DeterministicIntakeApplicationService, ReadingApplicationService, "
                     "DeterministicTrunkService, PipelineJobService; "
-                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.10'; "
+                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.11'; "
                     f"session = WorkspaceSessionService({{'wheel': Path({str(config_path)!r})}}).open('wheel'); "
                     "limits = DeterministicIntakeApplicationService().limits(session); "
-                    "assert limits['interface_version'] == '1.10'; "
+                    "assert limits['interface_version'] == '1.11'; "
                     "assert limits['ingress_modes'] == ['upload', 'watched_inbox']; "
                     f"reading = ReadingApplicationService().show_paper(session, {paper_id!r}); "
                     "assert reading['persistent_writes'] == 0 and 'source_ref' not in str(reading); "
@@ -1059,7 +1059,7 @@ def main() -> int:
                     "query_accepted = tasks.accept_report(session, query['task']['task_id'], query_expected); "
                     "assert query_accepted['task']['status'] == 'approved' and query_accepted['canonical_scientific_write'] is False, 'query acceptance'; "
                     "source_access = ReadingApplicationService().prepare_evidence_source(session, evidence_id); "
-                    "assert source_access.descriptor['application_service_interface_version'] == '1.10', 'source interface'; "
+                    "assert source_access.descriptor['application_service_interface_version'] == '1.11', 'source interface'; "
                     "assert source_access.descriptor['media_type'] == 'application/pdf' and source_access.descriptor['persistent_writes'] == 0, 'source descriptor'; "
                     "assert 'source_ref' not in str(source_access.descriptor) and 'fingerprint' not in str(source_access.descriptor), 'source redaction'; "
                     "opened = ReadingApplicationService().open_evidence_source(session, source_access.handle); "
