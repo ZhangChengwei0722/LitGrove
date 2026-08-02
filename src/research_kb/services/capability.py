@@ -133,6 +133,7 @@ class CapabilityService:
                 )
             ),
             "features": {
+                "discovery_application_service": True,
                 "real_pdf_parse": True,
                 "stdin_json_handoff": True,
                 "review_runtime": True,

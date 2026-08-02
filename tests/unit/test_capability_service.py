@@ -107,7 +107,8 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "source-asset-state",
             "transaction-journal",
         ],
-        "features": {
+            "features": {
+                "discovery_application_service": True,
             "approved_discovery_candidate_handoff": True,
             "explicit_oa_acquisition": True,
             "legal_oa_resolution": True,

@@ -8,6 +8,7 @@ from research_kb.services.catalog import CatalogCapabilityService, CatalogProjec
 from research_kb.services.capability import CapabilityService
 from research_kb.services.compatibility import CompatibilityAdapterRegistry, CompatibilityInspectionService
 from research_kb.services.discovery import DiscoveryConnectorRegistry, DiscoveryService
+from research_kb.services.discovery_application import DiscoveryApplicationService
 from research_kb.services.discovery_candidate import DiscoveryCandidateService, DiscoverySelectionResult
 from research_kb.services.discovery_acquisition import (
     DiscoveryAcquisitionService,
@@ -60,6 +61,7 @@ __all__ = [
     "CompatibilityInspectionService",
     "ContractValidationService",
     "DiscoveryConnectorRegistry",
+    "DiscoveryApplicationService",
     "DiscoveryAcquisitionService",
     "DiscoveryAcquisitionTransportRegistry",
     "DiscoveryCandidateService",

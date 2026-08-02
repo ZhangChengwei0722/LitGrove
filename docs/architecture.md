@@ -720,3 +720,25 @@ User acceptance appends only the terminal Agent Task receipt with
 `canonical_scientific_write=false`. It has no applied Job state and does not write Paper
 Card, Evidence, Review Memory, Question Mapping or Research Synthesis. Archive, compaction
 and closed-task payload cleanup remain P11 lifecycle work.
+
+## P6 Discovery Application Service
+
+Application Service interface `1.10` adds `DiscoveryApplicationService` as a thin,
+session-bound product facade over the existing Europe PMC discovery contracts. It owns
+no schema, connector discovery or second persistence implementation. Production
+registration remains closed to `EuropePmcConnector`, `EuropePmcResolver` and
+`EuropePmcPdfTransport`; tests may inject protocol-conforming fakes.
+
+The facade preserves three separate authority transitions:
+
+```text
+search -> transient report, zero workspace writes
+explicit user selection -> metadata-only discovery candidate
+explicit user acquisition -> create-only inbox PDF plus receipt, then stop
+```
+
+Candidate listing adds stable candidate-ID cursor pagination for the App without changing
+the legacy CLI list contract. `inspect_acquired` is a read-only handoff into the already
+defined intake contract; it does not register, parse or create a Pipeline Job. Discovery
+candidates remain excluded from Catalog projection, so selection and acquisition do not
+invalidate or rebuild Catalog.
