@@ -559,6 +559,45 @@ class GuardianService:
         task_heads = {task["task_id"]: task for task in current_tasks}
         for task in current_tasks:
             basis = task["input_basis"]
+            if task["task_kind"] == "knowledge_query_report":
+                staged = task.get("staged_result")
+                if "job_id" in basis or "job_state_id" in basis:
+                    diagnostics.append(
+                        Diagnostic(
+                            INVALID_AUTHORITY,
+                            "agent-task-state",
+                            task["state_id"],
+                            "/input_basis",
+                            "Knowledge Query Task must remain independent of Pipeline Job authority",
+                        )
+                    )
+                if isinstance(staged, dict) and (
+                    staged.get("canonical_scientific_write") is not False
+                    or staged.get("persistence_status") != "report_only"
+                ):
+                    diagnostics.append(
+                        Diagnostic(
+                            INVALID_AUTHORITY,
+                            "agent-task-state",
+                            task["state_id"],
+                            "/staged_result",
+                            "Knowledge Query result must remain report-only with zero canonical scientific writes",
+                        )
+                    )
+                if task["status"] == "approved" and (
+                    task["decision"].get("reason_code") != "report_accepted"
+                    or task["decision"].get("applied_job_state_id") is not None
+                ):
+                    diagnostics.append(
+                        Diagnostic(
+                            INVALID_AUTHORITY,
+                            "agent-task-state",
+                            task["state_id"],
+                            "/decision",
+                            "accepted Knowledge Query report must not claim a Pipeline Job or scientific commit",
+                        )
+                    )
+                continue
             basis_job = job_by_state.get(basis["job_state_id"])
             if basis_job is not None and canonical_digest(basis_job) != basis["job_state_digest"]:
                 diagnostics.append(

@@ -691,3 +691,32 @@ the opened descriptor, requires the expected SHA-256 and PDF header signature, a
 that same descriptor. The backend path is available only on the opened Core value for an
 explicit trusted local-reader adapter. No handle, path, source ref or fingerprint is
 durable or browser-authoritative.
+
+## P5-C Knowledge Query Agent Tasks
+
+Application Service interface `1.9` adds one `knowledge_query_report` Task kind under the
+additive `p5c-v1` registry. It supports single-paper explanation, seven-section overview,
+methods, selected-paper comparison, trend/problem discussion and Evidence finding through
+one state machine and one `p5c-knowledge-query-report@1.0` result contract.
+
+Knowledge Query Tasks are created from one to four ordered Library paper IDs and are not
+owned by a Pipeline Job. Core projects Registry identity first: archived, tombstoned or
+aliased-away records cannot enter factual support. It then binds exact paper, active
+Primary/Review revision, Card, Evidence, Review Memory, Question Mapping and live source
+digests. Only grounded/revised active Card Units whose complete Evidence closure remains
+canonical and traceable enter the factual allowlist. Review Units may enter only an
+explicit `background_only` allowlist. Stale or unavailable records expose reason-only
+descriptors without their scientific content.
+
+The handoff contains no source ref, path, fingerprint, parsed page body, PDF bytes, lease
+or writer authority. Submitted factual and cross-paper blocks must close over exact
+`paper_id + card_unit_id + evidence_ids` entries; background blocks must close over exact
+Review Unit entries. Unresolved and zero-match reports are valid. A changed input basis
+rejects inspection, lease, submission, revision and acceptance rather than remapping to a
+new active revision.
+
+User acceptance appends only the terminal Agent Task receipt with
+`retention_class=current_task_report`, `persistence_status=report_only` and
+`canonical_scientific_write=false`. It has no applied Job state and does not write Paper
+Card, Evidence, Review Memory, Question Mapping or Research Synthesis. Archive, compaction
+and closed-task payload cleanup remain P11 lifecycle work.

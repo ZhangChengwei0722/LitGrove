@@ -149,6 +149,7 @@ class CapabilityService:
                 "deterministic_trunk": True,
                 "deterministic_intake_application": True,
                 "agent_task_staging": True,
+                "knowledge_query_agent_tasks": True,
                 "reading_application": True,
                 "reading_evidence_source_access": True,
                 "embedded_agent_runtime": False,

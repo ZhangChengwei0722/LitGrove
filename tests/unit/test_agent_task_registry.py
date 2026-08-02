@@ -20,13 +20,53 @@ def test_registry_publishes_route_and_primary_processing_as_available() -> None:
 
     available = [item["task_kind"] for item in projection["task_kinds"] if item["runtime_status"] == "available"]
 
-    assert projection["registry_version"] == "p4c-v1"
+    assert projection["registry_version"] == "p5c-v1"
     assert available == [
         "document_route_resolution",
+        "knowledge_query_report",
         "primary_semantic_processing",
         "review_semantic_processing",
     ]
     assert projection["embedded_agent_runtime"] is False
+
+    query = next(
+        item for item in projection["task_kinds"]
+        if item["task_kind"] == "knowledge_query_report"
+    )
+    assert query == {
+        "task_kind": "knowledge_query_report",
+        "required_content_classes": [
+            "canonical_evidence",
+            "operational_context",
+            "paper_card_content",
+        ],
+        "optional_content_classes": [
+            "metadata",
+            "research_routing_context",
+            "review_background",
+        ],
+        "result_contract": "p5c-knowledge-query-report@1.0",
+        "runtime_status": "available",
+        "max_items": 4,
+        "max_payload_bytes": 1_048_576,
+        "max_excerpt_bytes": 0,
+        "max_result_bytes": 524_288,
+    }
+
+
+def test_p4c_registry_projection_remains_backward_compatible() -> None:
+    projection = registry_projection("p4c-v1")
+
+    assert projection["registry_version"] == "p4c-v1"
+    assert [
+        item["task_kind"]
+        for item in projection["task_kinds"]
+        if item["runtime_status"] == "available"
+    ] == [
+        "document_route_resolution",
+        "primary_semantic_processing",
+        "review_semantic_processing",
+    ]
 
 
 def test_privacy_intersection_is_explicit_and_non_hierarchical() -> None:
@@ -57,6 +97,41 @@ def test_absent_policy_deferred_kind_and_local_only_cloud_handoff_fail_closed() 
             workspace_policy=None,
             approved_content_classes=["metadata", "parsed_excerpt", "operational_context"],
         )
+
+
+def test_knowledge_query_uses_explicit_non_document_content_classes() -> None:
+    policy = {
+        **POLICY,
+        "registry_version": "p5c-v1",
+        "allowed_content_classes": [
+            "metadata",
+            "parsed_excerpt",
+            "canonical_evidence",
+            "paper_card_content",
+            "review_background",
+            "research_routing_context",
+            "research_synthesis",
+            "operational_context",
+            "source_document",
+        ],
+    }
+
+    definition, _, effective = resolve_effective_classes(
+        task_kind="knowledge_query_report",
+        executor_id="codex_cli",
+        workspace_policy=policy,
+        approved_content_classes=policy["allowed_content_classes"],
+    )
+
+    assert definition.max_result_bytes == 524_288
+    assert effective == (
+        "canonical_evidence",
+        "metadata",
+        "operational_context",
+        "paper_card_content",
+        "research_routing_context",
+        "review_background",
+    )
 
     with pytest.raises(ResearchKBError, match="not available"):
         resolve_effective_classes(

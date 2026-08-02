@@ -125,7 +125,11 @@ def main() -> int:
             raise SystemExit("base wheel capability report lacks the Europe PMC connector")
         if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["approved_discovery_candidate_handoff"] is not True or capability["features"]["legal_oa_resolution"] is not True or capability["features"]["explicit_oa_acquisition"] is not True or capability["features"]["manuscript_projection"] is not True or capability["features"]["pipeline_jobs"] is not True or capability["features"]["source_asset_runtime"] is not True or capability["features"]["registry_identity_correction"] is not True or capability["features"]["source_adequacy"] is not True or capability["features"]["deterministic_trunk"] is not True or capability["features"]["deterministic_intake_application"] is not True:
             raise SystemExit("base wheel capability report lacks Review Memory, Step 7 or discovery runtime")
-        if capability["features"]["agent_task_staging"] is not True or capability["agent_task_registry_version"] != "p4c-v1":
+        if (
+            capability["features"]["agent_task_staging"] is not True
+            or capability["features"]["knowledge_query_agent_tasks"] is not True
+            or capability["agent_task_registry_version"] != "p5c-v1"
+        ):
             raise SystemExit("base wheel capability report lacks P4-A Agent Task staging")
         if capability["features"]["reading_evidence_source_access"] is not True:
             raise SystemExit("base wheel capability report lacks P5-B Evidence source access")
@@ -279,8 +283,8 @@ def main() -> int:
                 "line_ending": "lf",
             },
             "agent_policy": {
-                "registry_version": "p4c-v1",
-                "allowed_content_classes": ["metadata", "parsed_excerpt", "operational_context", "review_background"],
+                "registry_version": "p5c-v1",
+                "allowed_content_classes": ["metadata", "parsed_excerpt", "canonical_evidence", "paper_card_content", "operational_context", "review_background", "research_routing_context"],
                 "execution_scope": "cloud_allowed",
                 "max_prompt_bytes": 262_144,
                 "max_result_bytes": 65_536,
@@ -965,10 +969,10 @@ def main() -> int:
                     "WorkspaceSessionService, SourceAssetService, RegistryIdentityCorrectionService, "
                     "AgentTaskApplicationService, DeterministicIntakeApplicationService, ReadingApplicationService, "
                     "DeterministicTrunkService, PipelineJobService; "
-                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.8'; "
+                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.9'; "
                     f"session = WorkspaceSessionService({{'wheel': Path({str(config_path)!r})}}).open('wheel'); "
                     "limits = DeterministicIntakeApplicationService().limits(session); "
-                    "assert limits['interface_version'] == '1.8'; "
+                    "assert limits['interface_version'] == '1.9'; "
                     "assert limits['ingress_modes'] == ['upload', 'watched_inbox']; "
                     f"reading = ReadingApplicationService().show_paper(session, {paper_id!r}); "
                     "assert reading['persistent_writes'] == 0 and 'source_ref' not in str(reading); "
@@ -982,7 +986,7 @@ def main() -> int:
                     "assert waiting.state['status'] == 'waiting_user'; "
                     "tasks = AgentTaskApplicationService(); "
                     "registry = tasks.registry(session); "
-                    "assert registry['registry_version'] == 'p4c-v1'; "
+                    "assert registry['registry_version'] == 'p5c-v1'; "
                     "assert registry['embedded_agent_runtime'] is False; "
                     f"created = tasks.create_from_pipeline(session, job['job_id'], {{'paper_id':{paper_id!r},'task_kind':'document_route_resolution','executor_id':'codex_cli','approved_content_classes':['metadata','parsed_excerpt','operational_context'],'idempotency_key':'installed-wheel-route-task'}}); "
                     "expected = {'state_id':created['task']['state_id'],'state_digest':created['task']['state_digest']}; "
@@ -1043,8 +1047,19 @@ def main() -> int:
                     "assert layout.primary_bundle_path(paper['paper_id']).is_file(), 'primary bundle file'; "
                     "bundle = read_json_document(layout.primary_bundle_path(paper['paper_id']), record_kind='primary-semantic-bundle'); "
                     "evidence_id = bundle['revisions'][0]['evidence'][0]['evidence_id']; "
+                    "unit = next(unit for section in bundle['revisions'][0]['paper_card']['sections'] for unit in section['units'] if unit['evidence_ids']); "
+                    "query = tasks.create_knowledge_query(session, {'query_type':'single_paper_explanation','query_text':'Explain the bounded synthetic finding.','paper_ids':[paper['paper_id']],'include_review_background':False,'include_routing_context':False,'executor_id':'codex_cli','approved_content_classes':['metadata','canonical_evidence','paper_card_content','operational_context'],'idempotency_key':'installed-wheel-query-task'}); "
+                    "query_expected = {'state_id':query['task']['state_id'],'state_digest':query['task']['state_digest']}; "
+                    "query_handoff = tasks.prepare_handoff(session, query['task']['task_id'], query_expected, 'codex_cli'); "
+                    "query_result = {'contract_version':'p5c-knowledge-query-report@1.0','task_id':query_handoff['task']['task_id'],'input_basis_digest':query_handoff['task']['input_basis_digest'],'query_type':'single_paper_explanation','answer_blocks':[{'block_role':'factual','text':'The installed-wheel synthetic response increased.','support_refs':[{'paper_id':paper['paper_id'],'card_unit_id':unit['unit_id'],'evidence_ids':[evidence_id]}],'background_refs':[],'background_only':False}],'unresolved_items':[],'persistence_status':'report_only','canonical_scientific_write':False}; "
+                    "query_expected = {'state_id':query_handoff['task']['state_id'],'state_digest':query_handoff['task']['state_digest']}; "
+                    "query_submitted = tasks.submit_result(session, query['task']['task_id'], query_expected, query_handoff['lease'], query_result); "
+                    "assert tasks.preview_result(session, query['task']['task_id'])['candidate']['retention_class'] == 'current_task_report', 'query preview'; "
+                    "query_expected = {'state_id':query_submitted['task']['state_id'],'state_digest':query_submitted['task']['state_digest']}; "
+                    "query_accepted = tasks.accept_report(session, query['task']['task_id'], query_expected); "
+                    "assert query_accepted['task']['status'] == 'approved' and query_accepted['canonical_scientific_write'] is False, 'query acceptance'; "
                     "source_access = ReadingApplicationService().prepare_evidence_source(session, evidence_id); "
-                    "assert source_access.descriptor['application_service_interface_version'] == '1.8', 'source interface'; "
+                    "assert source_access.descriptor['application_service_interface_version'] == '1.9', 'source interface'; "
                     "assert source_access.descriptor['media_type'] == 'application/pdf' and source_access.descriptor['persistent_writes'] == 0, 'source descriptor'; "
                     "assert 'source_ref' not in str(source_access.descriptor) and 'fingerprint' not in str(source_access.descriptor), 'source redaction'; "
                     "opened = ReadingApplicationService().open_evidence_source(session, source_access.handle); "

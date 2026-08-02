@@ -81,5 +81,8 @@ The App renders escaped text and sanitized Markdown under CSP. Allowed links use
 - P4-A through P4-C materialize compatible registries `p4a-v1`, `p4b-v1` and `p4c-v1`,
   append-only Task state, bounded staging and explicit route-specific approval. Other
   registered task kinds remain fail-closed and deferred to their owning phases.
+- P5-C adds `p5c-v1` and one Job-independent `knowledge_query_report` kind. Its accepted
+  result remains an operational `current_task_report`; `report_accepted` has no applied
+  Job state and grants no canonical scientific write authority.
 - Deterministic adapter conformance is CI; bounded live Agent smoke is optional/non-deterministic and cannot gate CI on login, network, cost or model drift.
 - P0 creates no Agent Task, prompt bundle or staging runtime.
