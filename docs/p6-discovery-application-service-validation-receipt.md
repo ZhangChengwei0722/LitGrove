@@ -32,10 +32,10 @@ recorded deterministic shards.
 
 ```text
 research_kb_core-0.1.0-py3-none-any.whl
-sha256 c7afb307fd3740278b557d87707d9d80fa31edf374f578a55d6e52aecca2e078
+sha256 9daff96fe54858d56046fc9b463da5ee7e7ea40f5d1e04ac586ac84ac42c2144
 
 research_kb_core-0.1.0.tar.gz
-sha256 539038e28bc53c4db2dd26bd52275a1db38d2916f28c7ff7c024d51d76f85f94
+sha256 b745ca4d7ca6a2569e57cfb7006d2ad5861e885405201e66bacd54e2264199a4
 ```
 
 The fresh wheel smoke installed the exact wheel into a new virtual environment and
