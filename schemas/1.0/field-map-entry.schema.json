@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:field-map-entry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "field_map_entry_id", "title", "entry_type", "definition", "status", "consensus_level", "direction_refs", "links", "aspect_notes"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "field_map_entry_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/field_map_id"},
+    "title": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+    "entry_type": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+    "definition": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+    "status": {"enum": ["active", "contested_or_unsettled", "archived"]},
+    "consensus_level": {"enum": ["single_review", "multiple_reviews", "review_plus_primary_examples", "unsettled"]},
+    "direction_refs": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["direction_id", "direction_revision_id"], "properties": {"direction_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/direction_id"}, "direction_revision_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/organization_revision_id"}}}, "uniqueItems": true},
+    "links": {"type": "array", "items": {"$ref": "urn:research-kb:schema:1.0:organization-link"}},
+    "aspect_notes": {"type": "array", "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}, "uniqueItems": true}
+  }
+}

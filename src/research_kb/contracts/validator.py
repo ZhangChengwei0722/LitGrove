@@ -59,6 +59,10 @@ from research_kb.review_bundles import (
     mixed_review_authority_diagnostics,
     review_bundle_diagnostics,
 )
+from research_kb.organization_bundles import (
+    expand_active_organization_entries,
+    organization_entries_diagnostics,
+)
 from research_kb.source_assets import (
     current_source_asset_heads,
     source_asset_chain_diagnostics,
@@ -185,8 +189,10 @@ def validate_bundle(
             normalized.append((kind, record))
     diagnostics.extend(mixed_primary_authority_diagnostics(normalized))
     diagnostics.extend(mixed_review_authority_diagnostics(normalized))
+    diagnostics.extend(organization_entries_diagnostics(normalized))
     expanded = expand_active_primary_entries(normalized)
     expanded = expand_active_review_entries(expanded)
+    expanded = expand_active_organization_entries(expanded)
     for kind, record in expanded[len(normalized):]:
         diagnostics.extend(validate_record(kind, record, registry=schema_registry, actor=actor))
     diagnostics.extend(_cross_record_diagnostics(expanded))
@@ -817,6 +823,42 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                         unit.get("review_unit_id", "")
                         for unit in section.get("units", [])
                     )
+        elif kind == "direction-bundle":
+            defined["orgrev"].extend(
+                revision.get("revision_id", "") for revision in record.get("revisions", [])
+            )
+            defined["orglink"].extend(sorted({
+                    link.get("organization_link_id", "")
+                    for revision in record.get("revisions", [])
+                    for link in revision.get("direction", {}).get("links", [])
+            }))
+        elif kind == "field-map-bundle":
+            defined["orgrev"].extend(
+                revision.get("revision_id", "") for revision in record.get("revisions", [])
+            )
+            defined["orglink"].extend(sorted({
+                    link.get("organization_link_id", "")
+                    for revision in record.get("revisions", [])
+                    for link in revision.get("field_map_entry", {}).get("links", [])
+            }))
+        elif kind == "question-revision-bundle":
+            defined["questionrev"].extend(
+                revision.get("revision_id", "") for revision in record.get("revisions", [])
+            )
+            defined["qbackground"].extend(sorted({
+                    item.get("question_background_id", "")
+                    for revision in record.get("revisions", [])
+                    for item in revision.get("background_links", [])
+            }))
+            defined["orglink"].extend(sorted({
+                    item.get("link", {}).get("organization_link_id", "")
+                    for revision in record.get("revisions", [])
+                    for item in revision.get("background_links", [])
+            }))
+        elif kind == "direction":
+            defined["direction"].append(record.get("direction_id", ""))
+        elif kind == "field-map-entry":
+            defined["fieldmap"].append(record.get("field_map_entry_id", ""))
         elif kind == "guardian-report":
             guardian_reports.append(record)
             defined["guardian"].append(record.get("guardian_report_id", ""))
@@ -1814,6 +1856,11 @@ def _record_id(kind: str, record: dict[str, Any]) -> str | None:
         "agent-task-state": "state_id",
         "primary-semantic-bundle": "paper_id",
         "review-semantic-bundle": "paper_id",
+        "direction-bundle": "direction_id",
+        "field-map-bundle": "field_map_entry_id",
+        "question-revision-bundle": "question_id",
+        "direction": "direction_id",
+        "field-map-entry": "field_map_entry_id",
     }
     field = fields.get(kind)
     value = record.get(field) if field else None

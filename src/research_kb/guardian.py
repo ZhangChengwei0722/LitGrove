@@ -26,6 +26,11 @@ from research_kb.identifiers import Namespace, allocate_id
 from research_kb.pipeline_jobs import current_pipeline_states, pipeline_job_chain_diagnostics
 from research_kb.process_events import timestamp
 from research_kb.primary_bundles import expand_active_primary_entries
+from research_kb.review_bundles import expand_active_review_entries
+from research_kb.organization_bundles import (
+    expand_active_organization_entries,
+    organization_link_freshness,
+)
 from research_kb.review_memory_provenance import build_active_parse_index, review_memory_freshness
 from research_kb.services.question_mapping import mapping_freshness_diagnostics
 from research_kb.source_assets import (
@@ -77,11 +82,14 @@ class GuardianService:
             diagnostics.extend(self._source_diagnostics(entries))
             diagnostics.extend(self._acquisition_diagnostics(entries))
             diagnostics.extend(self._local_source_intake_diagnostics(entries))
-            for kind, mapping in entries:
+            effective_entries = expand_active_organization_entries(
+                expand_active_review_entries(expand_active_primary_entries(entries))
+            )
+            for kind, mapping in effective_entries:
                 if kind == "question-mapping" and not validate_record(
                     "question-mapping", mapping, actor="stored"
                 ):
-                    diagnostics.extend(mapping_freshness_diagnostics(mapping, entries))
+                    diagnostics.extend(mapping_freshness_diagnostics(mapping, effective_entries))
                 elif kind == "review-memory" and not validate_record(
                     "review-memory", mapping, actor="stored"
                 ):
@@ -90,6 +98,29 @@ class GuardianService:
                     kind, mapping, actor="stored"
                 ):
                     diagnostics.extend(step7_freshness_diagnostics(kind, mapping, entries))
+                elif kind in {"direction", "field-map-entry"}:
+                    diagnostics.extend(_organization_freshness_diagnostics(kind, mapping, effective_entries))
+            for kind, bundle in entries:
+                if kind == "question-revision-bundle":
+                    revision = next(
+                        (
+                            item
+                            for item in bundle.get("revisions", [])
+                            if item.get("revision_id") == bundle.get("active_revision_id")
+                        ),
+                        None,
+                    )
+                    if revision is not None:
+                        diagnostics.extend(
+                            _organization_freshness_diagnostics(
+                                kind,
+                                {
+                                    "question_id": bundle.get("question_id"),
+                                    "links": [item.get("link", {}) for item in revision.get("background_links", [])],
+                                },
+                                effective_entries,
+                            )
+                        )
         diagnostics.extend(self._canonical_path_diagnostics())
         process_events = [record for kind, record in entries if kind == "process-event"]
         diagnostics.extend(self._adequacy_diagnostics(entries, process_events))
@@ -1095,6 +1126,8 @@ def _finding_from_diagnostic(diagnostic: Diagnostic, defined_ids: set[str]) -> d
         remediation = "Inspect the Agent Task chain, its exact input basis and correlated transaction event; do not promote staged output automatically."
     elif diagnostic.record_kind == "primary-semantic-bundle":
         remediation = "Inspect the immutable Primary revision chain and active head; repair only through a new approved revision."
+    elif diagnostic.record_kind in {"direction", "field-map-entry", "question-revision-bundle"}:
+        remediation = "Inspect the active organization revision and upstream Unit or Evidence closure; revise through a new approved revision without rewriting history."
     return {
         "code": diagnostic.code,
         "severity": diagnostic.severity,
@@ -1105,7 +1138,9 @@ def _finding_from_diagnostic(diagnostic: Diagnostic, defined_ids: set[str]) -> d
 
 
 def _defined_ids(entries: list[BundleEntry]) -> set[str]:
-    entries = expand_active_primary_entries(entries)
+    entries = expand_active_organization_entries(
+        expand_active_review_entries(expand_active_primary_entries(entries))
+    )
     result: set[str] = set()
     fields = {
         "registry-paper": "paper_id",
@@ -1121,6 +1156,8 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
         "source-adequacy-profile": "profile_id",
         "agent-task-state": "state_id",
         "primary-semantic-bundle": "active_revision_id",
+        "direction": "direction_id",
+        "field-map-entry": "field_map_entry_id",
         "question-mapping": "question_id",
         "discovery-candidate": "candidate_id",
         "step7-synthesis": "candidate_id",
@@ -1148,6 +1185,16 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
         elif kind == "question-mapping":
             result.add(record["question_id"])
             result.update(link["question_link_id"] for link in record.get("paper_links", []))
+        elif kind in {"direction-bundle", "field-map-bundle", "question-revision-bundle"}:
+            for revision in record.get("revisions", []):
+                result.add(revision["revision_id"])
+                child = revision.get("direction") or revision.get("field_map_entry") or {}
+                result.update(
+                    link["organization_link_id"] for link in child.get("links", [])
+                )
+                for item in revision.get("background_links", []):
+                    result.add(item["question_background_id"])
+                    result.add(item["link"]["organization_link_id"])
         elif kind in fields:
             value = record.get(fields[kind])
             if isinstance(value, str):
@@ -1159,6 +1206,47 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
             elif kind == "source-asset-state" and isinstance(record.get("source_asset_id"), str):
                 result.add(record["source_asset_id"])
     return result
+
+
+def _organization_freshness_diagnostics(
+    kind: str,
+    record: dict[str, Any],
+    entries: list[BundleEntry],
+) -> list[Diagnostic]:
+    record_id = record.get("direction_id") or record.get("field_map_entry_id") or record.get("question_id")
+    diagnostics: list[Diagnostic] = []
+    for index, link in enumerate(record.get("links", [])):
+        freshness = organization_link_freshness(link, entries)
+        if freshness["status"] != "current":
+            diagnostics.append(
+                Diagnostic(
+                    GROUNDING_MISMATCH,
+                    kind,
+                    record_id if isinstance(record_id, str) else None,
+                    f"/links/{index}",
+                    "organization link is stale: " + ", ".join(freshness["reasons"]),
+                    severity="warning",
+                )
+            )
+    if kind == "field-map-entry":
+        directions = {
+            item["direction_id"]: item.get("active_revision_id")
+            for entry_kind, item in entries
+            if entry_kind == "direction-bundle"
+        }
+        for index, ref in enumerate(record.get("direction_refs", [])):
+            if directions.get(ref.get("direction_id")) != ref.get("direction_revision_id"):
+                diagnostics.append(
+                    Diagnostic(
+                        GROUNDING_MISMATCH,
+                        kind,
+                        record_id if isinstance(record_id, str) else None,
+                        f"/direction_refs/{index}",
+                        "linked Direction revision is unavailable or stale",
+                        severity="warning",
+                    )
+                )
+    return diagnostics
 
 
 def _deduplicate(diagnostics: list[Diagnostic]) -> list[Diagnostic]:

@@ -176,7 +176,7 @@ def test_capability_reports_registered_ignored_and_unregistered_kinds() -> None:
         ["registry-paper", "parsed-page", "future-direction"]
     )
 
-    assert capability["registry_version"] == "1.0"
+    assert capability["registry_version"] == "1.1"
     assert "parsed-page" in capability["ignored_record_kinds"]
     assert capability["unregistered_record_kinds"] == ["future-direction"]
     assert "registry-paper" in {

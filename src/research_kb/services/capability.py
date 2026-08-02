@@ -153,6 +153,7 @@ class CapabilityService:
                 "knowledge_query_agent_tasks": True,
                 "reading_application": True,
                 "reading_evidence_source_access": True,
+                "research_organization_application": True,
                 "embedded_agent_runtime": False,
             },
             "agent_task_registry_version": PRIVACY_REGISTRY_VERSION,

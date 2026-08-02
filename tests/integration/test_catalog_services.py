@@ -17,6 +17,7 @@ from research_kb.services import (
     CatalogQueryService,
     RegistryIdentityCorrectionService,
     RegistryService,
+    ResearchOrganizationService,
     SourceAssetService,
     WorkspaceSessionService,
 )
@@ -133,6 +134,38 @@ def test_catalog_projects_only_current_pipeline_job_heads_with_stable_pagination
         second.state["state_id"],
     }
     assert query.detail(items[0]["item_id"])["detail"]["revision"] in {1, 2}
+
+
+def test_catalog_projects_and_resolves_active_direction_detail(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    bundle, _ = ResearchOrganizationService(layout).promote_direction(
+        {
+            "name": "Synthetic catalog direction",
+            "scope": "Synthetic catalog scope.",
+            "status": "active",
+            "unit_links": [],
+            "gap_notes": [],
+        },
+        approval={
+            "receipt_id": "catalog-direction-receipt",
+            "approved_by": "user",
+            "approved_at": "2026-01-01T00:00:00Z",
+            "origin": "user_authored",
+        },
+        actor="user",
+        fixture_origin="synthetic_from_scratch",
+    )
+    session = WorkspaceSessionService({"alpha": layout.config.path}).open("alpha")
+    projection = CatalogProjectionService(session, tmp_path / "app-state")
+    projection.rebuild()
+    query = CatalogQueryService(projection)
+
+    result = query.search(item_kinds=("research_direction",), page_size=10)
+    detail = query.detail(result["items"][0]["item_id"])
+
+    assert [item["record_id"] for item in result["items"]] == [bundle["direction_id"]]
+    assert detail["current_record_status"] == "current"
+    assert detail["detail"]["name"] == "Synthetic catalog direction"
 
 
 def test_source_and_identity_catalog_details_resolve_current_derived_records(tmp_path: Path) -> None:

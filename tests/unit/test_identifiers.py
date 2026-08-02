@@ -34,6 +34,24 @@ def test_review_memory_namespaces_are_cli_owned(namespace: Namespace, expected: 
 
 
 @pytest.mark.parametrize(
+    ("namespace", "expected"),
+    [
+        (Namespace.DIRECTION, "direction_550e8400-e29b-41d4-a716-446655440000"),
+        (Namespace.FIELD_MAP, "fieldmap_550e8400-e29b-41d4-a716-446655440000"),
+        (Namespace.ORGANIZATION_REVISION, "orgrev_550e8400-e29b-41d4-a716-446655440000"),
+        (Namespace.ORGANIZATION_LINK, "orglink_550e8400-e29b-41d4-a716-446655440000"),
+        (Namespace.QUESTION_REVISION, "questionrev_550e8400-e29b-41d4-a716-446655440000"),
+        (Namespace.QUESTION_BACKGROUND, "qbackground_550e8400-e29b-41d4-a716-446655440000"),
+    ],
+)
+def test_research_organization_namespaces_are_cli_owned(namespace: Namespace, expected: str) -> None:
+    fixed = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
+    value = allocate_id(namespace, lambda: fixed)
+    assert value == expected
+    assert validate_id(value, namespace) == value
+
+
+@pytest.mark.parametrize(
     "value",
     [
         "paper_550e8400-e29b-11d4-a716-446655440000",
