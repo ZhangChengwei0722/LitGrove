@@ -70,6 +70,7 @@ RESULT_CONTRACT_KINDS = {
     "document-route-decision",
     "primary-semantic-candidate",
     "review-semantic-candidate",
+    "knowledge-query-report",
 }
 HUMAN_ONLY_REVIEW_STATES = {"human_checked", "verified"}
 NON_SUPPORTING_UNIT_STATES = {"interpretive", "background_only", "needs_resolution"}
@@ -1582,36 +1583,58 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
         elif kind == "agent-task-state":
             _require_ref(diagnostics, kind, record_id, "/workspace_id", record.get("workspace_id"), workspaces, "workspace")
             basis = record.get("input_basis", {})
-            _require_ref(diagnostics, kind, record_id, "/input_basis/paper_id", basis.get("paper_id"), papers, "paper")
-            _require_ref(diagnostics, kind, record_id, "/input_basis/job_id", basis.get("job_id"), jobs, "Pipeline Job")
-            _require_ref(
-                diagnostics,
-                kind,
-                record_id,
-                "/input_basis/job_state_id",
-                basis.get("job_state_id"),
-                set(defined["jobstate"]),
-                "Pipeline Job state",
-            )
-            _require_ref(
-                diagnostics,
-                kind,
-                record_id,
-                "/input_basis/parse_run_id",
-                basis.get("parse_run_id"),
-                events,
-                "parse process event",
-            )
-            _require_ref(
-                diagnostics,
-                kind,
-                record_id,
-                "/input_basis/adequacy_profile_id",
-                basis.get("adequacy_profile_id"),
-                set(adequacy_profiles),
-                "Source Adequacy profile",
-            )
-            if basis.get("origin_job_id") is not None:
+            if record.get("task_kind") == "knowledge_query_report":
+                for index, paper_id in enumerate(basis.get("paper_ids", [])):
+                    _require_ref(
+                        diagnostics,
+                        kind,
+                        record_id,
+                        f"/input_basis/paper_ids/{index}",
+                        paper_id,
+                        papers,
+                        "paper",
+                    )
+                for index, snapshot in enumerate(basis.get("mapping_snapshots", [])):
+                    _require_ref(
+                        diagnostics,
+                        kind,
+                        record_id,
+                        f"/input_basis/mapping_snapshots/{index}/question_id",
+                        snapshot.get("question_id"),
+                        questions,
+                        "question",
+                    )
+            else:
+                _require_ref(diagnostics, kind, record_id, "/input_basis/paper_id", basis.get("paper_id"), papers, "paper")
+                _require_ref(diagnostics, kind, record_id, "/input_basis/job_id", basis.get("job_id"), jobs, "Pipeline Job")
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    "/input_basis/job_state_id",
+                    basis.get("job_state_id"),
+                    set(defined["jobstate"]),
+                    "Pipeline Job state",
+                )
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    "/input_basis/parse_run_id",
+                    basis.get("parse_run_id"),
+                    events,
+                    "parse process event",
+                )
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    "/input_basis/adequacy_profile_id",
+                    basis.get("adequacy_profile_id"),
+                    set(adequacy_profiles),
+                    "Source Adequacy profile",
+                )
+            if record.get("task_kind") != "knowledge_query_report" and basis.get("origin_job_id") is not None:
                 _require_ref(
                     diagnostics,
                     kind,

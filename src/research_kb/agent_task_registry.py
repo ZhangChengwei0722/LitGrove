@@ -6,8 +6,8 @@ from typing import Any
 from research_kb.errors import SCHEMA_VALIDATION_FAILED, Diagnostic, ResearchKBError
 
 
-PRIVACY_REGISTRY_VERSION = "p4c-v1"
-SUPPORTED_REGISTRY_VERSIONS = ("p4a-v1", "p4b-v1", "p4c-v1")
+PRIVACY_REGISTRY_VERSION = "p5c-v1"
+SUPPORTED_REGISTRY_VERSIONS = ("p4a-v1", "p4b-v1", "p4c-v1", "p5c-v1")
 CONTENT_CLASSES = frozenset(
     {
         "metadata",
@@ -33,6 +33,7 @@ class TaskKindDefinition:
     max_items: int
     max_payload_bytes: int
     max_excerpt_bytes: int
+    max_result_bytes: int
 
     def projection(self) -> dict[str, Any]:
         return {
@@ -44,6 +45,7 @@ class TaskKindDefinition:
             "max_items": self.max_items,
             "max_payload_bytes": self.max_payload_bytes,
             "max_excerpt_bytes": self.max_excerpt_bytes,
+            "max_result_bytes": self.max_result_bytes,
         }
 
 
@@ -75,6 +77,7 @@ P4A_TASK_KINDS: dict[str, TaskKindDefinition] = {
         128,
         262_144,
         131_072,
+        262_144,
     ),
     "source_adequacy_assessment": TaskKindDefinition(
         "source_adequacy_assessment",
@@ -82,6 +85,7 @@ P4A_TASK_KINDS: dict[str, TaskKindDefinition] = {
         frozenset({"source_document"}),
         "deferred-p4",
         "deferred",
+        0,
         0,
         0,
         0,
@@ -95,6 +99,7 @@ P4A_TASK_KINDS: dict[str, TaskKindDefinition] = {
         0,
         0,
         0,
+        0,
     ),
     "review_semantic_processing": TaskKindDefinition(
         "review_semantic_processing",
@@ -105,6 +110,7 @@ P4A_TASK_KINDS: dict[str, TaskKindDefinition] = {
         0,
         0,
         0,
+        0,
     ),
     "question_direction_mapping": TaskKindDefinition(
         "question_direction_mapping",
@@ -112,6 +118,7 @@ P4A_TASK_KINDS: dict[str, TaskKindDefinition] = {
         frozenset({"canonical_evidence", "review_background", "metadata"}),
         "deferred-p7",
         "deferred",
+        0,
         0,
         0,
         0,
@@ -132,6 +139,7 @@ P4A_TASK_KINDS: dict[str, TaskKindDefinition] = {
         0,
         0,
         0,
+        0,
     ),
     "semantic_review": TaskKindDefinition(
         "semantic_review",
@@ -139,6 +147,7 @@ P4A_TASK_KINDS: dict[str, TaskKindDefinition] = {
         frozenset(),
         "deferred-p4b",
         "deferred",
+        0,
         0,
         0,
         0,
@@ -156,6 +165,7 @@ TASK_KINDS = {
         256,
         1_048_576,
         524_288,
+        1_048_576,
     ),
 }
 P4C_TASK_KINDS = {
@@ -169,12 +179,28 @@ P4C_TASK_KINDS = {
         256,
         1_048_576,
         524_288,
+        1_048_576,
+    ),
+}
+P5C_TASK_KINDS = {
+    **P4C_TASK_KINDS,
+    "knowledge_query_report": TaskKindDefinition(
+        "knowledge_query_report",
+        frozenset({"paper_card_content", "canonical_evidence", "operational_context"}),
+        frozenset({"metadata", "review_background", "research_routing_context"}),
+        "p5c-knowledge-query-report@1.0",
+        "available",
+        4,
+        1_048_576,
+        0,
+        524_288,
     ),
 }
 REGISTRY_TASK_KINDS = {
     "p4a-v1": P4A_TASK_KINDS,
     "p4b-v1": TASK_KINDS,
     "p4c-v1": P4C_TASK_KINDS,
+    "p5c-v1": P5C_TASK_KINDS,
 }
 
 EXECUTORS: dict[str, ExecutorDefinition] = {

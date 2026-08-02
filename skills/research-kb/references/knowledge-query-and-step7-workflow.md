@@ -32,6 +32,11 @@ full_workflow_step7_refresh
 persistent_writes: 0
 ```
 
+This direct Skill route is distinct from an exact App-generated `knowledge_query_report`
+handoff. The latter is handled only by the App Agent Task response workflow and may be
+retained by Core as bounded operational Task history after App preview and user approval;
+it still performs zero canonical scientific writes.
+
 `explicit_step7_maintenance` requires an explicit create, refresh, revise, reject or render request for one existing question.
 
 `full_workflow_step7_refresh` applies only when the active intake request explicitly asks to continue through Step 7 and Guardian after an authorized Question Mapping exists.

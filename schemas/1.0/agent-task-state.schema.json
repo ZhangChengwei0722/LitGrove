@@ -96,6 +96,77 @@
         "bundle_head_digest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
       }
     },
+    "knowledge_query_input_basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["query_type", "query_text", "paper_ids", "include_review_background", "include_routing_context", "paper_snapshots", "mapping_snapshots", "payload_digest"],
+      "properties": {
+        "query_type": {"enum": ["single_paper_explanation", "seven_section_overview", "methods", "selected_paper_comparison", "trend_problem_discussion", "evidence_find"]},
+        "query_text": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "paper_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"}
+        },
+        "include_review_background": {"type": "boolean"},
+        "include_routing_context": {"type": "boolean"},
+        "paper_snapshots": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["paper_id", "paper_record_digest", "canonical_paper_id", "library_status", "identity_projection_digest", "source_state", "source_digest", "document_route", "authority_mode", "revision_id", "revision_digest", "card_digest", "evidence_digests", "review_memory_digest"],
+            "properties": {
+              "paper_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+              "paper_record_digest": {"$ref": "#/$defs/digest"},
+              "canonical_paper_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+              "library_status": {"enum": ["active", "archived", "tombstoned"]},
+              "identity_projection_digest": {"$ref": "#/$defs/digest"},
+              "source_state": {"enum": ["current", "stale_source", "fingerprint_mismatch", "missing", "inaccessible", "relink_required", "not_regular_file"]},
+              "source_digest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+              "document_route": {"enum": ["primary", "review", "unprocessed"]},
+              "authority_mode": {"enum": ["revisioned_bundle", "legacy_unversioned", "none"]},
+              "revision_id": {"type": ["string", "null"], "pattern": "^(primaryrev|reviewrev)_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+              "revision_digest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+              "card_digest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+              "evidence_digests": {
+                "type": "array",
+                "maxItems": 512,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["evidence_id", "evidence_digest"],
+                  "properties": {
+                    "evidence_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/evidence_id"},
+                    "evidence_digest": {"$ref": "#/$defs/digest"}
+                  }
+                }
+              },
+              "review_memory_digest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+            }
+          }
+        },
+        "mapping_snapshots": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["question_id", "mapping_digest", "freshness"],
+            "properties": {
+              "question_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/question_id"},
+              "mapping_digest": {"$ref": "#/$defs/digest"},
+              "freshness": {"enum": ["current", "stale"]}
+            }
+          }
+        },
+        "payload_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
     "result_lineage": {
       "type": "object",
       "additionalProperties": false,
@@ -132,7 +203,7 @@
       "required": ["action", "reason_code", "feedback", "successor_task_id", "applied_job_state_id", "decided_at"],
       "properties": {
         "action": {"enum": ["revision_requested", "superseded", "rejected", "approved"]},
-        "reason_code": {"type": ["string", "null"], "enum": [null, "input_refreshed", "user_rejected", "route_confirmed", "primary_bundle_committed", "review_bundle_committed"]},
+        "reason_code": {"type": ["string", "null"], "enum": [null, "input_refreshed", "user_rejected", "route_confirmed", "primary_bundle_committed", "review_bundle_committed", "report_accepted"]},
         "feedback": {"type": ["string", "null"], "maxLength": 4000},
         "successor_task_id": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/agent_task_id"}, {"type": "null"}]},
         "applied_job_state_id": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/job_state_id"}, {"type": "null"}]},
@@ -150,24 +221,24 @@
     "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
     "revision": {"type": "integer", "minimum": 1},
     "predecessor": {"anyOf": [{"$ref": "#/$defs/predecessor"}, {"type": "null"}]},
-    "task_kind": {"enum": ["document_route_resolution", "primary_semantic_processing", "review_semantic_processing"]},
-    "result_contract": {"enum": ["p4a-document-route-decision@1.0", "p4b-primary-semantic-candidate@1.0", "p4c-review-semantic-candidate@1.0"]},
-    "privacy_registry_version": {"enum": ["p4a-v1", "p4b-v1", "p4c-v1"]},
+    "task_kind": {"enum": ["document_route_resolution", "primary_semantic_processing", "review_semantic_processing", "knowledge_query_report"]},
+    "result_contract": {"enum": ["p4a-document-route-decision@1.0", "p4b-primary-semantic-candidate@1.0", "p4c-review-semantic-candidate@1.0", "p5c-knowledge-query-report@1.0"]},
+    "privacy_registry_version": {"enum": ["p4a-v1", "p4b-v1", "p4c-v1", "p5c-v1"]},
     "executor_id": {"enum": ["codex_cli", "claude_code_cli"]},
     "execution_scope": {"const": "cloud_allowed"},
     "effective_content_classes": {
       "type": "array",
       "minItems": 3,
       "uniqueItems": true,
-      "items": {"enum": ["metadata", "parsed_excerpt", "operational_context", "research_routing_context", "review_background"]}
+      "items": {"enum": ["metadata", "parsed_excerpt", "canonical_evidence", "paper_card_content", "operational_context", "research_routing_context", "review_background"]}
     },
-    "input_basis": {"oneOf": [{"$ref": "#/$defs/route_input_basis"}, {"$ref": "#/$defs/primary_input_basis"}, {"$ref": "#/$defs/review_input_basis"}]},
+    "input_basis": {"oneOf": [{"$ref": "#/$defs/route_input_basis"}, {"$ref": "#/$defs/primary_input_basis"}, {"$ref": "#/$defs/review_input_basis"}, {"$ref": "#/$defs/knowledge_query_input_basis"}]},
     "input_basis_digest": {"$ref": "#/$defs/digest"},
     "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 200},
     "lineage": {"anyOf": [{"$ref": "#/$defs/result_lineage"}, {"$ref": "#/$defs/refresh_lineage"}, {"type": "null"}]},
     "status": {"enum": ["created", "leased", "submitted", "revision_requested", "superseded", "rejected", "approved", "cancelled"]},
     "lease": {"anyOf": [{"$ref": "#/$defs/lease"}, {"type": "null"}]},
-    "staged_result": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:document-route-decision"}, {"$ref": "urn:research-kb:schema:1.0:primary-semantic-candidate"}, {"$ref": "urn:research-kb:schema:1.0:review-semantic-candidate"}, {"type": "null"}]},
+    "staged_result": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:document-route-decision"}, {"$ref": "urn:research-kb:schema:1.0:primary-semantic-candidate"}, {"$ref": "urn:research-kb:schema:1.0:review-semantic-candidate"}, {"$ref": "urn:research-kb:schema:1.0:knowledge-query-report"}, {"type": "null"}]},
     "decision": {"anyOf": [{"$ref": "#/$defs/decision"}, {"type": "null"}]},
     "terminal_receipt": {"type": "boolean"},
     "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
@@ -190,7 +261,7 @@
       "then": {
         "properties": {
           "result_contract": {"const": "p4b-primary-semantic-candidate@1.0"},
-          "privacy_registry_version": {"enum": ["p4b-v1", "p4c-v1"]},
+          "privacy_registry_version": {"enum": ["p4b-v1", "p4c-v1", "p5c-v1"]},
           "input_basis": {"$ref": "#/$defs/primary_input_basis"},
           "staged_result": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:primary-semantic-candidate"}, {"type": "null"}]}
         }
@@ -201,9 +272,20 @@
       "then": {
         "properties": {
           "result_contract": {"const": "p4c-review-semantic-candidate@1.0"},
-          "privacy_registry_version": {"const": "p4c-v1"},
+          "privacy_registry_version": {"enum": ["p4c-v1", "p5c-v1"]},
           "input_basis": {"$ref": "#/$defs/review_input_basis"},
           "staged_result": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:review-semantic-candidate"}, {"type": "null"}]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"task_kind": {"const": "knowledge_query_report"}}, "required": ["task_kind"]},
+      "then": {
+        "properties": {
+          "result_contract": {"const": "p5c-knowledge-query-report@1.0"},
+          "privacy_registry_version": {"const": "p5c-v1"},
+          "input_basis": {"$ref": "#/$defs/knowledge_query_input_basis"},
+          "staged_result": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:knowledge-query-report"}, {"type": "null"}]}
         }
       }
     }

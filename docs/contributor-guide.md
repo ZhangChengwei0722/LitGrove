@@ -245,6 +245,11 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Require explicit user revision, rejection or approval. Revision creates a reciprocal successor lineage with prior result digest, feedback and refreshed inputs.
 - P4-A may advance only document routing. It must not create Paper Card, Evidence, Review Memory, scientific review-queue or Research Synthesis records.
 - Exercise registry, handoff, submit, preview and approval from the installed wheel; live model availability is never a deterministic CI condition.
+- Keep `p5c-v1` additive: existing Pipeline-bound kinds remain available, while `knowledge_query_report` has no Job owner and no scientific commit path.
+- Build Knowledge Query payloads only from active Registry identities, current source manifestations, grounded/revised active Card Units and their complete canonical Evidence closure. Review Units are an explicit background-only allowlist.
+- Bind the query input basis to exact selected paper, revision, Card, Evidence, Review Memory, routing and source-currentness digests. Reject stale handoff, submission, revision and acceptance; P5-C has no refresh transition.
+- Validate every returned support/background ref against the exact handoff payload. A zero-match or unresolved report is valid; excluded context never becomes support.
+- Accepting a query result may append only Agent Task operational state with `report_accepted`; it cannot name an applied Job or write a scientific store.
 
 ## Primary Semantic Bundle Rules
 
@@ -263,7 +268,7 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 ## Review Semantic Bundle Rules
 
 - Start Review semantic work only from a completed Review or mixed-document Review gate; never reopen the deterministic intake Job.
-- Keep `p4a-v1` and `p4b-v1` behavior compatible. Register Review processing only under `p4c-v1`.
+- Keep `p4a-v1` and `p4b-v1` behavior compatible. Register Review processing under `p4c-v1`; `p5c-v1` must continue exposing all three earlier available Task kinds.
 - Bind five Review operations, but block staging only when the base `basic_review_memory` gate or an operation actually consumed by a retained source note is inadequate.
 - Validate every retained source note against the Task-bound Parse. Exact quotes require a character slice; paraphrases require a resolvable page and section or explicit missing-section reason.
 - Accept semantic Review fields only. Core owns revision, Review Memory and Review Unit IDs plus all background/non-evidence constants.

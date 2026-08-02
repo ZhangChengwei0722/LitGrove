@@ -46,7 +46,7 @@
       "additionalProperties": false,
       "required": ["registry_version", "allowed_content_classes", "execution_scope", "max_prompt_bytes", "max_result_bytes"],
       "properties": {
-        "registry_version": {"enum": ["p4a-v1", "p4b-v1", "p4c-v1"]},
+        "registry_version": {"enum": ["p4a-v1", "p4b-v1", "p4c-v1", "p5c-v1"]},
         "allowed_content_classes": {
           "type": "array",
           "uniqueItems": true,
