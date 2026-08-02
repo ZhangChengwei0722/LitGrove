@@ -128,9 +128,10 @@ def main() -> int:
         if (
             capability["features"]["agent_task_staging"] is not True
             or capability["features"]["knowledge_query_agent_tasks"] is not True
-            or capability["agent_task_registry_version"] != "p5c-v1"
+            or capability["features"]["organization_proposal_agent_tasks"] is not True
+            or capability["agent_task_registry_version"] != "p7b-v1"
         ):
-            raise SystemExit("base wheel capability report lacks P4-A Agent Task staging")
+            raise SystemExit("base wheel capability report lacks current Agent Task staging")
         if capability["features"]["reading_evidence_source_access"] is not True:
             raise SystemExit("base wheel capability report lacks P5-B Evidence source access")
         subprocess.run(
@@ -283,7 +284,7 @@ def main() -> int:
                 "line_ending": "lf",
             },
             "agent_policy": {
-                "registry_version": "p5c-v1",
+                "registry_version": "p7b-v1",
                 "allowed_content_classes": ["metadata", "parsed_excerpt", "canonical_evidence", "paper_card_content", "operational_context", "review_background", "research_routing_context"],
                 "execution_scope": "cloud_allowed",
                 "max_prompt_bytes": 262_144,
@@ -969,10 +970,10 @@ def main() -> int:
                     "WorkspaceSessionService, SourceAssetService, RegistryIdentityCorrectionService, "
                     "AgentTaskApplicationService, DeterministicIntakeApplicationService, ReadingApplicationService, "
                     "DeterministicTrunkService, PipelineJobService; "
-                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.11'; "
+                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.12'; "
                     f"session = WorkspaceSessionService({{'wheel': Path({str(config_path)!r})}}).open('wheel'); "
                     "limits = DeterministicIntakeApplicationService().limits(session); "
-                    "assert limits['interface_version'] == '1.11'; "
+                    "assert limits['interface_version'] == '1.12'; "
                     "assert limits['ingress_modes'] == ['upload', 'watched_inbox']; "
                     f"reading = ReadingApplicationService().show_paper(session, {paper_id!r}); "
                     "assert reading['persistent_writes'] == 0 and 'source_ref' not in str(reading); "
@@ -986,7 +987,7 @@ def main() -> int:
                     "assert waiting.state['status'] == 'waiting_user'; "
                     "tasks = AgentTaskApplicationService(); "
                     "registry = tasks.registry(session); "
-                    "assert registry['registry_version'] == 'p5c-v1'; "
+                    "assert registry['registry_version'] == 'p7b-v1'; "
                     "assert registry['embedded_agent_runtime'] is False; "
                     f"created = tasks.create_from_pipeline(session, job['job_id'], {{'paper_id':{paper_id!r},'task_kind':'document_route_resolution','executor_id':'codex_cli','approved_content_classes':['metadata','parsed_excerpt','operational_context'],'idempotency_key':'installed-wheel-route-task'}}); "
                     "expected = {'state_id':created['task']['state_id'],'state_digest':created['task']['state_digest']}; "
@@ -1058,8 +1059,18 @@ def main() -> int:
                     "query_expected = {'state_id':query_submitted['task']['state_id'],'state_digest':query_submitted['task']['state_digest']}; "
                     "query_accepted = tasks.accept_report(session, query['task']['task_id'], query_expected); "
                     "assert query_accepted['task']['status'] == 'approved' and query_accepted['canonical_scientific_write'] is False, 'query acceptance'; "
+                    "organization = tasks.create_organization_proposal(session, {'target_kind':'direction','target_id':None,'proposal_goal':'Create one installed-wheel synthetic direction.','paper_ids':[paper['paper_id']],'include_review_background':False,'executor_id':'codex_cli','approved_content_classes':['metadata','canonical_evidence','paper_card_content','research_routing_context','operational_context'],'idempotency_key':'installed-wheel-organization-task'}); "
+                    "organization_expected = {'state_id':organization['task']['state_id'],'state_digest':organization['task']['state_digest']}; "
+                    "organization_handoff = tasks.prepare_handoff(session, organization['task']['task_id'], organization_expected, 'codex_cli'); "
+                    "organization_candidate = {'contract_version':'p7b-organization-proposal@1.0','task_id':organization_handoff['task']['task_id'],'input_basis_digest':organization_handoff['task']['input_basis_digest'],'target_kind':'direction','target_id':None,'proposal':{'name':'Installed-wheel synthetic direction','scope':'The generated installed-wheel records only.','status':'active','unit_links':[{'source_kind':'primary','paper_id':paper['paper_id'],'unit_id':unit['unit_id'],'role':'factual_example','rationale':'The current grounded synthetic Unit is a bounded example.'}],'gap_notes':[]},'duplicate_notes':[],'unresolved_conflicts':[]}; "
+                    "organization_expected = {'state_id':organization_handoff['task']['state_id'],'state_digest':organization_handoff['task']['state_digest']}; "
+                    "organization_submitted = tasks.submit_result(session, organization['task']['task_id'], organization_expected, organization_handoff['lease'], organization_candidate); "
+                    "assert tasks.preview_result(session, organization['task']['task_id'])['candidate']['approval_blocked'] is False, 'organization preview'; "
+                    "organization_expected = {'state_id':organization_submitted['task']['state_id'],'state_digest':organization_submitted['task']['state_digest']}; "
+                    "organization_approved = tasks.approve_organization_result(session, organization['task']['task_id'], organization_expected); "
+                    "assert organization_approved['task']['status'] == 'approved' and organization_approved['canonical_scientific_write'] is True, 'organization approval'; "
                     "source_access = ReadingApplicationService().prepare_evidence_source(session, evidence_id); "
-                    "assert source_access.descriptor['application_service_interface_version'] == '1.11', 'source interface'; "
+                    "assert source_access.descriptor['application_service_interface_version'] == '1.12', 'source interface'; "
                     "assert source_access.descriptor['media_type'] == 'application/pdf' and source_access.descriptor['persistent_writes'] == 0, 'source descriptor'; "
                     "assert 'source_ref' not in str(source_access.descriptor) and 'fingerprint' not in str(source_access.descriptor), 'source redaction'; "
                     "opened = ReadingApplicationService().open_evidence_source(session, source_access.handle); "

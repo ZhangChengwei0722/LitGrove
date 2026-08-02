@@ -6,8 +6,8 @@ from typing import Any
 from research_kb.errors import SCHEMA_VALIDATION_FAILED, Diagnostic, ResearchKBError
 
 
-PRIVACY_REGISTRY_VERSION = "p5c-v1"
-SUPPORTED_REGISTRY_VERSIONS = ("p4a-v1", "p4b-v1", "p4c-v1", "p5c-v1")
+PRIVACY_REGISTRY_VERSION = "p7b-v1"
+SUPPORTED_REGISTRY_VERSIONS = ("p4a-v1", "p4b-v1", "p4c-v1", "p5c-v1", "p7b-v1")
 CONTENT_CLASSES = frozenset(
     {
         "metadata",
@@ -196,11 +196,26 @@ P5C_TASK_KINDS = {
         524_288,
     ),
 }
+P7B_TASK_KINDS = {
+    **P5C_TASK_KINDS,
+    "organization_proposal": TaskKindDefinition(
+        "organization_proposal",
+        frozenset({"paper_card_content", "research_routing_context", "operational_context"}),
+        frozenset({"metadata", "canonical_evidence", "review_background"}),
+        "p7b-organization-proposal@1.0",
+        "available",
+        25,
+        2_097_152,
+        0,
+        1_048_576,
+    ),
+}
 REGISTRY_TASK_KINDS = {
     "p4a-v1": P4A_TASK_KINDS,
     "p4b-v1": TASK_KINDS,
     "p4c-v1": P4C_TASK_KINDS,
     "p5c-v1": P5C_TASK_KINDS,
+    "p7b-v1": P7B_TASK_KINDS,
 }
 
 EXECUTORS: dict[str, ExecutorDefinition] = {

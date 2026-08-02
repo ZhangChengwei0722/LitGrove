@@ -250,6 +250,13 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Bind the query input basis to exact selected paper, revision, Card, Evidence, Review Memory, routing and source-currentness digests. Reject stale handoff, submission, revision and acceptance; P5-C has no refresh transition.
 - Validate every returned support/background ref against the exact handoff payload. A zero-match or unresolved report is valid; excluded context never becomes support.
 - Accepting a query result may append only Agent Task operational state with `report_accepted`; it cannot name an applied Job or write a scientific store.
+- Keep `p7b-v1` additive and register `organization_proposal` as a direct no-Job Task. One Task targets exactly one Direction, Field Map Entry or Question.
+- Preserve the caller's ordered, unique paper selection. Build all Unit text, Evidence closure and organization context inside Core; browser or Agent input may reference only allowlisted IDs.
+- Bind existing targets, selected semantic revisions, Card/Review Units, Evidence closure and referenced Directions in the Task basis. Reject stale handoff, submission, revision and approval.
+- Keep Review Units background-only. Direction and Field Map links allow factual Primary examples or background context; Question background links require `question_background`; Review content never becomes Evidence.
+- Promote through exactly one `ResearchOrganizationService` writer after explicit user approval. Core allocates target, revision and link IDs and derives factual Evidence IDs.
+- Treat exact semantic duplicates as no canonical write while still retaining the Task approval receipt. Replay must resolve the basis-bound historical revision even when no Task-authored canonical revision exists.
+- Keep unresolved conflict notes previewable but approval-blocking. Organization proposals cannot carry Tags, Screening decisions or Research Synthesis candidates.
 
 ## Primary Semantic Bundle Rules
 
