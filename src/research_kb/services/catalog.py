@@ -328,6 +328,7 @@ class CatalogQueryService:
         paper_id: str | None = None,
         question_id: str | None = None,
         tag_id: str | None = None,
+        status_labels: Iterable[str] = (),
         page_size: int = 20,
         cursor: str | None = None,
     ) -> dict[str, Any]:
@@ -341,6 +342,7 @@ class CatalogQueryService:
             paper_id=paper_id,
             question_id=question_id,
             tag_id=tag_id,
+            status_labels=tuple(status_labels),
             page_size=page_size,
             cursor=cursor,
         )
@@ -385,8 +387,20 @@ class CatalogQueryService:
                 )
             else:
                 record = _load_exact_workspace_record(self.projection.session._layout, row)
+            if record is not None and row["record_kind"] == "screening-decision-bundle":
+                entries = self.projection.entry_loader(self.projection.session._layout)
+                self.projection.entry_validator(entries)
+                record = next(
+                    (
+                        selected
+                        for kind, selected in self.projection.registry.select_entries(entries)
+                        if kind == row["record_kind"]
+                        and adapter.record_id(selected) == row["record_id"]
+                    ),
+                    None,
+                )
             if record is not None:
-                if row["record_kind"] != "registry-identity-projection":
+                if row["record_kind"] not in {"registry-identity-projection", "screening-decision-bundle"}:
                     diagnostics = validate_record(row["record_kind"], record, actor="stored")
                     if diagnostics:
                         raise ResearchKBError(diagnostics[0])
@@ -445,7 +459,7 @@ class CatalogCapabilityService:
             "projection_storage": "disposable_sqlite_fts",
             "raw_parsed_text_indexed": False,
             "max_page_size": 100,
-            "query_filters": ["item_kinds", "paper_id", "question_id", "tag_id"],
+            "query_filters": ["item_kinds", "paper_id", "question_id", "tag_id", "status_labels"],
             **self.registry.capability(record_kinds),
         }
 
@@ -488,6 +502,10 @@ def _load_exact_workspace_record(layout, row: dict[str, Any]) -> dict[str, Any] 
         return _read_bound_json(layout.tag_bundle_path(row["record_id"]), "tag_id", row["record_id"])
     if kind == "tag-link-bundle":
         return _read_bound_json(layout.tag_link_bundle_path(row["record_id"]), "tag_link_id", row["record_id"])
+    if kind == "screening-criteria-bundle":
+        return _read_bound_json(layout.screening_criteria_bundle_path(row["record_id"]), "criteria_id", row["record_id"])
+    if kind == "screening-decision-bundle":
+        return _read_bound_json(layout.screening_decision_bundle_path(row["record_id"]), "decision_id", row["record_id"])
     if kind in {
         "step7-synthesis",
         "step7-review-angle",

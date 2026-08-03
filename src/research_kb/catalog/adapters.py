@@ -20,6 +20,7 @@ from research_kb.review_bundles import expand_active_review_entries
 from research_kb.organization_bundles import expand_active_organization_entries
 from research_kb.source_assets import current_source_asset_heads
 from research_kb.tag_bundles import active_tag, active_tag_link_state
+from research_kb.screening_bundles import active_screening_criteria, active_screening_decision, decision_freshness
 
 
 MAX_TITLE_CHARACTERS = 1_000
@@ -254,6 +255,8 @@ def _default_adapters() -> tuple[CatalogRecordAdapter, ...]:
         _adapter("field-map-entry", "field_map_entry_id", _project_field_map, _field_map_detail),
         _adapter("tag-bundle", "tag_id", _project_tag_bundle, _tag_bundle_detail),
         _adapter("tag-link-bundle", "tag_link_id", _project_tag_link_bundle, _tag_link_bundle_detail),
+        _adapter("screening-criteria-bundle", "criteria_id", _project_screening_criteria, _screening_criteria_detail),
+        _adapter("screening-decision-bundle", "decision_id", _project_screening_decision, _screening_decision_detail),
         _adapter("step7-synthesis", "candidate_id", _project_step7, _step7_detail),
         _adapter("step7-review-angle", "candidate_id", _project_step7, _step7_detail),
         _adapter("step7-insight", "candidate_id", _project_step7, _step7_detail),
@@ -521,6 +524,23 @@ def _project_tag_bundle(record: Record, workspace_id: str, digest: str) -> tuple
 def _project_tag_link_bundle(record: Record, workspace_id: str, digest: str) -> tuple[CatalogDocument, ...]:
     del record, workspace_id, digest
     return ()
+
+
+def _project_screening_criteria(record: Record, workspace_id: str, digest: str) -> tuple[CatalogDocument, ...]:
+    del workspace_id
+    criteria = active_screening_criteria(record)
+    if criteria is None:
+        return ()
+    return (_document(record_kind="screening-criteria-bundle", record_id=str(record["criteria_id"]), child_id=None, item_kind="screening_criteria", authority_layer="canonical", paper_id=None, question_id=str(record["question_id"]), title=str(criteria["title"]), summary=str(criteria["scope"]), statuses=(f"criteria:{criteria['status']}",), search_text=_join([str(criteria["title"]), str(criteria["scope"]), str(criteria["notes"]), *(str(item["text"]) for field in ("inclusion_criteria", "exclusion_criteria") for item in criteria[field])]), digest=digest),)
+
+
+def _project_screening_decision(record: Record, workspace_id: str, digest: str) -> tuple[CatalogDocument, ...]:
+    del workspace_id
+    decision = active_screening_decision(record)
+    if decision is None:
+        return ()
+    freshness = record.get("_projected_freshness", {"state": "unknown", "reasons": []})
+    return (_document(record_kind="screening-decision-bundle", record_id=str(record["decision_id"]), child_id=None, item_kind="screening_decision", authority_layer="canonical", paper_id=str(record["paper_id"]), question_id=str(record["question_id"]), title=f"Question screening: {decision['outcome']}", summary=str(decision["rationale"]), statuses=(f"screening:{decision['outcome']}", f"freshness:{freshness['state']}", f"basis:{decision['basis_scope']}"), search_text=_join([str(decision["outcome"]), str(decision["rationale"]), *map(str, decision["known_limitations"])]), digest=digest),)
 
 
 def _project_step7(record: Record, workspace_id: str, digest: str) -> tuple[CatalogDocument, ...]:
@@ -895,6 +915,22 @@ def _tag_link_bundle_detail(record: Record, child_id: str | None) -> dict[str, A
     }
 
 
+def _screening_criteria_detail(record: Record, child_id: str | None) -> dict[str, Any]:
+    del child_id
+    criteria = active_screening_criteria(record)
+    if criteria is None:
+        raise KeyError(record.get("criteria_id"))
+    return {**criteria, "revision_id": record["active_revision_id"], "criteria_digest": record["revisions"][-1]["content_digest"]}
+
+
+def _screening_decision_detail(record: Record, child_id: str | None) -> dict[str, Any]:
+    del child_id
+    decision = active_screening_decision(record)
+    if decision is None:
+        raise KeyError(record.get("decision_id"))
+    return {**decision, "revision_id": record["active_revision_id"], "freshness": record.get("_projected_freshness", {"state": "unknown", "reasons": []})}
+
+
 def _step7_detail(record: Record, child_id: str | None) -> dict[str, Any]:
     return {
         key: value
@@ -1072,6 +1108,15 @@ def _select_catalog_entries(
         ("source-adequacy-profile", record)
         for _, record in sorted(adequacy_profiles.items())
     )
+    selected = [
+        (
+            kind,
+            {**record, "_projected_freshness": decision_freshness(record, entries)}
+            if kind == "screening-decision-bundle"
+            else record,
+        )
+        for kind, record in selected
+    ]
     corrections = _ordered_identity_corrections(
         [record for kind, record in entries if kind == "registry-identity-correction"]
     )

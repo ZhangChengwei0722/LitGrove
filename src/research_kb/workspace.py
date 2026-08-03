@@ -129,6 +129,12 @@ class WorkspaceLayout:
     def tag_link_bundle_path(self, tag_link_id: str) -> Path:
         return self.knowledge_root / "organization" / "tag_links" / "by_id" / f"{tag_link_id}.tag-link-bundle.json"
 
+    def screening_criteria_bundle_path(self, criteria_id: str) -> Path:
+        return self.knowledge_root / "organization" / "screening_criteria" / "by_id" / f"{criteria_id}.screening-criteria-bundle.json"
+
+    def screening_decision_bundle_path(self, decision_id: str) -> Path:
+        return self.knowledge_root / "organization" / "screening_decisions" / "by_id" / f"{decision_id}.screening-decision-bundle.json"
+
     def step7_store_path(self, record_kind: str) -> Path:
         filenames = {
             "step7-synthesis": "synthesis.jsonl",

@@ -43,6 +43,8 @@ from research_kb.services.step7_render import WorkspaceStep7ReadingViewService
 from research_kb.services.step7_view import Step7ReadingViewService
 from research_kb.services.workspace_session import WorkspaceSession, WorkspaceSessionService
 from research_kb.services.question_mapping import QuestionMappingService
+from research_kb.services.question_screening import QuestionScreeningService
+from research_kb.services.question_screening_application import QuestionScreeningApplicationService
 from research_kb.services.research_organization import ResearchOrganizationService
 from research_kb.services.research_organization_application import ResearchOrganizationApplicationService
 from research_kb.services.tag_application import TagApplicationService
@@ -100,6 +102,8 @@ __all__ = [
     "Step7ReadingViewService",
     "TransactionRecoveryService",
     "QuestionMappingService",
+    "QuestionScreeningApplicationService",
+    "QuestionScreeningService",
     "ResearchOrganizationApplicationService",
     "ResearchOrganizationService",
     "TagApplicationService",

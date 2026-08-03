@@ -46,6 +46,11 @@ class Namespace(StrEnum):
     TAG_REVISION = "tagrev"
     TAG_LINK = "taglink"
     TAG_LINK_REVISION = "taglinkrev"
+    SCREENING_CRITERIA = "screencriteria"
+    SCREENING_CRITERION = "criterion"
+    SCREENING_CRITERIA_REVISION = "criteriarev"
+    SCREENING_DECISION = "screendecision"
+    SCREENING_DECISION_REVISION = "decisionrev"
 
 
 UUID4_PATTERN = r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"

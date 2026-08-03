@@ -28,6 +28,7 @@ from research_kb.organization_bundles import (
 )
 from research_kb.process_events import Clock, timestamp, utc_now
 from research_kb.services.question_mapping import mapping_freshness_diagnostics
+from research_kb.screening_bundles import require_screening_eligible_links
 from research_kb.storage.json_io import file_sha256, read_json_document, serialize_json
 from research_kb.storage.transactions import TransactionManager, TransactionResult
 from research_kb.workspace import WorkspaceLayout
@@ -179,6 +180,11 @@ class ResearchOrganizationService:
             payload.get("factual_links", []),
             entries,
             existing_mapping=basis_mapping,
+        )
+        require_screening_eligible_links(
+            question_id,
+            (link["paper_id"] for link in factual_links),
+            entries,
         )
         background_links = self._normalize_unit_links(
             payload.get("background_links", []),

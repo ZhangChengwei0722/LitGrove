@@ -648,5 +648,5 @@ def test_catalog_services_are_public_and_capability_is_machine_readable() -> Non
     )
     assert capability["projection_storage"] == "disposable_sqlite_fts"
     assert capability["raw_parsed_text_indexed"] is False
-    assert capability["query_filters"] == ["item_kinds", "paper_id", "question_id", "tag_id"]
+    assert capability["query_filters"] == ["item_kinds", "paper_id", "question_id", "tag_id", "status_labels"]
     assert capability["unregistered_record_kinds"] == ["future-kind"]

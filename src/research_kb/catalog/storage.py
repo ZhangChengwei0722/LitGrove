@@ -319,6 +319,7 @@ class CatalogDatabase:
         paper_id: str | None = None,
         question_id: str | None = None,
         tag_id: str | None = None,
+        status_labels: tuple[str, ...] = (),
         page_size: int = DEFAULT_PAGE_SIZE,
         cursor: str | None = None,
     ) -> dict[str, Any]:
@@ -334,6 +335,9 @@ class CatalogDatabase:
             validate_id(question_id, Namespace.QUESTION)
         if tag_id is not None:
             validate_id(tag_id, Namespace.TAG)
+        normalized_statuses = tuple(sorted(set(status_labels)))
+        if len(normalized_statuses) > 20 or any(not isinstance(item, str) or not item or len(item) > 200 for item in normalized_statuses):
+            raise _cursor_error("catalog status-label filter is outside the supported bounds")
         query_key = canonical_digest(
             {
                 "query": normalized_query,
@@ -341,6 +345,7 @@ class CatalogDatabase:
                 "paper_id": paper_id,
                 "question_id": question_id,
                 "tag_id": tag_id,
+                "status_labels": normalized_statuses,
                 "order": "sort_key,item_kind,item_id",
             }
         )
@@ -373,6 +378,9 @@ class CatalogDatabase:
             if tag_id is not None:
                 sql += " AND EXISTS (SELECT 1 FROM catalog_item_tags AS tags WHERE tags.item_id = catalog_items.item_id AND tags.tag_id = ?)"
                 parameters.append(tag_id)
+            for status_label in normalized_statuses:
+                sql += " AND EXISTS (SELECT 1 FROM json_each(catalog_items.status_labels) AS labels WHERE labels.value = ?)"
+                parameters.append(status_label)
             if after is not None:
                 sql += """
                     AND (
@@ -411,6 +419,8 @@ class CatalogDatabase:
                 result["question_id"] = question_id
             if tag_id is not None:
                 result["tag_id"] = tag_id
+            if normalized_statuses:
+                result["status_labels"] = list(normalized_statuses)
             return result
         except sqlite3.DatabaseError as error:
             raise _projection_error("catalog query failed") from error

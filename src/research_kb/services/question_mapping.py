@@ -20,6 +20,7 @@ from research_kb.errors import (
 from research_kb.identifiers import Namespace, allocate_id, validate_id
 from research_kb.mutation import MutationRequest
 from research_kb.process_events import timestamp
+from research_kb.screening_bundles import require_screening_eligible_links
 from research_kb.storage.json_io import file_sha256, read_jsonl, serialize_jsonl
 from research_kb.storage.transactions import TransactionManager, TransactionResult
 from research_kb.workspace import WorkspaceLayout
@@ -92,6 +93,11 @@ class QuestionMappingService:
         diagnostics = validate_record("question-mapping", record, actor=actor)
         if diagnostics:
             raise ResearchKBError(diagnostics[0])
+        require_screening_eligible_links(
+            record["question_id"],
+            (link["paper_id"] for link in record["paper_links"]),
+            entries,
+        )
         return self._promote_store(request, entries, record, actor)
 
     def _append_record(
@@ -498,6 +504,23 @@ def mapping_freshness_diagnostics(
                 )
             )
             break
+    try:
+        require_screening_eligible_links(
+            mapping["question_id"],
+            (link["paper_id"] for link in mapping["paper_links"]),
+            entries,
+        )
+    except ResearchKBError:
+        diagnostics.append(
+            Diagnostic(
+                SNAPSHOT_MISMATCH,
+                "question-mapping",
+                mapping["question_id"],
+                "/paper_links",
+                "question mapping is stale relative to its active Question-specific screening criteria or decisions",
+                severity="warning",
+            )
+        )
     return diagnostics
 
 
