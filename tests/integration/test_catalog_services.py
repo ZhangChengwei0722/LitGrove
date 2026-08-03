@@ -304,6 +304,55 @@ def test_projection_rebuild_search_detail_stale_update_and_source_confinement(
     assert _tree_bytes(next(iter(layout.source_roots.values()))) == sources_before
 
 
+def test_projection_update_rebuilds_older_schema_with_explicit_reason(tmp_path: Path) -> None:
+    _, _, _, _, projection = _projection(tmp_path)
+    projection.rebuild()
+    connection = sqlite3.connect(projection.paths.database_path)
+    try:
+        connection.execute(
+            "UPDATE catalog_metadata SET value = '2' WHERE key = 'catalog_schema_version'"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    result = projection.update()
+
+    assert result["build_mode"] == "full"
+    assert result["reason"] == "schema_upgrade"
+    assert CatalogDatabase.inspect(projection.paths.database_path).state == "ready"
+
+
+@pytest.mark.parametrize("failure", ["workspace_mismatch", "corrupt"])
+def test_projection_update_does_not_rebuild_wrong_workspace_or_corrupt_database(
+    tmp_path: Path,
+    failure: str,
+) -> None:
+    _, _, _, _, projection = _projection(tmp_path)
+    projection.rebuild()
+    connection = sqlite3.connect(projection.paths.database_path)
+    try:
+        if failure == "workspace_mismatch":
+            connection.execute(
+                "UPDATE catalog_metadata SET value = ? WHERE key = 'workspace_id'",
+                ("workspace_b2222222-2222-4222-8222-222222222222",),
+            )
+        else:
+            connection.execute(
+                "UPDATE catalog_metadata SET value = ? WHERE key = 'facet_digest'",
+                ("0" * 64,),
+            )
+        connection.commit()
+    finally:
+        connection.close()
+    before = projection.paths.database_path.read_bytes()
+
+    with pytest.raises(ResearchKBError) as rejected:
+        projection.update()
+
+    assert rejected.value.diagnostic.code == "RKBC-036"
+    assert projection.paths.database_path.read_bytes() == before
+
 def test_projection_uses_authoritative_workspace_loader_and_validator(tmp_path: Path) -> None:
     layout = make_runtime_workspace(tmp_path)
     session = WorkspaceSessionService({"alpha": layout.config.path}).open("alpha")
@@ -599,5 +648,5 @@ def test_catalog_services_are_public_and_capability_is_machine_readable() -> Non
     )
     assert capability["projection_storage"] == "disposable_sqlite_fts"
     assert capability["raw_parsed_text_indexed"] is False
-    assert capability["query_filters"] == ["item_kinds", "paper_id", "question_id"]
+    assert capability["query_filters"] == ["item_kinds", "paper_id", "question_id", "tag_id"]
     assert capability["unregistered_record_kinds"] == ["future-kind"]

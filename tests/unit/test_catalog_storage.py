@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import sqlite3
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,8 @@ PAPER_A = "paper_a1111111-1111-4111-8111-111111111111"
 PAPER_B = "paper_b2222222-2222-4222-8222-222222222222"
 QUESTION_A = "question_a1111111-1111-4111-8111-111111111111"
 QUESTION_B = "question_b2222222-2222-4222-8222-222222222222"
+TAG_A = "tag_a1111111-1111-4111-8111-111111111111"
+TAG_B = "tag_b2222222-2222-4222-8222-222222222222"
 
 
 def _snapshot(
@@ -134,6 +137,19 @@ def _filter_snapshot() -> CatalogSnapshot:
     )
 
 
+def _tagged_filter_snapshot() -> CatalogSnapshot:
+    snapshot = _filter_snapshot()
+    documents = tuple(
+        replace(
+            document,
+            tag_ids=(TAG_A, TAG_B) if document.record_id == "paper-a" else (TAG_A,),
+            tag_names=("Alpha tag", "Beta tag") if document.record_id == "paper-a" else ("Alpha tag",),
+        )
+        for document in snapshot.documents
+    )
+    return replace(snapshot, documents=documents)
+
+
 def test_incremental_add_change_remove_matches_full_rebuild_without_fts_orphans(
     tmp_path: Path,
 ) -> None:
@@ -156,6 +172,8 @@ def test_incremental_add_change_remove_matches_full_rebuild_without_fts_orphans(
     assert [item["title"] for item in CatalogDatabase.query(incremental, query="revised")["items"]] == [
         "Alpha revised"
     ]
+    assert all(item["tags"] == [] for item in _all_items(incremental))
+    assert CatalogDatabase.detail_row(incremental, _all_items(incremental)[0]["item_id"])["tags"] == []
     with sqlite3.connect(incremental) as connection:
         assert connection.execute("SELECT COUNT(*) FROM source_records").fetchone()[0] == 2
         assert connection.execute("SELECT COUNT(*) FROM catalog_items").fetchone()[0] == 2
@@ -224,6 +242,23 @@ def test_inspection_classifies_missing_corrupt_and_incompatible(tmp_path: Path) 
             "UPDATE catalog_metadata SET value = '99.0' WHERE key = 'catalog_contract_version'"
         )
     assert CatalogDatabase.inspect(path).state == "incompatible"
+
+
+def test_inspection_detects_missing_or_tampered_tag_facets(tmp_path: Path) -> None:
+    path = tmp_path / "catalog.sqlite3"
+    CatalogDatabase.build(path, _tagged_filter_snapshot(), build_mode="full")
+    inspection = CatalogDatabase.inspect(path)
+    assert inspection.state == "ready"
+    assert inspection.metadata["facet_count"] == 5
+    assert len(inspection.metadata["facet_digest"]) == 64
+
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "DELETE FROM catalog_item_tags WHERE item_id = (SELECT item_id FROM catalog_items WHERE record_id = 'paper-a') AND tag_id = ?",
+            (TAG_B,),
+        )
+
+    assert CatalogDatabase.inspect(path).state == "corrupt"
 
 
 def test_cursor_pagination_is_complete_and_bound_to_query(tmp_path: Path) -> None:
@@ -347,3 +382,35 @@ def test_filter_ids_and_cursor_query_identity_fail_closed(tmp_path: Path) -> Non
     assert question_cursor_mismatch.value.diagnostic.code == "RKBC-037"
     assert malformed_paper.value.diagnostic.code == "RKBC-002"
     assert malformed_question.value.diagnostic.code == "RKBC-002"
+
+
+def test_tag_filter_cursor_pagination_is_complete_and_filter_bound(tmp_path: Path) -> None:
+    path = tmp_path / "catalog.sqlite3"
+    CatalogDatabase.build(path, _tagged_filter_snapshot(), build_mode="full")
+    expected = CatalogDatabase.query(path, tag_id=TAG_A, page_size=100)["items"]
+    seen: list[dict] = []
+    cursor = None
+    while True:
+        page = CatalogDatabase.query(path, tag_id=TAG_A, page_size=1, cursor=cursor)
+        seen.extend(page["items"])
+        cursor = page["next_cursor"]
+        if cursor is None:
+            break
+
+    assert seen == expected
+    assert len({item["item_id"] for item in seen}) == 4
+    first_page = CatalogDatabase.query(path, tag_id=TAG_A, page_size=1)
+    with pytest.raises(ResearchKBError) as mismatched_tag:
+        CatalogDatabase.query(path, tag_id=TAG_B, page_size=1, cursor=first_page["next_cursor"])
+    assert mismatched_tag.value.diagnostic.code == "RKBC-037"
+
+    combined = CatalogDatabase.query(
+        path,
+        query="Alpha",
+        item_kinds=("paper",),
+        paper_id=PAPER_A,
+        question_id=QUESTION_B,
+        tag_id=TAG_A,
+    )
+    assert [item["title"] for item in combined["items"]] == ["Alpha two"]
+    assert combined["tag_id"] == TAG_A

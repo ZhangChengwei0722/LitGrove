@@ -127,6 +127,8 @@ def load_workspace_entries(
         (layout.knowledge_root / "organization" / "directions" / "by_id", "*.direction-bundle.json", "direction-bundle", "direction_id"),
         (layout.knowledge_root / "organization" / "field_map" / "by_id", "*.field-map-bundle.json", "field-map-bundle", "field_map_entry_id"),
         (layout.knowledge_root / "organization" / "questions" / "by_id", "*.question-revision-bundle.json", "question-revision-bundle", "question_id"),
+        (layout.knowledge_root / "organization" / "tags" / "by_id", "*.tag-bundle.json", "tag-bundle", "tag_id"),
+        (layout.knowledge_root / "organization" / "tag_links" / "by_id", "*.tag-link-bundle.json", "tag-link-bundle", "tag_link_id"),
     ):
         if not root.exists():
             continue

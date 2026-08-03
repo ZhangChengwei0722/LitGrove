@@ -32,6 +32,8 @@ SCHEMA_FILES: dict[str, str] = {
     "field-map-entry": "field-map-entry.schema.json",
     "field-map-bundle": "field-map-bundle.schema.json",
     "question-revision-bundle": "question-revision-bundle.schema.json",
+    "tag-bundle": "tag-bundle.schema.json",
+    "tag-link-bundle": "tag-link-bundle.schema.json",
     "step7-common": "step7-common.schema.json",
     "step7-synthesis": "step7-synthesis.schema.json",
     "step7-review-angle": "step7-review-angle.schema.json",

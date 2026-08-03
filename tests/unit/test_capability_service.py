@@ -12,7 +12,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
         "core": {
             "version": "0.1.0",
             "contract_versions": ["1.0"],
-                "layout_versions": ["p7a-1"],
+                "layout_versions": ["p7c-1"],
         },
         "parse_adapters": [
             {
@@ -129,7 +129,8 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "organization_proposal_agent_tasks": True,
             "reading_application": True,
                 "reading_evidence_source_access": True,
-                "research_organization_application": True,
+                    "research_organization_application": True,
+                    "tag_application": True,
                 "embedded_agent_runtime": False,
         },
         "agent_task_registry_version": "p7b-v1",

@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import unicodedata
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from research_kb.catalog.models import (
@@ -19,6 +19,7 @@ from research_kb.primary_bundles import expand_active_primary_entries
 from research_kb.review_bundles import expand_active_review_entries
 from research_kb.organization_bundles import expand_active_organization_entries
 from research_kb.source_assets import current_source_asset_heads
+from research_kb.tag_bundles import active_tag, active_tag_link_state
 
 
 MAX_TITLE_CHARACTERS = 1_000
@@ -66,7 +67,7 @@ class CatalogAdapterRegistry:
         self,
         adapters: Iterable[CatalogRecordAdapter] | None = None,
         *,
-        registry_version: str = "1.1",
+        registry_version: str = "1.2",
         ignored_record_kinds: Iterable[str] = (),
     ):
         selected = tuple(_default_adapters() if adapters is None else adapters)
@@ -127,13 +128,15 @@ class CatalogAdapterRegistry:
         *,
         workspace_id: str,
     ) -> CatalogSnapshot:
+        materialized_entries = tuple(entries)
         selected_entries = _select_catalog_entries(
             tuple(
                 expand_active_organization_entries(
-                    expand_active_review_entries(expand_active_primary_entries(entries))
+                    expand_active_review_entries(expand_active_primary_entries(materialized_entries))
                 )
             )
         )
+        target_tags = _target_tag_facets(materialized_entries)
         source_records: list[CatalogSourceRecord] = []
         documents: list[CatalogDocument] = []
         unknown: list[tuple[str, str]] = []
@@ -169,7 +172,9 @@ class CatalogAdapterRegistry:
                     adapter.adapter_version,
                 )
             )
-            for document in adapter.project(record, workspace_id, digest):
+            for projected in adapter.project(record, workspace_id, digest):
+                tag_ids, tag_names = target_tags.get(_document_tag_target(projected), ((), ()))
+                document = replace(projected, tag_ids=tag_ids, tag_names=tag_names)
                 if document.source_key != source_key:
                     raise ValueError("catalog adapter returned a mismatched source key")
                 if document.item_id in seen_items:
@@ -247,6 +252,8 @@ def _default_adapters() -> tuple[CatalogRecordAdapter, ...]:
         _adapter("question-mapping", "question_id", _project_question, _question_detail),
         _adapter("direction", "direction_id", _project_direction, _direction_detail),
         _adapter("field-map-entry", "field_map_entry_id", _project_field_map, _field_map_detail),
+        _adapter("tag-bundle", "tag_id", _project_tag_bundle, _tag_bundle_detail),
+        _adapter("tag-link-bundle", "tag_link_id", _project_tag_link_bundle, _tag_link_bundle_detail),
         _adapter("step7-synthesis", "candidate_id", _project_step7, _step7_detail),
         _adapter("step7-review-angle", "candidate_id", _project_step7, _step7_detail),
         _adapter("step7-insight", "candidate_id", _project_step7, _step7_detail),
@@ -486,6 +493,34 @@ def _project_field_map(record: Record, workspace_id: str, digest: str) -> tuple[
             digest=digest,
         ),
     )
+
+
+def _project_tag_bundle(record: Record, workspace_id: str, digest: str) -> tuple[CatalogDocument, ...]:
+    del workspace_id
+    tag = active_tag(record)
+    if tag is None:
+        return ()
+    return (
+        _document(
+            record_kind="tag-bundle",
+            record_id=str(record["tag_id"]),
+            child_id=None,
+            item_kind="tag",
+            authority_layer="canonical",
+            paper_id=None,
+            question_id=None,
+            title=tag["name"],
+            summary=tag["description"],
+            statuses=(f"tag:{tag['status']}",),
+            search_text=_join([tag["name"], tag["description"], *tag["aliases"]]),
+            digest=digest,
+        ),
+    )
+
+
+def _project_tag_link_bundle(record: Record, workspace_id: str, digest: str) -> tuple[CatalogDocument, ...]:
+    del record, workspace_id, digest
+    return ()
 
 
 def _project_step7(record: Record, workspace_id: str, digest: str) -> tuple[CatalogDocument, ...]:
@@ -840,6 +875,26 @@ def _field_map_detail(record: Record, child_id: str | None) -> dict[str, Any]:
     }
 
 
+def _tag_bundle_detail(record: Record, child_id: str | None) -> dict[str, Any]:
+    del child_id
+    tag = active_tag(record)
+    if tag is None:
+        raise KeyError(record.get("tag_id"))
+    return {**tag, "revision_id": record["active_revision_id"]}
+
+
+def _tag_link_bundle_detail(record: Record, child_id: str | None) -> dict[str, Any]:
+    del child_id
+    return {
+        "tag_link_id": record["tag_link_id"],
+        "tag_id": record["tag_id"],
+        "target_kind": record["target_kind"],
+        "target_id": record["target_id"],
+        "state": active_tag_link_state(record),
+        "revision_id": record["active_revision_id"],
+    }
+
+
 def _step7_detail(record: Record, child_id: str | None) -> dict[str, Any]:
     return {
         key: value
@@ -1035,6 +1090,44 @@ def _select_catalog_entries(
             if value["canonical_paper_id"] != value["paper_id"] or value["library_status"] != "active"
         )
     return tuple(selected)
+
+
+def _target_tag_facets(
+    entries: tuple[tuple[str, dict[str, Any]], ...],
+) -> dict[tuple[str, str], tuple[tuple[str, ...], tuple[str, ...]]]:
+    tags = {
+        record["tag_id"]: active_tag(record)
+        for kind, record in entries
+        if kind == "tag-bundle"
+    }
+    collected: dict[tuple[str, str], dict[str, str]] = {}
+    for kind, record in entries:
+        if kind != "tag-link-bundle" or active_tag_link_state(record) != "assigned":
+            continue
+        tag = tags.get(record.get("tag_id"))
+        if tag is None or tag.get("status") != "active":
+            continue
+        key = (str(record["target_kind"]), str(record["target_id"]))
+        collected.setdefault(key, {})[str(record["tag_id"])] = str(tag["name"])
+    return {
+        key: (
+            tuple(sorted(values)),
+            tuple(values[tag_id] for tag_id in sorted(values)),
+        )
+        for key, values in collected.items()
+    }
+
+
+def _document_tag_target(document: CatalogDocument) -> tuple[str, str]:
+    if document.record_kind == "registry-paper":
+        return "paper", document.record_id
+    if document.record_kind == "direction":
+        return "direction", document.record_id
+    if document.record_kind == "field-map-entry":
+        return "field_map_entry", document.record_id
+    if document.record_kind == "question-mapping":
+        return "question", document.record_id
+    return "", ""
 
 
 def _ordered_identity_corrections(corrections: list[dict[str, Any]]) -> list[dict[str, Any]]:

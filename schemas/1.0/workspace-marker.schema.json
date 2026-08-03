@@ -9,7 +9,7 @@
     "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
     "domain_profile_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
     "domain_profile_version": {"const": "1.0"},
-    "layout_contract_version": {"enum": ["m2a-1", "m2b-1", "m3a-2a", "m3b-1", "m3c-2a", "p4b-1", "p4c-1", "p7a-1"]},
+    "layout_contract_version": {"enum": ["m2a-1", "m2b-1", "m3a-2a", "m3b-1", "m3c-2a", "p4b-1", "p4c-1", "p7a-1", "p7c-1"]},
     "config_fingerprint": {
       "type": "object",
       "additionalProperties": false,

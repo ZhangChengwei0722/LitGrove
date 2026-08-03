@@ -1187,7 +1187,7 @@ def _finding_from_diagnostic(diagnostic: Diagnostic, defined_ids: set[str]) -> d
         remediation = "Inspect the Agent Task chain, its exact input basis and correlated transaction event; do not promote staged output automatically."
     elif diagnostic.record_kind == "primary-semantic-bundle":
         remediation = "Inspect the immutable Primary revision chain and active head; repair only through a new approved revision."
-    elif diagnostic.record_kind in {"direction", "field-map-entry", "question-revision-bundle"}:
+    elif diagnostic.record_kind in {"direction", "field-map-entry", "question-revision-bundle", "tag-bundle", "tag-link-bundle"}:
         remediation = "Inspect the active organization revision and upstream Unit or Evidence closure; revise through a new approved revision without rewriting history."
     return {
         "code": diagnostic.code,
@@ -1256,6 +1256,12 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
                 for item in revision.get("background_links", []):
                     result.add(item["question_background_id"])
                     result.add(item["link"]["organization_link_id"])
+        elif kind == "tag-bundle":
+            result.add(record["tag_id"])
+            result.update(item["revision_id"] for item in record.get("revisions", []))
+        elif kind == "tag-link-bundle":
+            result.add(record["tag_link_id"])
+            result.update(item["revision_id"] for item in record.get("revisions", []))
         elif kind in fields:
             value = record.get(fields[kind])
             if isinstance(value, str):
