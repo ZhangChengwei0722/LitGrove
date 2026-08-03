@@ -127,13 +127,14 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "agent_task_staging": True,
             "knowledge_query_agent_tasks": True,
             "organization_proposal_agent_tasks": True,
+            "question_screening_agent_tasks": True,
             "reading_application": True,
                 "reading_evidence_source_access": True,
                     "research_organization_application": True,
                     "tag_application": True,
                 "embedded_agent_runtime": False,
         },
-        "agent_task_registry_version": "p7b-v1",
+        "agent_task_registry_version": "p7d-v1",
     }
 
 

@@ -5,6 +5,7 @@ from collections.abc import Iterable, Mapping
 from datetime import datetime
 from typing import Any
 
+from research_kb.agent_task_registry import REGISTRY_TASK_KINDS
 from research_kb.catalog.models import canonical_digest
 from research_kb.errors import INCOMPLETE_TRANSACTION, SCHEMA_VALIDATION_FAILED, Diagnostic, ResearchKBError
 
@@ -39,6 +40,16 @@ def validate_task_state(state: Mapping[str, Any]) -> None:
     classes = state.get("effective_content_classes")
     if isinstance(classes, list) and classes != sorted(classes):
         raise _task_error("effective content classes are not deterministically ordered", "/effective_content_classes")
+    definitions = REGISTRY_TASK_KINDS.get(str(state.get("privacy_registry_version")))
+    definition = None if definitions is None else definitions.get(str(state.get("task_kind")))
+    if definition is None:
+        raise _task_error("Task kind is unavailable in its privacy registry version", "/privacy_registry_version")
+    if state.get("result_contract") != definition.result_contract:
+        raise _task_error("Task result contract does not match its registry definition", "/result_contract")
+    class_set = set(classes) if isinstance(classes, list) else set()
+    allowed = definition.required_content_classes | definition.optional_content_classes
+    if not definition.required_content_classes.issubset(class_set) or class_set - allowed:
+        raise _task_error("Task content classes do not match its registry definition", "/effective_content_classes")
     status = str(state.get("status"))
     terminal = status in TERMINAL_STATUSES
     if state.get("terminal_receipt") is not terminal:
@@ -69,6 +80,8 @@ def validate_task_state(state: Mapping[str, Any]) -> None:
         no_job_approval = status == "approved" and state.get("task_kind") in {
             "knowledge_query_report",
             "organization_proposal",
+            "question_screening_criteria_proposal",
+            "question_screening_decision_proposal",
         }
         if status == "approved" and not no_job_approval and decision.get("applied_job_state_id") is None:
             raise _task_error("approved scientific or route decision requires an applied Job state", "/decision/applied_job_state_id")
@@ -92,6 +105,8 @@ def validate_task_state(state: Mapping[str, Any]) -> None:
                 "review_semantic_processing": "review_bundle_committed",
                 "knowledge_query_report": "report_accepted",
                 "organization_proposal": "organization_revision_committed",
+                "question_screening_criteria_proposal": "screening_revision_committed",
+                "question_screening_decision_proposal": "screening_revision_committed",
             }.get(state.get("task_kind"), "route_confirmed")
             if decision.get("reason_code") != expected_reason:
                 raise _task_error("approved decision reason does not match the Task kind", "/decision/reason_code")

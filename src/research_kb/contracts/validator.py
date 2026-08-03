@@ -78,6 +78,8 @@ RESULT_CONTRACT_KINDS = {
     "review-semantic-candidate",
     "knowledge-query-report",
     "organization-proposal",
+    "screening-criteria-proposal",
+    "screening-decision-proposal",
 }
 HUMAN_ONLY_REVIEW_STATES = {"human_checked", "verified"}
 NON_SUPPORTING_UNIT_STATES = {"interpretive", "background_only", "needs_resolution"}
@@ -1656,7 +1658,12 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
         elif kind == "agent-task-state":
             _require_ref(diagnostics, kind, record_id, "/workspace_id", record.get("workspace_id"), workspaces, "workspace")
             basis = record.get("input_basis", {})
-            if record.get("task_kind") in {"knowledge_query_report", "organization_proposal"}:
+            if record.get("task_kind") in {
+                "knowledge_query_report",
+                "organization_proposal",
+                "question_screening_criteria_proposal",
+                "question_screening_decision_proposal",
+            }:
                 for index, paper_id in enumerate(basis.get("paper_ids", [])):
                     _require_ref(
                         diagnostics,
@@ -1676,6 +1683,29 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                         snapshot.get("question_id"),
                         questions,
                         "question",
+                    )
+                if record.get("task_kind") in {
+                    "question_screening_criteria_proposal",
+                    "question_screening_decision_proposal",
+                }:
+                    _require_ref(
+                        diagnostics,
+                        kind,
+                        record_id,
+                        "/input_basis/question_id",
+                        basis.get("question_id"),
+                        questions,
+                        "question",
+                    )
+                if record.get("task_kind") == "question_screening_decision_proposal":
+                    _require_ref(
+                        diagnostics,
+                        kind,
+                        record_id,
+                        "/input_basis/paper_id",
+                        basis.get("paper_id"),
+                        papers,
+                        "paper",
                     )
             else:
                 _require_ref(diagnostics, kind, record_id, "/input_basis/paper_id", basis.get("paper_id"), papers, "paper")
@@ -1707,7 +1737,12 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                     set(adequacy_profiles),
                     "Source Adequacy profile",
                 )
-            if record.get("task_kind") not in {"knowledge_query_report", "organization_proposal"} and basis.get("origin_job_id") is not None:
+            if record.get("task_kind") not in {
+                "knowledge_query_report",
+                "organization_proposal",
+                "question_screening_criteria_proposal",
+                "question_screening_decision_proposal",
+            } and basis.get("origin_job_id") is not None:
                 _require_ref(
                     diagnostics,
                     kind,
@@ -1826,6 +1861,19 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                         binding.get("profile_id"),
                         set(adequacy_profiles),
                         "Source Adequacy profile",
+                    )
+        elif kind in {"screening-criteria-bundle", "screening-decision-bundle"}:
+            for index, revision in enumerate(record.get("revisions", [])):
+                approval = revision.get("approval", {})
+                if approval.get("origin") == "user_approved_agent_proposal":
+                    _require_ref(
+                        diagnostics,
+                        kind,
+                        record_id,
+                        f"/revisions/{index}/approval/task_id",
+                        approval.get("task_id"),
+                        agent_tasks,
+                        "Agent Task",
                     )
         elif kind == "guardian-report":
             _require_ref(diagnostics, kind, record_id, "/workspace_id", record.get("workspace_id"), workspaces, "workspace")

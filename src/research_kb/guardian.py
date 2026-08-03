@@ -704,6 +704,78 @@ class GuardianService:
                             )
                         )
                 continue
+            if task["task_kind"] in {
+                "question_screening_criteria_proposal",
+                "question_screening_decision_proposal",
+            }:
+                staged = task.get("staged_result")
+                if "job_id" in basis or "job_state_id" in basis:
+                    diagnostics.append(
+                        Diagnostic(
+                            INVALID_AUTHORITY,
+                            "agent-task-state",
+                            task["state_id"],
+                            "/input_basis",
+                            "screening proposal Task must remain independent of Pipeline Job authority",
+                        )
+                    )
+                if task["status"] == "approved":
+                    if (
+                        task["decision"].get("reason_code") != "screening_revision_committed"
+                        or task["decision"].get("applied_job_state_id") is not None
+                    ):
+                        diagnostics.append(
+                            Diagnostic(
+                                INVALID_AUTHORITY,
+                                "agent-task-state",
+                                task["state_id"],
+                                "/decision",
+                                "approved screening proposal must not claim a Pipeline Job",
+                            )
+                        )
+                    result_digest = canonical_digest(staged)
+                    bundle_kind = (
+                        "screening-criteria-bundle"
+                        if task["task_kind"] == "question_screening_criteria_proposal"
+                        else "screening-decision-bundle"
+                    )
+                    matching_revisions = [
+                        revision
+                        for kind, bundle in entries
+                        if kind == bundle_kind
+                        for revision in bundle.get("revisions", [])
+                        if revision.get("approval", {}).get("task_id") == task["task_id"]
+                        and revision.get("approval", {}).get("task_result_digest") == result_digest
+                    ]
+                    snapshot_key = (
+                        "criteria_snapshot"
+                        if task["task_kind"] == "question_screening_criteria_proposal"
+                        else "decision_snapshot"
+                    )
+                    snapshot = basis.get(snapshot_key)
+                    id_field = "criteria_id" if snapshot_key == "criteria_snapshot" else "decision_id"
+                    snapshot_revisions = [
+                        revision
+                        for kind, bundle in entries
+                        if kind == bundle_kind
+                        and snapshot is not None
+                        and bundle.get(id_field) == snapshot[id_field]
+                        for revision in bundle.get("revisions", [])
+                        if revision.get("revision_id") == snapshot["revision_id"]
+                    ]
+                    if len(matching_revisions) != 1 and not (
+                        not matching_revisions and len(snapshot_revisions) == 1
+                    ):
+                        diagnostics.append(
+                            Diagnostic(
+                                GROUNDING_MISMATCH,
+                                "agent-task-state",
+                                task["state_id"],
+                                "/decision",
+                                "approved screening proposal lacks one matching revision or no-change basis snapshot",
+                            )
+                        )
+                continue
             basis_job = job_by_state.get(basis["job_state_id"])
             if basis_job is not None and canonical_digest(basis_job) != basis["job_state_digest"]:
                 diagnostics.append(
@@ -898,6 +970,51 @@ class GuardianService:
                             bundle["paper_id"],
                             f"/revisions/{index}/input_snapshot",
                             f"{label} revision input snapshot does not match its Agent Task basis",
+                        )
+                    )
+        for kind, bundle in entries:
+            if kind not in {"screening-criteria-bundle", "screening-decision-bundle"}:
+                continue
+            expected_task_kind = (
+                "question_screening_criteria_proposal"
+                if kind == "screening-criteria-bundle"
+                else "question_screening_decision_proposal"
+            )
+            for index, revision in enumerate(bundle.get("revisions", [])):
+                approval = revision.get("approval", {})
+                if approval.get("origin") != "user_approved_agent_proposal":
+                    continue
+                task = task_heads.get(approval.get("task_id"))
+                if task is None:
+                    continue
+                if task["task_kind"] != expected_task_kind:
+                    diagnostics.append(
+                        Diagnostic(
+                            GROUNDING_MISMATCH,
+                            kind,
+                            bundle.get("criteria_id", bundle.get("decision_id")),
+                            f"/revisions/{index}/approval/task_id",
+                            "screening revision approval Task kind does not match",
+                        )
+                    )
+                if canonical_digest(task.get("staged_result")) != approval.get("task_result_digest"):
+                    diagnostics.append(
+                        Diagnostic(
+                            GROUNDING_MISMATCH,
+                            kind,
+                            bundle.get("criteria_id", bundle.get("decision_id")),
+                            f"/revisions/{index}/approval/task_result_digest",
+                            "screening revision result digest does not match its Agent Task result",
+                        )
+                    )
+                if task["status"] != "approved":
+                    diagnostics.append(
+                        Diagnostic(
+                            INCOMPLETE_TRANSACTION,
+                            kind,
+                            bundle.get("criteria_id", bundle.get("decision_id")),
+                            f"/revisions/{index}/approval/task_id",
+                            "screening revision references a non-approved Agent Task",
                         )
                     )
         return diagnostics

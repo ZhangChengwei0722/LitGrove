@@ -1,15 +1,15 @@
 # P7-D2 Screening Agent And App Implementation Plan
 
-- status: `short_review_passed_for_unattended_implementation`
+- status: `p7d2a_validation_passed_pending_remote_closure`
 - prepared_at: `2026-08-03`
 - core_baseline: `main@7bf01ea4e4b64a891590035df1c9940c7e669ab2`
 - app_baseline: `feature/p7c-tags-work-surface@ad60a79794d83026f7424e36042607c4391036a9`
 - core_branch: `feature/p7d2-screening-proposals`
 - app_branch: `feature/p7d-screening-work-surface`
-- schema_change: `additive Agent Task/result contracts only`
+- schema_change: `additive Agent Task/result contracts plus screening approval provenance variant`
 - migration: false
 - private_scientific_workspace_access: false
-- next_gate: `short_review_then_core_tests`
+- next_gate: `core_commit_push_pr_merge_then_p7d2b_app`
 
 ## 1. Goal
 
@@ -69,6 +69,18 @@ p7d-screening-decision-proposal@1.0
 Extend the versioned Agent Task registry additively to `p7d-v1`. Existing Task kinds keep
 their previous result contracts and remain compatible when a workspace opts into the new
 registry.
+
+Extend the P7-D1 screening approval object additively with a second exact variant:
+
+```text
+origin: user_approved_agent_proposal
+approved_by: user
+task_id: exact Agent Task
+task_result_digest: exact staged candidate
+```
+
+The existing direct `user_authored` receipt remains unchanged. Core must never relabel an
+Agent-derived candidate as directly user-authored.
 
 The task-kind/privacy matrix is closed:
 

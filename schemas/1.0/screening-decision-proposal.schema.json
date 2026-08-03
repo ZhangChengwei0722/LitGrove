@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:screening-decision-proposal",
+  "$defs": {
+    "disposition": {"type": "object", "additionalProperties": false, "required": ["criterion_alias", "disposition", "rationale"], "properties": {"criterion_alias": {"type": "string", "pattern": "^criterion_alias_[0-9]{3}$"}, "disposition": {"enum": ["met", "not_met", "not_applicable", "uncertain"]}, "rationale": {"type": "string", "minLength": 1, "maxLength": 2000}}}
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "task_id", "input_basis_digest", "outcome", "criterion_dispositions", "rationale", "known_limitations"],
+  "properties": {
+    "contract_version": {"const": "p7d-screening-decision-proposal@1.0"},
+    "task_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/agent_task_id"},
+    "input_basis_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "outcome": {"enum": ["included", "excluded", "uncertain"]},
+    "criterion_dispositions": {"type": "array", "minItems": 1, "maxItems": 200, "items": {"$ref": "#/$defs/disposition"}},
+    "rationale": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "known_limitations": {"type": "array", "maxItems": 50, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 1000}}
+  }
+}
