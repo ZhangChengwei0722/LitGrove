@@ -37,7 +37,7 @@ Milestone 1B implements this deterministic storage lifecycle. M3A-0A adds explic
 19. `paper status` projects deterministic stage, freshness, Guardian and transaction safety facts without scientific content or a resume decision.
 20. `question list/show` retrieves deterministic structured mappings without writing a reading view, report, event, or journal.
 21. `question render` validates one mapping and emits its complete Markdown reading view to stdout without persisting the view or changing structured state.
-22. A Step 7 `record promote` request selects grounded/revised Card Units already admitted by one current Question Mapping. Core derives exact Evidence and Unit-boundary closure before atomic promotion.
+22. A Research Synthesis `record promote` request selects grounded/revised Card Units already admitted by one current Question Mapping. Core derives exact Evidence and Unit-boundary closure before atomic promotion.
 23. `step7 context` returns only one question's complete candidates plus deterministic current/stale projections; `step7 render` emits the corresponding non-canonical Markdown reading view to stdout.
 24. `guardian check` is read-only by default. `--write-report` explicitly appends the report through the same transaction kernel.
 25. `transaction recover --dry-run` reports digest-based recovery actions without mutation; recovery writes only when dry-run is omitted.
@@ -86,9 +86,9 @@ Discovery candidate authority is separate: only exact `actor: user` may select r
 
 Structured JSON/YAML/JSONL records are inputs. Markdown views are one-way renders and cannot be used to rewrite structured facts.
 
-M2B-2 renders exactly one stdout-only Question Reading View. M3B-1 adds a separate stdout-only Step 7 Reading View grouped by candidate type. Both are built from validated structured records, label queue references as non-evidence, and create no Markdown file or view store.
+M2B-2 renders exactly one stdout-only Question Reading View. M3B-1 adds a separate stdout-only Research Synthesis Reading View grouped by candidate type. Both are built from validated structured records, label queue references as non-evidence, and create no Markdown file or view store.
 
-Evidence matrices, relations, gap maps, contradictions, persisted Question Layer Markdown, persisted Step 7 Markdown and additional derived views remain outside the implemented runtime.
+Evidence matrices, relations, gap maps, contradictions, persisted Question Layer Markdown, persisted Research Synthesis Markdown and additional derived views remain outside the implemented runtime.
 
 ## Skill-Facing Read And Handoff Boundary
 
@@ -108,20 +108,20 @@ The repo-owned `research-kb` Skill routes workspace-independent on-demand discov
 
 The Skill maintains no checkpoint. Reruns recover state through `intake inspect` or `intake inspect-acquired`, then `paper status` and `paper context`; exact existing records are reused, while stale state, ambiguous sources and uncertain near-duplicates stop. Paper-local unsupported-PDF or document-type failures may be isolated, but workspace/transaction integrity failures stop the batch.
 
-Document classification and the final report remain local to the active task. Supported high-confidence reviews use the common Review Memory route; ambiguous, mixed and unsupported types stop before mutation. Knowledge queries start from grounded/revised Paper Card Units and expand to canonical Evidence for trace-back. Discovery search and ordinary queries write nothing; explicit selection writes metadata candidates and explicit OA acquisition may add a source receipt. Explicit Step 7 maintenance and an explicitly complete intake workflow may use the deterministic Core runtime. Subtype-specific review schemas, Field Map integration, Review Unit Question Mapping, institutional/browser acquisition, OCR, migration and workspace-config generation are not implemented.
+Document classification and the final report remain local to the active task. Supported high-confidence reviews use the common Review Memory route; ambiguous, mixed and unsupported types stop before mutation. Knowledge queries start from grounded/revised Paper Card Units and expand to canonical Evidence for trace-back. Discovery search and ordinary queries write nothing; explicit selection writes metadata candidates and explicit OA acquisition may add a source receipt. Explicit Research Synthesis maintenance and an explicitly complete intake workflow may use the deterministic Core runtime. Subtype-specific review schemas, Field Map integration, Review Unit Question Mapping, institutional/browser acquisition, OCR, migration and workspace-config generation are not implemented.
 
-## Step 7 Candidate Flow
+## Research Synthesis Candidate Flow
 
 ```text
 current Question Mapping
 -> selected grounded/revised Card Units
 -> Agent semantic candidate
 -> Core-derived Evidence and Unit-boundary closure
--> append/replace in one Step 7 JSONL store
+-> append/replace in one internal `step7` JSONL store
 -> context / stdout render / Guardian
 ```
 
-Step 7 cannot create a question. The request uses `paper_id: null` and `question_origin: existing_question`; callers must not submit candidate IDs, evidence/queue closure, snapshots or status constants. Synthesis spans at least two papers. Cross-View sources are same-question, current and admissible. Upstream drift leaves a valid candidate readable as `stale_upstream`; structural corruption still blocks the bundle.
+Research Synthesis cannot create a question. The request uses `paper_id: null` and `question_origin: existing_question`; callers must not submit candidate IDs, evidence/queue closure, snapshots or status constants. Synthesis spans at least two papers. Cross-View sources are same-question, current and admissible. Upstream drift leaves a valid candidate readable as `stale_upstream`; structural corruption still blocks the bundle.
 
 The Skill owns candidate generation, duplicate judgment, scientific assessment and refresh decisions. It calls `step7 context` before mutation, writes only through `record promote`, treats exact reruns as no-change, stops on uncertain near-duplicates, and finishes with context/render/Guardian. Core remains deterministic and makes no scientific judgment.
 
@@ -136,7 +136,7 @@ current parse + supported review classification
 -> Guardian read-only
 ```
 
-Ordinary reruns reuse a current memory without writing. A stale parse requires rereading before explicit refresh. A low-value review may persist zero Units with a reason. Review-derived content remains non-evidence and receives no Field Map, Question Mapping or Step 7 identity in M3A-2A.
+Ordinary reruns reuse a current memory without writing. A stale parse requires rereading before explicit refresh. A low-value review may persist zero Units with a reason. Review-derived content remains non-evidence and receives no Field Map, Question Mapping or Research Synthesis identity in M3A-2A.
 
 ## P1 Host-Neutral Service Workflow
 
