@@ -64,6 +64,7 @@ from research_kb.organization_bundles import (
     organization_entries_diagnostics,
 )
 from research_kb.tag_bundles import tag_entries_diagnostics
+from research_kb.screening_bundles import screening_entries_diagnostics
 from research_kb.source_assets import (
     current_source_asset_heads,
     source_asset_chain_diagnostics,
@@ -193,6 +194,7 @@ def validate_bundle(
     diagnostics.extend(mixed_review_authority_diagnostics(normalized))
     diagnostics.extend(organization_entries_diagnostics(normalized))
     diagnostics.extend(tag_entries_diagnostics(normalized))
+    diagnostics.extend(screening_entries_diagnostics(normalized))
     expanded = expand_active_primary_entries(normalized)
     expanded = expand_active_review_entries(expanded)
     expanded = expand_active_organization_entries(expanded)
@@ -866,6 +868,22 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
         elif kind == "tag-link-bundle":
             defined["taglink"].append(record.get("tag_link_id", ""))
             defined["taglinkrev"].extend(
+                revision.get("revision_id", "") for revision in record.get("revisions", [])
+            )
+        elif kind == "screening-criteria-bundle":
+            defined["screencriteria"].append(record.get("criteria_id", ""))
+            defined["criteriarev"].extend(
+                revision.get("revision_id", "") for revision in record.get("revisions", [])
+            )
+            defined["criterion"].extend(sorted({
+                item.get("criterion_id", "")
+                for revision in record.get("revisions", [])
+                for field in ("inclusion_criteria", "exclusion_criteria")
+                for item in revision.get("criteria", {}).get(field, [])
+            }))
+        elif kind == "screening-decision-bundle":
+            defined["screendecision"].append(record.get("decision_id", ""))
+            defined["decisionrev"].extend(
                 revision.get("revision_id", "") for revision in record.get("revisions", [])
             )
         elif kind == "direction":
@@ -1874,6 +1892,8 @@ def _record_id(kind: str, record: dict[str, Any]) -> str | None:
         "question-revision-bundle": "question_id",
         "direction": "direction_id",
         "field-map-entry": "field_map_entry_id",
+        "screening-criteria-bundle": "criteria_id",
+        "screening-decision-bundle": "decision_id",
     }
     field = fields.get(kind)
     value = record.get(field) if field else None

@@ -30,8 +30,8 @@ from research_kb.errors import (
 from research_kb.storage.json_io import read_json_document
 
 
-PREVIOUS_LAYOUT_CONTRACT_VERSION = "p7a-1"
-CURRENT_LAYOUT_CONTRACT_VERSION = "p7c-1"
+PREVIOUS_LAYOUT_CONTRACT_VERSION = "p7c-1"
+CURRENT_LAYOUT_CONTRACT_VERSION = "p7d-1"
 LAYOUT_CONTRACT_VERSION = CURRENT_LAYOUT_CONTRACT_VERSION
 MARKER_RELATIVE_PATH = ".research-kb/workspace.json"
 M2A_1_MANAGED_DIRECTORIES = (
@@ -79,7 +79,13 @@ P7C_1_MANAGED_DIRECTORIES = P7A_1_MANAGED_DIRECTORIES + (
     "organization/tag_links",
     "organization/tag_links/by_id",
 )
-MANAGED_DIRECTORIES = P7C_1_MANAGED_DIRECTORIES
+P7D_1_MANAGED_DIRECTORIES = P7C_1_MANAGED_DIRECTORIES + (
+    "organization/screening_criteria",
+    "organization/screening_criteria/by_id",
+    "organization/screening_decisions",
+    "organization/screening_decisions/by_id",
+)
+MANAGED_DIRECTORIES = P7D_1_MANAGED_DIRECTORIES
 
 
 @dataclass(frozen=True, slots=True)
@@ -477,6 +483,8 @@ def _recognized_descendant(
         ("organization/questions/by_id/", ".question-revision-bundle.json"),
         ("organization/tags/by_id/", ".tag-bundle.json"),
         ("organization/tag_links/by_id/", ".tag-link-bundle.json"),
+        ("organization/screening_criteria/by_id/", ".screening-criteria-bundle.json"),
+        ("organization/screening_decisions/by_id/", ".screening-decision-bundle.json"),
     )
     if any(relative.startswith(prefix) and "/" not in relative[len(prefix) :] and relative.endswith(suffix) for prefix, suffix in patterns):
         return True

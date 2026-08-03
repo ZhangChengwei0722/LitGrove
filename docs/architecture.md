@@ -801,3 +801,25 @@ search documents and target facets; Tag/link changes participate in the Catalog 
 and incremental refresh. Cross-file vocabulary and assignment uniqueness are rechecked
 inside the workspace transaction lock. P7-C does not add hierarchy, inferred synonyms, automatic merge,
 automatic tagging, Screening or Research Synthesis.
+
+## P7-D1 Deterministic Question Screening
+
+Application Service interface `1.14` and layout `p7d-1` add optional Question-specific
+screening without changing Library inclusion or ordinary Paper processing. One active
+criteria bundle may govern a Question. Criteria and criterion identities are Core-owned;
+criteria revisions are append-only, user-approved and may be archived without deleting
+history.
+
+One stable decision owns each Question-Paper pair. Every final decision is user-only,
+binds the exact current criteria revision and digest, and records a disposition for every
+criterion. A criteria successor leaves the older decision intact but projects it as
+`stale_criteria`. Registry corrections and unavailable Questions or Papers likewise affect
+freshness without rewriting accepted revisions.
+
+When no active criteria exist, Question Mapping and Research Organization preserve their
+existing behavior. When active criteria exist, new factual links require a current
+`included` decision for every linked Paper; excluded, missing or stale decisions fail
+closed. Screening remains organization metadata, never Evidence or a scientific
+credibility judgment. Catalog stores only rebuildable criteria/decision search documents
+and status labels, while Guardian checks identity, revision, reference, digest, freshness
+and transaction closure. Agent proposals and the localhost App work surface remain P7-D2.

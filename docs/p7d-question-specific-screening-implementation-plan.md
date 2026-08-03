@@ -1,6 +1,6 @@
 # P7-D Question-Specific Screening Implementation Plan
 
-- status: `short_review_passed_for_unattended_implementation`
+- status: `p7d1_implementation_validated`
 - prepared_at: `2026-08-03`
 - core_baseline: `main@59d4c004a84acd7f87bc204907882b11fa590f64`
 - app_baseline: `feature/p7c-tags-work-surface@ad60a79794d83026f7424e36042607c4391036a9`
@@ -11,7 +11,7 @@
 - operational_schema_change: true
 - migration: false
 - private_scientific_workspace_access: false
-- next_gate: `tests_then_p7d1_deterministic_kernel`
+- next_gate: `p7d1_merge_closure_then_p7d2_plan`
 
 ## 1. Objective
 
@@ -271,6 +271,6 @@ P7-D does not add:
 - subtype-specific systematic-review protocols, PRISMA report generation or citation graph;
 - Discovery provider expansion, acquisition changes or institutional downloads;
 - Exchange identity/merge, Obsidian runtime, embedded Agent execution;
-- Q001/private workspace access, real PDFs, migration, cutover or cleanup.
+- private scientific workspace access, real PDFs, migration, cutover or cleanup.
 
 Research Synthesis remains P8. Citation/reference graph remains post-R2.

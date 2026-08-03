@@ -33,6 +33,7 @@ from research_kb.organization_bundles import (
 )
 from research_kb.review_memory_provenance import build_active_parse_index, review_memory_freshness
 from research_kb.services.question_mapping import mapping_freshness_diagnostics
+from research_kb.screening_bundles import decision_freshness
 from research_kb.source_assets import (
     current_source_asset_heads,
     source_asset_chain_diagnostics,
@@ -119,6 +120,19 @@ class GuardianService:
                                     "links": [item.get("link", {}) for item in revision.get("background_links", [])],
                                 },
                                 effective_entries,
+                            )
+                        )
+                elif kind == "screening-decision-bundle":
+                    freshness = decision_freshness(bundle, entries)
+                    if freshness["state"] != "current":
+                        diagnostics.append(
+                            Diagnostic(
+                                SNAPSHOT_MISMATCH,
+                                kind,
+                                bundle.get("decision_id"),
+                                "/active_revision_id",
+                                "Question-specific screening decision is not current: " + ", ".join(freshness["reasons"]),
+                                severity="warning",
                             )
                         )
         diagnostics.extend(self._canonical_path_diagnostics())
@@ -1187,7 +1201,7 @@ def _finding_from_diagnostic(diagnostic: Diagnostic, defined_ids: set[str]) -> d
         remediation = "Inspect the Agent Task chain, its exact input basis and correlated transaction event; do not promote staged output automatically."
     elif diagnostic.record_kind == "primary-semantic-bundle":
         remediation = "Inspect the immutable Primary revision chain and active head; repair only through a new approved revision."
-    elif diagnostic.record_kind in {"direction", "field-map-entry", "question-revision-bundle", "tag-bundle", "tag-link-bundle"}:
+    elif diagnostic.record_kind in {"direction", "field-map-entry", "question-revision-bundle", "tag-bundle", "tag-link-bundle", "screening-criteria-bundle", "screening-decision-bundle"}:
         remediation = "Inspect the active organization revision and upstream Unit or Evidence closure; revise through a new approved revision without rewriting history."
     return {
         "code": diagnostic.code,
@@ -1261,6 +1275,15 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
             result.update(item["revision_id"] for item in record.get("revisions", []))
         elif kind == "tag-link-bundle":
             result.add(record["tag_link_id"])
+            result.update(item["revision_id"] for item in record.get("revisions", []))
+        elif kind == "screening-criteria-bundle":
+            result.add(record["criteria_id"])
+            result.update(item["revision_id"] for item in record.get("revisions", []))
+            for revision in record.get("revisions", []):
+                for field in ("inclusion_criteria", "exclusion_criteria"):
+                    result.update(item["criterion_id"] for item in revision.get("criteria", {}).get(field, []))
+        elif kind == "screening-decision-bundle":
+            result.add(record["decision_id"])
             result.update(item["revision_id"] for item in record.get("revisions", []))
         elif kind in fields:
             value = record.get(fields[kind])

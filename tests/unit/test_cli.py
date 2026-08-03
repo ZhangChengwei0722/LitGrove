@@ -1200,13 +1200,13 @@ def test_step7_read_missing_id_has_empty_stdout(tmp_path, capsys, command) -> No
 def test_runtime_cli_reports_old_layout_as_upgrade_required(tmp_path, capsys, argv) -> None:
     layout = make_runtime_workspace(tmp_path)
     marker = json.loads(layout.marker_path.read_text(encoding="utf-8"))
-    marker["layout_contract_version"] = "p7a-1"
+    marker["layout_contract_version"] = "p7c-1"
     layout.marker_path.write_bytes(serialize_json(marker))
     for relative in (
-        "organization/tag_links/by_id",
-        "organization/tag_links",
-        "organization/tags/by_id",
-        "organization/tags",
+        "organization/screening_decisions/by_id",
+        "organization/screening_decisions",
+        "organization/screening_criteria/by_id",
+        "organization/screening_criteria",
     ):
         (layout.knowledge_root / relative).rmdir()
 
