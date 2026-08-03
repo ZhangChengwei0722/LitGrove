@@ -130,7 +130,9 @@ def main() -> int:
             or capability["features"]["knowledge_query_agent_tasks"] is not True
             or capability["features"]["organization_proposal_agent_tasks"] is not True
             or capability["features"]["question_screening_agent_tasks"] is not True
-            or capability["agent_task_registry_version"] != "p7d-v1"
+            or capability["features"]["research_synthesis_application"] is not True
+            or capability["features"]["research_synthesis_agent_tasks"] is not True
+            or capability["agent_task_registry_version"] != "p8-v1"
         ):
             raise SystemExit("base wheel capability report lacks current Agent Task staging")
         if capability["features"]["reading_evidence_source_access"] is not True:
@@ -143,9 +145,11 @@ def main() -> int:
                 "from research_kb.guardian import GuardianService; "
                 "from research_kb.discovery.europe_pmc import EuropePmcConnector, EuropePmcResolver; "
                 "from research_kb.discovery.europe_pmc_pdf import EuropePmcPdfTransport; "
-                "from research_kb.services import AcquiredCandidateIntakeService, CompatibilityAdapterRegistry, CompatibilityInspectionService, DeterministicTrunkService, DiscoveryAcquisitionService, DiscoveryAcquisitionTransportRegistry, DiscoveryCandidateService, DiscoveryConnectorRegistry, DiscoveryResolutionService, DiscoveryResolverRegistry, DiscoveryService, GuardianFindingDispositionService, IntakeInspectService, ManuscriptProjectionService, PaperContextService, ParseService, PipelineJobService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService, ReviewContextService, ReviewMemoryService, SourceAdequacyService, Step7CandidateService, Step7ContextService, Step7ReadingViewService; "
+                "from research_kb.services import AcquiredCandidateIntakeService, CompatibilityAdapterRegistry, CompatibilityInspectionService, DeterministicTrunkService, DiscoveryAcquisitionService, DiscoveryAcquisitionTransportRegistry, DiscoveryCandidateService, DiscoveryConnectorRegistry, DiscoveryResolutionService, DiscoveryResolverRegistry, DiscoveryService, GuardianFindingDispositionService, IntakeInspectService, ManuscriptProjectionService, PaperContextService, ParseService, PipelineJobService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService, ResearchSynthesisApplicationService, ReviewContextService, ReviewMemoryService, SourceAdequacyService, Step7CandidateService, Step7ContextService, Step7ReadingViewService; "
                 "registry = SchemaRegistry(); "
                 "assert registry.schema('mutation-request')['$id'].endswith('mutation-request'); "
+                "assert registry.schema('research-synthesis-proposal')['$id'].endswith('research-synthesis-proposal'); "
+                "assert ResearchSynthesisApplicationService is not None; "
                 "assert registry.schema('compatibility-difference')['$id'].endswith('compatibility-difference'); "
                 "assert registry.schema('compatibility-report')['$id'].endswith('compatibility-report'); "
                 "assert registry.schema('question-mapping')['$id'].endswith('question-mapping'); "
@@ -971,10 +975,10 @@ def main() -> int:
                     "WorkspaceSessionService, SourceAssetService, RegistryIdentityCorrectionService, "
                     "AgentTaskApplicationService, DeterministicIntakeApplicationService, ReadingApplicationService, "
                     "DeterministicTrunkService, PipelineJobService; "
-                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.15'; "
+                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.16'; "
                     f"session = WorkspaceSessionService({{'wheel': Path({str(config_path)!r})}}).open('wheel'); "
                     "limits = DeterministicIntakeApplicationService().limits(session); "
-                    "assert limits['interface_version'] == '1.15'; "
+                    "assert limits['interface_version'] == '1.16'; "
                     "assert limits['ingress_modes'] == ['upload', 'watched_inbox']; "
                     f"reading = ReadingApplicationService().show_paper(session, {paper_id!r}); "
                     "assert reading['persistent_writes'] == 0 and 'source_ref' not in str(reading); "
@@ -1076,7 +1080,7 @@ def main() -> int:
                     "assignment = tags.set_assignment(session, {'tag_id':tag['tag']['tag_id'],'target_kind':'paper','target_id':paper['paper_id'],'state':'assigned','receipt_id':'installed-wheel-tag-link'}); "
                     "assert assignment['result'] == 'committed' and tags.show_tag(session, tag['tag']['tag_id'])['assignments'][0]['target_id'] == paper['paper_id'], 'tag assignment'; "
                     "source_access = ReadingApplicationService().prepare_evidence_source(session, evidence_id); "
-                    "assert source_access.descriptor['application_service_interface_version'] == '1.15', 'source interface'; "
+                    "assert source_access.descriptor['application_service_interface_version'] == '1.16', 'source interface'; "
                     "assert source_access.descriptor['media_type'] == 'application/pdf' and source_access.descriptor['persistent_writes'] == 0, 'source descriptor'; "
                     "assert 'source_ref' not in str(source_access.descriptor) and 'fingerprint' not in str(source_access.descriptor), 'source redaction'; "
                     "opened = ReadingApplicationService().open_evidence_source(session, source_access.handle); "

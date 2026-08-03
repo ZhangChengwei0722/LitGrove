@@ -20,7 +20,7 @@ Ordinary knowledge queries are read-only. If persistence intent is ambiguous, us
 
 Manuscript projection is also read-only. It returns transient task units only and never authorizes claim extraction, evidence matching, rewriting, registration or canonical persistence. Manuscript audit is a separate explicit-criteria Agent route over that projection; it still authorizes no persistent write or rewrite.
 
-Query and Step 7 maintenance preflight is dry-run-only. A workspace action must be handled as a separate authorized intake/bootstrap task, never hidden inside a query or candidate rerun.
+Query and Research Synthesis maintenance preflight is dry-run-only. A workspace action must be handled as a separate authorized intake/bootstrap task, never hidden inside a query or candidate rerun.
 
 ## Discovery Authority
 
@@ -42,15 +42,15 @@ Canonical Evidence requires a current same-paper source, active parsed page, exa
 
 Review queue records are not evidence. Never cite them as support, count them as canonical Evidence or silently promote them.
 
-Review Memory is background-only. Review source notes, exact excerpts, Review Memory IDs and Review Unit IDs never support canonical Evidence, Question Mapping or Step 7. Keep the review route mutually exclusive from Paper Card and Evidence for the same paper.
+Review Memory is background-only. Review source notes, exact excerpts, Review Memory IDs and Review Unit IDs never support canonical Evidence or factual Question Mapping. They may enter Research Synthesis only through its labeled Review-background closure. Keep the review route mutually exclusive from Paper Card and Evidence for the same paper.
 
 Review Memory may inform a labeled ephemeral background discussion, but it cannot become primary support.
 
-Manuscript factual findings start from grounded/revised Card Units and expand to canonical Evidence. Review Memory, review queue and Step 7 cannot support a factual manuscript finding. A checked-scope miss is not a whole-field contradiction.
+Manuscript factual findings start from grounded/revised Card Units and expand to canonical Evidence. Review Memory, review queue and Research Synthesis cannot support a factual manuscript finding. A checked-scope miss is not a whole-field contradiction.
 
-## Step 7 Authority
+## Research Synthesis Authority
 
-Persist only for `explicit_step7_maintenance` or `full_workflow_step7_refresh`. Use `step7 context` before mutation and `record promote` for every append or replace. Never write Step 7 JSONL directly.
+Persist only for `explicit_step7_maintenance` or `full_workflow_step7_refresh`. Use `step7 context` before mutation and `record promote` for every append or replace. Never write Research Synthesis JSONL directly.
 
 Use only grounded/revised Card Units already selected by the current Question Mapping. Exact reruns write nothing. Replace the same candidate when its meaning/support changes, append only a materially distinct candidate and stop on an uncertain near-duplicate.
 
@@ -97,8 +97,8 @@ Stop the selected paper for:
 - an unsupported Card Unit with no valid queue representation;
 - a requested Question Mapping without user supply or approval;
 - an existing Card or grounded chain that would require automatic rewrite.
-- ambiguous Step 7 persistence intent;
-- an uncertain near-duplicate Step 7 candidate;
+- ambiguous Research Synthesis persistence intent;
+- an uncertain near-duplicate Research Synthesis candidate;
 - a Cross-View whose source candidate is stale, rejected, missing or cross-question.
 
 ## Task Outcomes

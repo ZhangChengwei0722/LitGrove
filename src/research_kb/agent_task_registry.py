@@ -6,8 +6,8 @@ from typing import Any
 from research_kb.errors import SCHEMA_VALIDATION_FAILED, Diagnostic, ResearchKBError
 
 
-PRIVACY_REGISTRY_VERSION = "p7d-v1"
-SUPPORTED_REGISTRY_VERSIONS = ("p4a-v1", "p4b-v1", "p4c-v1", "p5c-v1", "p7b-v1", "p7d-v1")
+PRIVACY_REGISTRY_VERSION = "p8-v1"
+SUPPORTED_REGISTRY_VERSIONS = ("p4a-v1", "p4b-v1", "p4c-v1", "p5c-v1", "p7b-v1", "p7d-v1", "p8-v1")
 CONTENT_CLASSES = frozenset(
     {
         "metadata",
@@ -235,6 +235,20 @@ P7D_TASK_KINDS = {
         524_288,
     ),
 }
+P8_TASK_KINDS = {
+    **P7D_TASK_KINDS,
+    "research_synthesis_drafting": TaskKindDefinition(
+        "research_synthesis_drafting",
+        frozenset({"paper_card_content", "canonical_evidence", "research_routing_context", "research_synthesis", "operational_context"}),
+        frozenset({"metadata", "review_background"}),
+        "p8-research-synthesis-proposal@1.0",
+        "available",
+        512,
+        2_097_152,
+        0,
+        1_048_576,
+    ),
+}
 REGISTRY_TASK_KINDS = {
     "p4a-v1": P4A_TASK_KINDS,
     "p4b-v1": TASK_KINDS,
@@ -242,6 +256,7 @@ REGISTRY_TASK_KINDS = {
     "p5c-v1": P5C_TASK_KINDS,
     "p7b-v1": P7B_TASK_KINDS,
     "p7d-v1": P7D_TASK_KINDS,
+    "p8-v1": P8_TASK_KINDS,
 }
 
 EXECUTORS: dict[str, ExecutorDefinition] = {

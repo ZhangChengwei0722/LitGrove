@@ -47,6 +47,7 @@ from research_kb.services.question_screening import QuestionScreeningService
 from research_kb.services.question_screening_application import QuestionScreeningApplicationService
 from research_kb.services.research_organization import ResearchOrganizationService
 from research_kb.services.research_organization_application import ResearchOrganizationApplicationService
+from research_kb.services.research_synthesis_application import ResearchSynthesisApplicationService
 from research_kb.services.tag_application import TagApplicationService
 from research_kb.services.tags import TagService
 from research_kb.services.question_view import QuestionReadingViewService
@@ -106,6 +107,7 @@ __all__ = [
     "QuestionScreeningService",
     "ResearchOrganizationApplicationService",
     "ResearchOrganizationService",
+    "ResearchSynthesisApplicationService",
     "TagApplicationService",
     "TagService",
     "QuestionReadingViewService",

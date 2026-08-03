@@ -26,6 +26,22 @@
     },
     "evidence_base": {"type": "array", "minItems": 1, "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/evidence_id"}, "uniqueItems": true},
     "review_queue_refs": {"type": "array", "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/queue_id"}, "uniqueItems": true},
+    "review_background_base": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["paper_id", "review_memory_id", "review_revision_id", "question_background_ids", "review_unit_ids"],
+        "properties": {
+          "paper_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+          "review_memory_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/review_memory_id"},
+          "review_revision_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/review_revision_id"},
+          "question_background_ids": {"type": "array", "minItems": 1, "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/question_background_id"}, "uniqueItems": true},
+          "review_unit_ids": {"type": "array", "minItems": 1, "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/review_unit_id"}, "uniqueItems": true}
+        }
+      }
+    },
     "missing_evidence": {"type": "array", "minItems": 1, "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}, "uniqueItems": true},
     "assumptions": {"type": "array", "minItems": 1, "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}, "uniqueItems": true},
     "risk": {"type": "array", "minItems": 1, "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}, "uniqueItems": true},
@@ -40,13 +56,26 @@
         "domain_profile_version": {"const": "1.0"},
         "card_unit_ids": {"type": "array", "minItems": 1, "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/unit_id"}, "uniqueItems": true},
         "evidence_ids": {"type": "array", "minItems": 1, "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/evidence_id"}, "uniqueItems": true},
-        "review_queue_ids": {"type": "array", "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/queue_id"}, "uniqueItems": true}
+        "review_queue_ids": {"type": "array", "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/queue_id"}, "uniqueItems": true},
+        "review_unit_ids": {"type": "array", "minItems": 1, "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/review_unit_id"}, "uniqueItems": true}
       }
     },
     "not_fact": {"const": true},
     "review_status": {"const": "ai_draft"},
     "automation_status": {"const": "pending"},
     "rejection_rationale": {"type": ["string", "null"]},
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approved_by", "approved_at", "origin", "task_id", "task_result_digest"],
+      "properties": {
+        "approved_by": {"const": "user"},
+        "approved_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+        "origin": {"const": "user_approved_agent_proposal"},
+        "task_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/agent_task_id"},
+        "task_result_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
     "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
     "updated_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
     "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}

@@ -1,6 +1,6 @@
-# Knowledge Query And Step 7 Workflow
+# Knowledge Query And Research Synthesis Workflow
 
-Use this workflow only with an initialized existing workspace. Knowledge queries are ephemeral by default. Step 7 persistence is a separate, explicit route.
+Use this workflow only with an initialized existing workspace. Knowledge queries are ephemeral by default. Research Synthesis persistence is a separate, explicit route. Internal `step7-*` command and store names remain compatibility identifiers.
 
 ## Contents
 
@@ -10,7 +10,7 @@ Use this workflow only with an initialized existing workspace. Knowledge queries
 4. Cross-paper comparison
 5. Claim trace-back
 6. Research directions and review gaps
-7. Persisted Step 7 maintenance
+7. Persisted Research Synthesis maintenance
 8. Candidate reconciliation
 9. Candidate type order
 10. Review and question boundaries
@@ -37,11 +37,11 @@ handoff. The latter is handled only by the App Agent Task response workflow and 
 retained by Core as bounded operational Task history after App preview and user approval;
 it still performs zero canonical scientific writes.
 
-`explicit_step7_maintenance` requires an explicit create, refresh, revise, reject or render request for one existing question.
+`explicit_step7_maintenance` requires an explicit Research Synthesis create, refresh, revise, reject or render request for one existing question.
 
-`full_workflow_step7_refresh` applies only when the active intake request explicitly asks to continue through Step 7 and Guardian after an authorized Question Mapping exists.
+`full_workflow_step7_refresh` applies only when the active intake request explicitly asks to continue through Research Synthesis and Guardian after an authorized Question Mapping exists.
 
-If persistence intent is ambiguous, use `ephemeral_query`. A supplied question for reading or mapping alone is not permission to persist Step 7.
+If persistence intent is ambiguous, use `ephemeral_query`. A supplied question for reading or mapping alone is not permission to persist Research Synthesis.
 
 ## 2. Selector And Read Plan
 
@@ -149,7 +149,7 @@ Do not allocate a candidate ID. Do not persist merely because the draft resemble
 
 New Research Question candidates also remain report-only until explicit user approval through the existing question-authority flow.
 
-## 7. Persisted Step 7 Maintenance
+## 7. Persisted Research Synthesis Maintenance
 
 Require one existing question. Execute:
 
@@ -172,7 +172,9 @@ Use only:
 research-kb record promote --workspace <config> --request - --actor agent
 ```
 
-Do not write Step 7 JSONL directly. Do not submit candidate IDs on append or submit Core-owned type, Evidence closure, queue closure, snapshots, timestamps or candidate-only status constants.
+Do not write Research Synthesis JSONL directly. Do not submit candidate IDs on append or submit Core-owned type, Evidence closure, queue closure, snapshots, timestamps or candidate-only status constants.
+
+Current, provenance-complete Review Units linked to the active Question as `question_background` may be supplied through `review_background_unit_ids`. Core derives the Review Memory/revision closure and persists it separately as `review_background_base`. Review Unit IDs must never appear in `paper_card_base` or `evidence_base`.
 
 Stale upstream state is a reassessment prompt. Reread current affected Card Units before replace. Do not refresh an unrelated current candidate.
 
@@ -205,13 +207,13 @@ Every persisted candidate retains missing evidence, assumptions, risk, testabili
 
 ## 10. Review And Question Boundaries
 
-Review Memory is background-only. It may shape an ephemeral discussion, but Review Units cannot enter Question Mapping, `paper_card_base`, `evidence_base` or persisted Step 7.
+Review Memory is background-only. It may shape an ephemeral discussion and may enter persisted Research Synthesis only through the labeled P8 Review-background closure. Review Units cannot enter factual Question Mapping, `paper_card_base` or `evidence_base`.
 
-Step 7 cannot create a question. Use an existing Question Mapping or one created from a directly supplied or explicitly approved question. Keep all generated question candidates report-only.
+Research Synthesis cannot create a question. Use an existing Question Mapping or one created from a directly supplied or explicitly approved question. Keep all generated question candidates report-only.
 
 ## 11. Failure And Reporting Rules
 
-Stop the maintenance task on workspace/layout conflict, incomplete transaction, mutation-unsafe state, unresolved mapping, structural Step 7 error or Cross-View source failure. Do not fall back to direct files.
+Stop the maintenance task on workspace/layout conflict, incomplete transaction, mutation-unsafe state, unresolved mapping, structural Research Synthesis error or Cross-View source failure. Do not fall back to direct files.
 
 For an ephemeral query, report selector, query type, Card Unit base, whether Evidence was expanded, answer, non-evidence boundaries, unresolved items and `persistent_writes: 0`.
 

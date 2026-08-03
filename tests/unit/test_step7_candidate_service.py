@@ -21,6 +21,7 @@ CORE_OWNED = {
     "type",
     "evidence_base",
     "review_queue_refs",
+    "review_background_base",
     "input_snapshot",
     "not_fact",
     "review_status",
@@ -28,6 +29,7 @@ CORE_OWNED = {
     "created_at",
     "updated_at",
     "fixture_origin",
+    "approval",
 }
 
 
@@ -128,6 +130,26 @@ def test_replace_preserves_identity_type_question_and_creation_time(tmp_path: Pa
     assert record["question_id"] == existing["question_id"]
     assert record["created_at"] == existing["created_at"]
     assert record["title"] == "Revised synthetic synthesis"
+
+
+def test_agent_cannot_attach_a_user_approval_receipt(tmp_path: Path) -> None:
+    layout, by_kind = _seed_workspace(tmp_path)
+    approval = {
+        "approved_by": "user",
+        "approved_at": "2026-08-03T00:00:00Z",
+        "origin": "user_approved_agent_proposal",
+        "task_id": "task_f0000009-0000-4000-8000-000000000009",
+        "task_result_digest": "a" * 64,
+    }
+
+    with pytest.raises(ResearchKBError) as caught:
+        Step7CandidateService(layout).promote(
+            _request("step7-insight", _payload(by_kind["step7-insight"][0])),
+            actor="agent",
+            approval=approval,
+        )
+
+    assert caught.value.diagnostic.code == "RKBC-006"
 
 
 @pytest.mark.parametrize(

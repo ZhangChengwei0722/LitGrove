@@ -14,7 +14,7 @@ Use Core CLI as the deterministic execution layer. Keep scientific reading, comp
 - Read [on-demand discovery workflow](references/discovery-workflow.md) before public metadata search.
 - Read [local intake workflow](references/local-intake-workflow.md) for intake, resume, grounding and question mapping.
 - Read [review intake workflow](references/review-intake-workflow.md) before routing or processing a review-like document.
-- Read [knowledge query and Step 7 workflow](references/knowledge-query-and-step7-workflow.md) before answering from an existing workspace or maintaining Step 7.
+- Read [knowledge query and Research Synthesis workflow](references/knowledge-query-and-step7-workflow.md) before answering from an existing workspace or maintaining Research Synthesis.
 - Read [manuscript audit workflow](references/manuscript-audit-workflow.md) before any criterion-based manuscript inspection.
 - Read [App Agent Task response workflow](references/app-agent-task-response-workflow.md) when the user provides an exact App-generated handoff manifest.
 - Read [authority and failure boundaries](references/authority-and-failure-boundaries.md) before mutation and whenever a command fails.
@@ -29,19 +29,19 @@ Classify the invocation mode before any mutation:
 - `explicit_oa_acquisition`: exact already-selected candidate IDs that the user explicitly asks to acquire through the supported Europe PMC OA route.
 - `acquired_candidate_intake`: exact acquired candidate IDs that the user explicitly asks to add to the knowledge base; use `registry_only` only when explicitly requested, otherwise resume the existing intake workflow through Guardian.
 - `ephemeral_query`: one paper, selected papers or one existing question; all answers remain in the task report only.
-- `explicit_step7_maintenance`: the user explicitly requests Step 7 create, refresh, revise, reject or render work for one existing question.
-- `full_workflow_step7_refresh`: a local-path or already-acquired intake request explicitly asks for the complete workflow through Step 7 and Guardian.
+- `explicit_step7_maintenance`: the user explicitly requests Research Synthesis create, refresh, revise, reject or render work for one existing question.
+- `full_workflow_step7_refresh`: a local-path or already-acquired intake request explicitly asks for the complete workflow through Research Synthesis and Guardian.
 - `manuscript_projection`: one exact user-supplied DOCX or PDF under a declared source root; return deterministic units and stop without semantic audit.
 - `manuscript_audit`: one exact user-supplied DOCX or PDF plus one or more explicit criteria and exact current-request knowledge selectors; return a criterion-scoped private report with zero writes.
 - `app_agent_task_response`: one exact App-generated handoff manifest for the current Codex CLI or Claude Code CLI; return one schema-conforming candidate JSON object and stop.
 
-If persistence intent is unclear, use `ephemeral_query` or intake without Step 7 persistence. Ordinary knowledge queries never persist a Question Mapping, Step 7 candidate, Markdown view, answer, cache or report.
+If persistence intent is unclear, use `ephemeral_query` or intake without Research Synthesis persistence. Ordinary knowledge queries never persist a Question Mapping, Research Synthesis candidate, Markdown view, answer, cache or report.
 
 ## Required Inputs
 
-Require an existing workspace config for intake, manuscript projection, manuscript audit, query, Step 7, approved discovery-candidate handoff, explicit OA acquisition and acquired-candidate intake. Discovery search and `app_agent_task_response` are workspace-independent.
+Require an existing workspace config for intake, manuscript projection, manuscript audit, query, Research Synthesis, approved discovery-candidate handoff, explicit OA acquisition and acquired-candidate intake. Discovery search and `app_agent_task_response` are workspace-independent.
 
-For local-path intake, require absolute PDF paths and accept bounded bibliography, a supplied document type and a supplied or explicitly approved question. For acquired-candidate intake, require exact acquired candidate IDs instead of paths. For queries, require a paper ID, ordered paper IDs, an existing question ID or an equivalent selector already resolved in the active task. For Step 7 maintenance, require one existing question ID.
+For local-path intake, require absolute PDF paths and accept bounded bibliography, a supplied document type and a supplied or explicitly approved question. For acquired-candidate intake, require exact acquired candidate IDs instead of paths. For queries, require a paper ID, ordered paper IDs, an existing question ID or an equivalent selector already resolved in the active task. For Research Synthesis maintenance, require one existing question ID.
 
 For discovery, require explicit inclusive dates, field-bound title/abstract keywords, `any` or `all`, a preprint choice and `max_results` from 1 through 15. Resolve relative dates in the Agent before CLI invocation.
 
@@ -75,16 +75,16 @@ For `acquired_candidate_intake`, require exact candidate IDs and an explicit lat
 6. Classify in task memory and choose one mutually exclusive primary or review route.
 7. Ground a question-independent primary Card or retain a background-only Review Memory.
 8. Map only a user-supplied or explicitly approved question from primary Card Units.
-9. Run Step 7 only for `full_workflow_step7_refresh`; otherwise stop after Guardian/reporting.
+9. Run Research Synthesis only for `full_workflow_step7_refresh`; otherwise stop after Guardian/reporting.
 10. Run Guardian read-only and return the route-appropriate report.
 
-## Execute Queries And Step 7
+## Execute Queries And Research Synthesis
 
 For query and maintenance modes, call capability plus `workspace init --dry-run`. Allow only `already_present` plus the planned `acquire_workspace_lock` action; the dry-run result itself remains `planned`. Never call operational `workspace init` from these modes. Stop if initialization, adoption, upgrade or repair would be required.
 
 For `ephemeral_query`, start from grounded/revised Paper Card Units returned by `paper context`. Expand to canonical Evidence for trace-back or when exact support matters. Review Memory may inform labeled background discussion but cannot become primary support. Return `persistent_writes: 0`.
 
-For persisted maintenance, call `step7 context` first, select only grounded/revised Units in the current Question Mapping, reconcile against existing candidates, and use `record promote --request - --actor agent`. Exact reruns write nothing. Replace an existing candidate when the same idea changes; append only a materially distinct candidate; stop on uncertain near-duplicates. Re-read context, optionally call `step7 render`, then run Guardian.
+For persisted maintenance, call `step7 context` first, select only grounded/revised Units in the current Question Mapping, reconcile against existing candidates, and use `record promote --request - --actor agent`. Exact reruns write nothing. Replace an existing candidate when the same idea changes; append only a materially distinct candidate; stop on uncertain near-duplicates. Current Question-linked Review Units may be supplied only as labeled `review_background_unit_ids`; they never enter `evidence_base`. Re-read context, optionally call `step7 render`, then run Guardian.
 
 ## Execute Manuscript Projection
 
@@ -96,7 +96,7 @@ Return the source fingerprint, parser identity, stable units, locators and `cove
 
 For `manuscript_audit`, follow the manuscript audit reference. Preserve the user's exact criteria and do not add default dimensions. Resolve only current-request selectors through public `question list/show` and `paper context` reads, run the same no-change preflight and `manuscript inspect`, then build only the bounded invocation-local map needed by those criteria.
 
-Start knowledge comparison from grounded/revised Card Units. Expand to canonical Evidence for exact factual support, citation checking or wording-strength judgment. Review Memory may provide labeled orientation, but Review Memory, review queue and Step 7 cannot support factual findings. Return only the criterion-scoped private report with `persistent_writes: 0`; do not persist a claim map, finding, cache, report or Markdown, and do not rewrite the manuscript.
+Start knowledge comparison from grounded/revised Card Units. Expand to canonical Evidence for exact factual support, citation checking or wording-strength judgment. Review Memory may provide labeled orientation, but Review Memory, review queue and Research Synthesis cannot support factual findings. Return only the criterion-scoped private report with `persistent_writes: 0`; do not persist a claim map, finding, cache, report or Markdown, and do not rewrite the manuscript.
 
 ## Execute App Agent Task Response
 
@@ -108,6 +108,6 @@ Do not parse workspace/domain-profile configuration or read canonical JSON/JSONL
 
 An App handoff authorizes semantic candidate generation only. It never authorizes direct persistence, lease handling, filesystem access, additional content retrieval or bypassing App preview and explicit user approval.
 
-Review Memory is background-only and cannot support canonical Evidence, Question Mapping or persisted Step 7. Review Unit Question Mapping, Field Map integration and subtype-specific review schemas are not implemented. New question candidates remain report-only until explicit approval.
+Review Memory is background-only and cannot support canonical Evidence or factual Question Mapping. P8 permits only current Question-linked Review Units as labeled Research Synthesis background. Review Unit factual mapping, Field Map integration and subtype-specific review schemas are not implemented. New question candidates remain report-only until explicit approval.
 
 Arbitrary connectors, institutional/browser acquisition, metadata refresh/deletion, OCR, figure/table interpretation, supplementary-data processing, automatic/default-rubric manuscript audit, manuscript rewriting and migration remain outside this Skill. Never infer discovery selection, acquisition or acquired-candidate intake, overwrite an existing source, or assign `human_checked`, `verified`, final screening or source-disposition authority. `discovery acquire` always stops before intake; only a separately explicit acquired-candidate task may resume downstream processing. Review queue records are boundaries, not evidence.

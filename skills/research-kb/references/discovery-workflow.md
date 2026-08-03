@@ -37,7 +37,7 @@ research-kb discovery search --provider europe-pmc --request -
 3. Accept only a successful transient interface `1.0` report.
 4. Keep the complete report in the active task and return `persistent_writes: 0` for search.
 
-Do not create a temporary request file. Do not call Registry, Parse, Paper Card, Evidence, Question Mapping or Step 7 from search.
+Do not create a temporary request file. Do not call Registry, Parse, Paper Card, Evidence, Question Mapping or Research Synthesis from search.
 
 ## Interpret The Results
 
@@ -114,7 +114,7 @@ research-kb discovery acquire --workspace <config> --candidate-id <discovery_id>
 
 4. Accept only `acquired` or `no_change`. Core re-resolves, chooses the configured destination, verifies the PDF and owns the receipt.
 5. Re-read with `discovery show`, run Guardian and report the returned portable `source_ref`, SHA-256, size and write count.
-6. Stop before `intake inspect-acquired`, Registry, Parse, Paper Card, Evidence, Question Mapping or Step 7. Those require a later, explicit invocation.
+6. Stop before `intake inspect-acquired`, Registry, Parse, Paper Card, Evidence, Question Mapping or Research Synthesis. Those require a later, explicit invocation.
 
 Never create `local_inbox`, choose a filename, pass a URL, use browser credentials, overwrite an existing target, delete a partial/final manually or reinterpret a Guardian finding.
 

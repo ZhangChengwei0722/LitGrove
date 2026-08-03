@@ -14,6 +14,7 @@ from research_kb.errors import (
     ResearchKBError,
 )
 from research_kb.identifiers import Namespace
+from research_kb.organization_bundles import organization_link_freshness
 
 
 STEP7_KIND_TO_TYPE = {
@@ -44,6 +45,7 @@ FRESHNESS_REASON_ORDER = (
     "evidence_newer",
     "boundary_expansion_changed",
     "review_queue_newer",
+    "review_background_changed",
     "domain_profile_changed",
     "source_view_newer",
     "source_view_stale",
@@ -58,6 +60,7 @@ class SupportClosure:
     paper_card_base: tuple[dict[str, Any], ...]
     evidence_base: tuple[str, ...]
     review_queue_refs: tuple[str, ...]
+    review_background_base: tuple[dict[str, Any], ...]
     input_snapshot: dict[str, Any]
     upstream_refs: tuple[str, ...]
 
@@ -67,6 +70,7 @@ def derive_support_closure(
     *,
     question_id: str,
     paper_card_base: object,
+    review_background_unit_ids: object = (),
     record_kind: str,
     record_id: str | None = None,
 ) -> SupportClosure:
@@ -86,7 +90,7 @@ def derive_support_closure(
             record_kind,
             record_id,
             "/payload/question_id",
-            "needs-resolution question mapping cannot admit Step 7 candidates",
+            "needs-resolution question mapping cannot admit Research Synthesis candidates",
         )
     if _mapping_is_stale(mapping, indexes):
         raise _error(
@@ -94,7 +98,7 @@ def derive_support_closure(
             record_kind,
             record_id,
             "/payload/question_id",
-            "stale question mapping must be refreshed before Step 7 promotion",
+            "stale question mapping must be refreshed before Research Synthesis promotion",
         )
     if not isinstance(paper_card_base, list) or not paper_card_base:
         raise _error(
@@ -158,7 +162,7 @@ def derive_support_closure(
             if owner != paper_id:
                 raise _error(STEP7_BOUNDARY, record_kind, record_id, base_path + "/card_unit_ids", "Card Unit belongs to another paper")
             if unit.get("grounding_status") not in ADMISSIBLE_UNIT_STATES:
-                raise _error(STEP7_BOUNDARY, record_kind, record_id, base_path + "/card_unit_ids", "non-factual Card Unit cannot enter Step 7 support")
+                raise _error(STEP7_BOUNDARY, record_kind, record_id, base_path + "/card_unit_ids", "non-factual Card Unit cannot enter Research Synthesis support")
             upstream_refs.add(unit_id)
             for evidence_id in unit.get("evidence_ids", []):
                 evidence = indexes.evidence.get(evidence_id)
@@ -179,7 +183,7 @@ def derive_support_closure(
         normalized.append({"paper_id": paper_id, "card_unit_ids": sorted(unit_ids)})
 
     if not evidence_ids:
-        raise _error(STEP7_BOUNDARY, record_kind, record_id, "/payload/paper_card_base", "Step 7 support requires canonical Evidence")
+        raise _error(STEP7_BOUNDARY, record_kind, record_id, "/payload/paper_card_base", "Research Synthesis support requires canonical Evidence")
     normalized.sort(key=lambda item: item["paper_id"])
     flattened_units = sorted(seen_units)
     profile = indexes.profile
@@ -188,17 +192,38 @@ def derive_support_closure(
         raise _error(UNRESOLVED_REFERENCE, record_kind, record_id, "/input_snapshot/domain_profile_version", "domain profile version is unavailable")
     evidence_base = tuple(sorted(evidence_ids))
     review_queue_refs = tuple(sorted(queue_ids))
+    review_background_base = _derive_review_background(
+        entries,
+        question_id=question_id,
+        review_unit_ids=review_background_unit_ids,
+        record_kind=record_kind,
+        record_id=record_id,
+    )
+    review_unit_ids = sorted(
+        unit_id
+        for item in review_background_base
+        for unit_id in item["review_unit_ids"]
+    )
+    for item in review_background_base:
+        upstream_refs.update(item["question_background_ids"])
+        upstream_refs.update(item["review_unit_ids"])
+        upstream_refs.add(item["review_memory_id"])
+        upstream_refs.add(item["review_revision_id"])
+    snapshot = {
+        "domain_profile_version": profile_version,
+        "card_unit_ids": flattened_units,
+        "evidence_ids": list(evidence_base),
+        "review_queue_ids": list(review_queue_refs),
+    }
+    if review_unit_ids:
+        snapshot["review_unit_ids"] = review_unit_ids
     return SupportClosure(
         question_mapping=mapping,
         paper_card_base=tuple(normalized),
         evidence_base=evidence_base,
         review_queue_refs=review_queue_refs,
-        input_snapshot={
-            "domain_profile_version": profile_version,
-            "card_unit_ids": flattened_units,
-            "evidence_ids": list(evidence_base),
-            "review_queue_ids": list(review_queue_refs),
-        },
+        review_background_base=review_background_base,
+        input_snapshot=snapshot,
         upstream_refs=tuple(sorted(upstream_refs)),
     )
 
@@ -221,13 +246,13 @@ def validate_cross_view_sources(
             raise _error(STEP7_BOUNDARY, record_kind, record_id, "/payload/source_views", "Cross-View cannot reference itself")
         source = candidates.get(source_id)
         if source is None:
-            raise _error(UNRESOLVED_REFERENCE, record_kind, record_id, "/payload/source_views", "source Step 7 candidate does not exist")
+            raise _error(UNRESOLVED_REFERENCE, record_kind, record_id, "/payload/source_views", "source Research Synthesis candidate does not exist")
         if source.get("question_id") != question_id:
-            raise _error(STEP7_BOUNDARY, record_kind, record_id, "/payload/source_views", "source Step 7 candidate belongs to another question")
+            raise _error(STEP7_BOUNDARY, record_kind, record_id, "/payload/source_views", "source Research Synthesis candidate belongs to another question")
         if source.get("candidate_status") not in ADMISSIBLE_SOURCE_STATUSES:
-            raise _error(STEP7_BOUNDARY, record_kind, record_id, "/payload/source_views", "source Step 7 candidate is not admissible")
+            raise _error(STEP7_BOUNDARY, record_kind, record_id, "/payload/source_views", "source Research Synthesis candidate is not admissible")
         if candidate_freshness(source, entries)["state"] != "current":
-            raise _error(STEP7_BOUNDARY, record_kind, record_id, "/payload/source_views", "source Step 7 candidate is stale")
+            raise _error(STEP7_BOUNDARY, record_kind, record_id, "/payload/source_views", "source Research Synthesis candidate is stale")
     return tuple(sorted(source_views))
 
 
@@ -292,6 +317,27 @@ def candidate_freshness(
         item = indexes.queues.get(queue_id)
         if item is not None and _is_after(item.get("updated_at"), updated_at):
             reasons.add("review_queue_newer")
+
+    stored_review_units = sorted(
+        unit_id
+        for item in candidate.get("review_background_base", [])
+        for unit_id in item.get("review_unit_ids", [])
+        if isinstance(unit_id, str)
+    )
+    if stored_review_units:
+        try:
+            current_review_background = _derive_review_background(
+                entries,
+                question_id=str(candidate.get("question_id", "")),
+                review_unit_ids=stored_review_units,
+                record_kind="step7-candidate",
+                record_id=candidate_id,
+            )
+        except ResearchKBError:
+            reasons.add("review_background_changed")
+        else:
+            if list(current_review_background) != candidate.get("review_background_base", []):
+                reasons.add("review_background_changed")
 
     snapshot = candidate.get("input_snapshot", {})
     profile_version = indexes.profile.get("domain_profile", {}).get("version") if indexes.profile else None
@@ -373,6 +419,86 @@ def _mapping_is_stale(mapping: dict[str, Any], indexes: _Indexes) -> bool:
             if queue is not None and _is_after(queue.get("updated_at"), mapping_time):
                 return True
     return False
+
+
+def _derive_review_background(
+    entries: list[tuple[str, dict[str, Any]]],
+    *,
+    question_id: str,
+    review_unit_ids: object,
+    record_kind: str,
+    record_id: str | None,
+) -> tuple[dict[str, Any], ...]:
+    if review_unit_ids in (None, (), []):
+        return ()
+    if (
+        not isinstance(review_unit_ids, (list, tuple))
+        or not review_unit_ids
+        or any(not isinstance(item, str) for item in review_unit_ids)
+    ):
+        raise _error(SCHEMA_VALIDATION_FAILED, record_kind, record_id, "/payload/review_background_unit_ids", "Review background selection must be a non-empty Review Unit ID array")
+    if len(review_unit_ids) != len(set(review_unit_ids)):
+        raise _error(DUPLICATE_ID, record_kind, record_id, "/payload/review_background_unit_ids", "duplicate Review Unit")
+
+    bundle = next(
+        (
+            item
+            for kind, item in entries
+            if kind == "question-revision-bundle" and item.get("question_id") == question_id
+        ),
+        None,
+    )
+    if bundle is None:
+        raise _error(STEP7_BOUNDARY, record_kind, record_id, "/payload/review_background_unit_ids", "Review background requires an active P7 Question revision")
+    revision = next(
+        (item for item in bundle.get("revisions", []) if item.get("revision_id") == bundle.get("active_revision_id")),
+        None,
+    )
+    if revision is None:
+        raise _error(UNRESOLVED_REFERENCE, record_kind, record_id, "/payload/review_background_unit_ids", "active Question revision is unavailable")
+
+    links = {
+        item.get("link", {}).get("source_unit_id"): item
+        for item in revision.get("background_links", [])
+        if item.get("link", {}).get("source_kind") == "review_unit"
+        and item.get("link", {}).get("role") == "question_background"
+    }
+    review_bundles = {
+        item.get("paper_id"): item
+        for kind, item in entries
+        if kind == "review-semantic-bundle"
+    }
+    grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for unit_id in review_unit_ids:
+        background = links.get(unit_id)
+        if background is None:
+            raise _error(STEP7_BOUNDARY, record_kind, record_id, "/payload/review_background_unit_ids", "Review Unit is outside the active Question background")
+        link = background["link"]
+        if organization_link_freshness(link, entries)["status"] != "current":
+            raise _error(STEP7_BOUNDARY, record_kind, record_id, "/payload/review_background_unit_ids", "Review background link is stale")
+        paper_id = link["paper_id"]
+        review_bundle = review_bundles.get(paper_id)
+        if review_bundle is None or review_bundle.get("active_revision_id") != link.get("source_revision_id"):
+            raise _error(STEP7_BOUNDARY, record_kind, record_id, "/payload/review_background_unit_ids", "Review Unit revision is not current")
+        key = (paper_id, link["review_memory_id"], link["source_revision_id"])
+        item = grouped.setdefault(
+            key,
+            {
+                "paper_id": paper_id,
+                "review_memory_id": link["review_memory_id"],
+                "review_revision_id": link["source_revision_id"],
+                "question_background_ids": [],
+                "review_unit_ids": [],
+            },
+        )
+        item["question_background_ids"].append(background["question_background_id"])
+        item["review_unit_ids"].append(unit_id)
+    normalized = []
+    for item in grouped.values():
+        item["question_background_ids"].sort()
+        item["review_unit_ids"].sort()
+        normalized.append(item)
+    return tuple(sorted(normalized, key=lambda item: (item["paper_id"], item["review_memory_id"])))
 
 
 def _is_after(candidate: object, baseline: object) -> bool:

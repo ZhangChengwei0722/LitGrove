@@ -1,6 +1,6 @@
 # P8 Research Synthesis Implementation Plan
 
-- status: `short_review_passed_for_unattended_implementation`
+- status: `p8a_implemented_and_validated_pending_remote_closure`
 - date: `2026-08-03`
 - core_baseline: `main@16013d5c58cf4f592129bb93f07425adf522b32d`
 - app_baseline: `feature/p7d-screening-work-surface@6efdbd54189609c75734e0c063164641c5fc77ec`
@@ -8,7 +8,7 @@
 - q001_access_authorized: false
 - private_workspace_access_authorized: false
 - migration_authorized: false
-- next_gate: `short_review_then_p8a_tests_first`
+- next_gate: `p8a_commit_push_pr_merge_then_exact_merged_wheel`
 
 ## Goal
 
@@ -36,7 +36,7 @@ existing stores.
 
 ### A1. Active Question And Support Closure
 
-1. Add characterization tests proving Step 7 consumes the active P7 Question revision and
+1. Add characterization tests proving Research Synthesis consumes the active P7 Question revision and
    becomes stale when its factual membership or revision changes.
 2. Include the active Question revision/basis in transaction race signatures. A concurrent
    Question change must reject promotion rather than commit against a superseded mapping.
@@ -46,7 +46,7 @@ existing stores.
 
 ### A2. Labeled Review Background
 
-1. Extend the existing Step 7 common contract additively with optional
+1. Extend the existing Research Synthesis common contract additively with optional
    `review_background_base` and exact Review Unit snapshot refs. Existing records without
    Review background remain valid and unchanged.
 2. A Review Unit is admissible only when it is current, retained, provenance-complete,
@@ -65,8 +65,10 @@ existing stores.
 
 1. Register `p8-v1` with available `research_synthesis_drafting`, preserving all previous
    registry versions. Required content classes are `paper_card_content`,
-   `canonical_evidence`, `research_routing_context` and `operational_context`; optional
-   classes are `review_background`, `research_synthesis` and `metadata`.
+   `canonical_evidence`, `research_routing_context`, `research_synthesis` and
+   `operational_context`; optional classes are `review_background` and `metadata`.
+   Existing candidate context is mandatory because append/replace duplicate disposition
+   cannot be decided without the bounded comparison set.
 2. Add one versioned result contract covering `synthesis`, `review_angle`, `insight` and
    `cross_view`. One Task belongs to one Question, one candidate type and one explicit
    `append | replace` maintenance intent. Replace binds one current target candidate.
@@ -151,7 +153,7 @@ existing stores.
 
 ## Boundaries
 
-- no Q001, private scientific workspace, real PDF or legacy CLI mutation;
+- no legacy scientific records, private scientific workspace, real PDF or legacy CLI mutation;
 - no schema/store rename, bulk migration, write freeze or cutover;
 - no automatic synthesis on intake, mapping, query, navigation or startup;
 - no Review Memory in canonical Evidence and no scientific credibility score;

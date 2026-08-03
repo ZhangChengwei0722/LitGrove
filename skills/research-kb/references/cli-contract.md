@@ -29,7 +29,7 @@ Use only public `research-kb` commands. Build every command result completely be
 | `research-kb question list --workspace <config>` | read | bounded question summaries | Find an explicitly selected existing question. |
 | `research-kb question show --workspace <config> --question-id <id>` | read | one Question Mapping | Inspect an existing mapping; do not edit stores directly. |
 | `research-kb question render --workspace <config> --question-id <id>` | read | disposable Markdown reading view | Use only as a non-canonical reading aid. |
-| `research-kb step7 context --workspace <config> --question-id <id>` | read | mapping, candidates and current freshness | Reconcile before any Step 7 write and recover candidate IDs. |
+| `research-kb step7 context --workspace <config> --question-id <id>` | read | mapping, candidates and current freshness | Reconcile before any Research Synthesis write and recover candidate IDs. |
 | `research-kb step7 render --workspace <config> --question-id <id>` | read | disposable Markdown candidate view | Render only after context validation; never persist the output. |
 | `research-kb guardian check --workspace <config>` | read | findings and status | Report the final deterministic integrity result. |
 | `research-kb transaction recover --workspace <config> --dry-run` | read-only preflight | recovery actions | Report possible recovery; do not apply recovery in this Skill. |
@@ -61,11 +61,11 @@ step7 render
 
 For discovery search, require `on_demand_discovery: true` and an available `europe-pmc` connector. Do not require a workspace or `pdfplumber`. For explicit candidate handoff, also require `approved_discovery_candidate_handoff: true`, an existing workspace and the `discovery list/show` reads. For one selected candidate's OA check, additionally require `legal_oa_resolution: true`. For exact user-requested acquisition, require `explicit_oa_acquisition: true`, available `pdfplumber`, `discovery show/resolve` and no-change workspace preflight.
 
-For new local primary/review intake, require `real_pdf_parse: true`, plus `pdfplumber-text-flow` with `availability: available` and a non-empty version. Existing-workspace query and Step 7 routes preserve their current parser identity and never reparse implicitly. A declared feature with a missing optional dependency is not executable.
+For new local primary/review intake, require `real_pdf_parse: true`, plus `pdfplumber-text-flow` with `availability: available` and a non-empty version. Existing-workspace query and Research Synthesis routes preserve their current parser identity and never reparse implicitly. A declared feature with a missing optional dependency is not executable.
 
 For manuscript projection, require `manuscript_projection: true` and `manuscript inspect`. DOCX projection uses the built-in OOXML reader; PDF projection additionally requires available `pdfplumber`.
 
-For query and Step 7 maintenance, use `workspace init --dry-run` only. Its successful `result` is `planned`; determine whether the workspace is already usable from `managed_actions`. Only `already_present` entries plus the planned `acquire_workspace_lock` entry are no-change preflight. Any create, marker write, adoption or upgrade action stops this route. Do not call operational init merely because the dry-run result says `planned`.
+For query and Research Synthesis maintenance, use `workspace init --dry-run` only. Its successful `result` is `planned`; determine whether the workspace is already usable from `managed_actions`. Only `already_present` entries plus the planned `acquire_workspace_lock` entry are no-change preflight. Any create, marker write, adoption or upgrade action stops this route. Do not call operational init merely because the dry-run result says `planned`.
 
 ## Read Boundaries
 
@@ -77,7 +77,7 @@ For query and Step 7 maintenance, use `workspace init --dry-run` only. Its succe
 - `review context` is the only public recovery surface for Review Memory and Review Unit IDs.
 - `question show` plus per-paper `paper context` are the structured inputs for question-scoped comparison.
 - `question render` and `step7 render` are disposable stdout Markdown, never structured input or persistent state.
-- `step7 context` is the only public recovery and freshness surface for Step 7 candidates.
+- `step7 context` is the only public recovery and freshness surface for Research Synthesis candidates.
 - `parse show` is the only public parsed-text read surface.
 - `pdfplumber-text-flow` uses a fixed content-stream profile, but it does not guarantee layout-correct reading order. Stop scientific promotion when the returned page remains interleaved, joined or otherwise ambiguous.
 - `guardian check` is read-only unless an explicit future task authorizes report persistence.
@@ -370,7 +370,7 @@ Question Mapping:
 
 Use `question_origin: user_approved_candidate` when the active user previously approved an Agent-generated candidate. Do not submit `question_link_id` or `evidence_ids`; Core derives them from the selected Card Units.
 
-### Step 7 mutation envelopes
+### Research Synthesis mutation envelopes
 
 Use these only for `explicit_step7_maintenance` or `full_workflow_step7_refresh`. All requests require an existing Question Mapping and selected `grounded` or `revised` Card Units already present in that mapping.
 

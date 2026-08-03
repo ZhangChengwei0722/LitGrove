@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from research_kb.agent_task_registry import registry_projection, resolve_effective_classes
+from research_kb.agent_task_registry import SUPPORTED_REGISTRY_VERSIONS, registry_projection, resolve_effective_classes
 from research_kb.errors import ResearchKBError
 
 
@@ -20,7 +20,9 @@ def test_registry_publishes_route_and_primary_processing_as_available() -> None:
 
     available = [item["task_kind"] for item in projection["task_kinds"] if item["runtime_status"] == "available"]
 
-    assert projection["registry_version"] == "p7d-v1"
+    assert projection["registry_version"] == "p8-v1"
+    assert "p7d-v1" in SUPPORTED_REGISTRY_VERSIONS
+    assert "p8-v1" in SUPPORTED_REGISTRY_VERSIONS
     assert available == [
         "document_route_resolution",
         "knowledge_query_report",
@@ -28,6 +30,7 @@ def test_registry_publishes_route_and_primary_processing_as_available() -> None:
         "primary_semantic_processing",
         "question_screening_criteria_proposal",
         "question_screening_decision_proposal",
+        "research_synthesis_drafting",
         "review_semantic_processing",
     ]
     assert projection["embedded_agent_runtime"] is False

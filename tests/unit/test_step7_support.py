@@ -211,3 +211,115 @@ def test_support_closure_reads_active_primary_bundle_children() -> None:
 
     assert set(closure.evidence_base) == set(candidate["evidence_base"])
     assert set(closure.review_queue_refs) == set(candidate["review_queue_refs"])
+
+
+def test_review_background_is_derived_from_current_question_and_review_revisions() -> None:
+    entries = _entries()
+    candidate = _one(entries, "step7-synthesis")
+    mapping = next(
+        record
+        for kind, record in entries
+        if kind == "question-mapping" and record["question_id"] == candidate["question_id"]
+    )
+    paper_id = mapping["paper_links"][0]["paper_id"]
+    memory_id = "reviewmem_a1111111-1111-4111-8111-111111111111"
+    review_unit_id = "reviewunit_a1111111-1111-4111-8111-111111111111"
+    review_revision_id = "reviewrev_a1111111-1111-4111-8111-111111111111"
+    question_revision_id = "questionrev_a1111111-1111-4111-8111-111111111111"
+    background_id = "qbackground_a1111111-1111-4111-8111-111111111111"
+    review_memory = {
+        "review_memory_id": memory_id,
+        "paper_id": paper_id,
+        "sections": [
+            {
+                "section_id": "taxonomy_field_structure",
+                "units": [
+                    {
+                        "review_unit_id": review_unit_id,
+                        "background_only": True,
+                        "can_enter_canonical_evidence": False,
+                        "not_fact": True,
+                        "source_notes": [{"pdf_page": 1, "section": "Synthetic background"}],
+                    }
+                ],
+            }
+        ],
+    }
+    entries.append(
+        (
+            "review-semantic-bundle",
+            {
+                "paper_id": paper_id,
+                "active_revision_id": review_revision_id,
+                "revisions": [
+                    {
+                        "revision_id": review_revision_id,
+                        "review_memory": review_memory,
+                    }
+                ],
+            },
+        )
+    )
+    link = {
+        "schema_version": "1.0",
+        "organization_link_id": "orglink_a1111111-1111-4111-8111-111111111111",
+        "source_kind": "review_unit",
+        "paper_id": paper_id,
+        "review_memory_id": memory_id,
+        "source_unit_id": review_unit_id,
+        "source_revision_id": review_revision_id,
+        "role": "question_background",
+        "rationale": "Synthetic background only.",
+        "evidence_ids": [],
+        "background_only": True,
+        "can_enter_canonical_evidence": False,
+        "not_fact": True,
+    }
+    entries.append(
+        (
+            "question-revision-bundle",
+            {
+                "question_id": candidate["question_id"],
+                "active_revision_id": question_revision_id,
+                "revisions": [
+                    {
+                        "revision_id": question_revision_id,
+                        "question_mapping": mapping,
+                        "background_links": [
+                            {"question_background_id": background_id, "link": link}
+                        ],
+                    }
+                ],
+            },
+        )
+    )
+
+    closure = derive_support_closure(
+        entries,
+        question_id=candidate["question_id"],
+        paper_card_base=candidate["paper_card_base"],
+        review_background_unit_ids=[review_unit_id],
+        record_kind="step7-synthesis",
+    )
+
+    assert closure.review_background_base == (
+        {
+            "paper_id": paper_id,
+            "review_memory_id": memory_id,
+            "review_revision_id": review_revision_id,
+            "question_background_ids": [background_id],
+            "review_unit_ids": [review_unit_id],
+        },
+    )
+    assert review_unit_id in closure.input_snapshot["review_unit_ids"]
+    assert review_unit_id not in closure.evidence_base
+
+    projected = deepcopy(candidate)
+    projected["review_background_base"] = [dict(closure.review_background_base[0])]
+    projected["input_snapshot"]["review_unit_ids"] = [review_unit_id]
+    assert candidate_freshness(projected, entries) == {"state": "current", "reasons": []}
+
+    link["source_revision_id"] = "reviewrev_a2222222-2222-4222-8222-222222222222"
+    assert candidate_freshness(projected, entries)["reasons"] == [
+        "review_background_changed"
+    ]

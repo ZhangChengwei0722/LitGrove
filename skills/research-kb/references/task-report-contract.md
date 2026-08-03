@@ -254,9 +254,9 @@ Preserve the user's original criteria and report the exact checked local scope. 
 
 This report is transient. Do not persist it, a claim map or a finding record, and do not include rewritten manuscript prose.
 
-## Step 7 Maintenance Result
+## Research Synthesis Maintenance Result
 
-For explicit or full-workflow Step 7 work, report:
+For explicit or full-workflow Research Synthesis work, report:
 
 ```yaml
 step7_maintenance:
@@ -287,8 +287,8 @@ Do not claim:
 - human review or verification;
 - final screening;
 - review-derived canonical Evidence, Field Map integration or Review Unit Question Mapping;
-- Step 7 generation during an ordinary `ephemeral_query`;
-- Step 7 persistence during `ephemeral_query`;
+- Research Synthesis generation during an ordinary `ephemeral_query`;
+- Research Synthesis persistence during `ephemeral_query`;
 - acquisition, Registry promotion or downstream intake caused merely by discovery candidate selection;
 - migration or legacy cutover;
 - unsupported figure, table, OCR or supplement interpretation;

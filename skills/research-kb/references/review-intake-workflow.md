@@ -115,4 +115,4 @@ Run Guardian read-only. A stale Review Memory is a warning and is never rebound 
 
 ## 7. Deferred Downstream Work
 
-Do not create Field Map, frontier, Question Mapping or Step 7 records from Review Units in this route. Do not turn review content into canonical Evidence, rank platforms, verify cited primary papers, search externally or acquire files. Return possible downstream ideas only in the private task report.
+Do not create Field Map, frontier, factual Question Mapping or Research Synthesis records from Review Units in this intake route. Do not turn review content into canonical Evidence, rank platforms, verify cited primary papers, search externally or acquire files. Return possible downstream ideas only in the private task report.

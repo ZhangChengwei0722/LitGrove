@@ -242,7 +242,9 @@ def test_query_and_step7_workflow_separates_read_only_and_persistent_intent() ->
     assert "If persistence intent is ambiguous, use `ephemeral_query`" in text
     assert "For query and maintenance, call `workspace init --dry-run` only" in text
     assert "Never call operational `workspace init` from these modes" in text
-    assert "Do not write Step 7 JSONL directly" in text
+    assert "Do not write Research Synthesis JSONL directly" in text
+    assert "review_background_unit_ids" in text
+    assert "must never appear in `paper_card_base` or `evidence_base`" in text
     assert "Review queue records are boundaries, not support" in text
     assert "Do not invent section labels" in text
 
@@ -365,7 +367,7 @@ def test_manuscript_audit_requires_explicit_criteria_bounded_scope_and_evidence(
     assert "exact_slice" in workflow
     assert "unit_only" in workflow
     assert "canonical Evidence IDs" in workflow
-    assert "Review Memory, review queue and Step 7" in workflow
+    assert "Review Memory, review queue and Research Synthesis" in workflow
     assert "persistent_writes: 0" in workflow
     assert "rewritten prose" in workflow
     assert "manuscript_audit:" in report
@@ -455,7 +457,7 @@ def test_review_workflow_is_actionable_and_keeps_downstream_boundaries() -> None
         "locator: null",
         "zero Units",
         "Field Map",
-        "Step 7",
+        "Research Synthesis",
     ):
         assert required in text
     assert "Do not summarize a review for completeness" in text
