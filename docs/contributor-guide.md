@@ -77,23 +77,23 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Treat synthetic golden Markdown as reviewed output: author its source records from scratch, compare bytes exactly, and update it only for an approved contract change.
 - Rendering is read-only. Do not create a view file, cache, event, journal, report, lock, or layout directory.
 
-## Step 7 Runtime Rules
+## Research Synthesis Runtime Rules
 
 - Admit only grounded/revised Card Units already selected by one current Question Mapping.
 - Treat candidate semantics as Agent-owned and IDs, type, Evidence/boundary closure, snapshots, timestamps and candidate-only status constants as Core-owned.
-- Keep review queue IDs out of `evidence_base`; Review Memory and Review Unit IDs cannot support Step 7.
+- Keep review queue IDs out of `evidence_base`; Review Memory and Review Unit IDs cannot support canonical Evidence or the factual synthesis base. Current linked Review Units may appear only in the labeled Review-background closure.
 - Distinguish explained upstream staleness from structural corruption. Guardian may warn with `RKBC-014`, but it must never refresh a candidate.
 - Revalidate relevant upstream records inside the transaction lock and keep candidate text out of journals and process events.
 - Test all four types, Cross-View same-question/current-source gates, stale readability, unrelated mutation, pre-replacement failure and exact golden Markdown for two synthetic domains.
 
-## Step 7 Skill Orchestration Rules
+## Research Synthesis Skill Orchestration Rules
 
 - Classify persistence intent before mutation. Ordinary explanations, comparisons, trace-back and research discussions must remain read-only task reports.
 - Keep query/maintenance workspace preflight dry-run-only. Treat `already_present` plus planned `acquire_workspace_lock` as no-change; do not confuse dry-run `result: planned` with a need for operational init.
 - Start semantic reasoning from grounded/revised Paper Card Units and expand to canonical Evidence for provenance or promotion.
-- Call `step7 context` before every maintenance decision and use `record promote`; never read or write Step 7 JSONL directly.
+- Call `step7 context` before every maintenance decision and use `record promote`; never read or write internal Research Synthesis JSONL directly.
 - Exact semantic reruns write nothing. Replace the same candidate, append only a materially distinct one and stop on uncertain near-duplicates.
-- Keep Review Memory as labeled ephemeral background; Review Units cannot become primary support or persisted Step 7 input.
+- Keep Review Memory out of factual support. Review Units may persist only through the current labeled Review-background closure and never enter `evidence_base`.
 - Forward-test query ephemerality by snapshotting the complete managed tree and test explicit persistence through Core plus Guardian.
 
 ## Deterministic Read And Stdin Rules
@@ -129,7 +129,7 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Require at least one explicit criterion and exact current-task question/paper selectors before `manuscript inspect`; never infer default audit dimensions or a broad corpus from topic similarity.
 - Preserve original criterion wording and report selector resolution basis, projection coverage limits and checked-corpus limits.
 - Use exact zero-based/end-exclusive unit slices only when reproduced byte-for-text; otherwise degrade to a stable unit locator with null offsets and text.
-- Start from grounded/revised Card Units and expand to canonical Evidence for exact factual support. Review Memory, review queue and Step 7 remain background or boundaries, never support.
+- Start from grounded/revised Card Units and expand to canonical Evidence for exact factual support. Review Memory, review queue and Research Synthesis remain background or boundaries, never support.
 - Keep reports transient with `persistent_writes: 0`; do not persist claim maps, findings, caches, events, journals, reports, Markdown or manuscript edits.
 - Contract-test these boundaries with invented text only. Static Skill tests verify the published route contract; they do not claim to verify scientific judgment.
 
@@ -179,7 +179,7 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Reuse the returned paper ID with existing status, Parse, primary/review and Guardian services; do not add a workflow runner or second mutation path.
 - Allow an explicit `registry_only` depth, otherwise continue ordinary knowledge-base intake through Guardian.
 - Treat provider paper type as metadata and classify from parsed document content before scientific promotion.
-- Keep Step 7 separately explicit, primary-only and scoped to an existing or approved question.
+- Keep Research Synthesis separately explicit and scoped to an existing or approved question. Factual support remains primary-only; current linked Review Units may be labeled background only.
 
 ## Pipeline Job Rules
 

@@ -1,6 +1,6 @@
 # P8 Research Synthesis Implementation Plan
 
-- status: `p8a_implemented_and_validated_pending_remote_closure`
+- status: `p8_closed`
 - date: `2026-08-03`
 - core_baseline: `main@16013d5c58cf4f592129bb93f07425adf522b32d`
 - app_baseline: `feature/p7d-screening-work-surface@6efdbd54189609c75734e0c063164641c5fc77ec`
@@ -8,7 +8,10 @@
 - q001_access_authorized: false
 - private_workspace_access_authorized: false
 - migration_authorized: false
-- next_gate: `p8a_commit_push_pr_merge_then_exact_merged_wheel`
+- core_merge_commit: `0142e6d96595796a525e0f79ebae157017c44e8d`
+- post_merge_fix_commit: `aac28d4b96842383ce8548a2f13fa1e3e70e2ab5`
+- app_closure_commit: `c215560b8bc1eed688be5237bc7d64ce9a4582dd`
+- next_gate: `bounded_p9_obsidian_generated_views_implementation_plan`
 
 ## Goal
 
