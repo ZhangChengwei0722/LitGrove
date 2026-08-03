@@ -44,6 +44,8 @@ class CatalogDocument:
     sort_key: str
     source_record_digest: str
     adapter_version: str
+    tag_ids: tuple[str, ...] = ()
+    tag_names: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

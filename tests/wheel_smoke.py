@@ -312,8 +312,8 @@ def main() -> int:
         if outputs != ["planned", "initialized", "no_change"]:
             raise SystemExit(f"unexpected workspace init results: {outputs}")
         marker = json.loads((workspace_root / "knowledge" / ".research-kb" / "workspace.json").read_text(encoding="utf-8"))
-        if marker["layout_contract_version"] != "p7a-1":
-            raise SystemExit("wheel workspace did not initialize at p7a-1")
+        if marker["layout_contract_version"] != "p7c-1":
+            raise SystemExit("wheel workspace did not initialize at p7c-1")
         if not (workspace_root / "knowledge" / "questions").is_dir():
             raise SystemExit("wheel workspace lacks questions directory")
         if (workspace_root / "knowledge" / "questions" / "mappings.jsonl").exists():
@@ -970,10 +970,10 @@ def main() -> int:
                     "WorkspaceSessionService, SourceAssetService, RegistryIdentityCorrectionService, "
                     "AgentTaskApplicationService, DeterministicIntakeApplicationService, ReadingApplicationService, "
                     "DeterministicTrunkService, PipelineJobService; "
-                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.12'; "
+                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.13'; "
                     f"session = WorkspaceSessionService({{'wheel': Path({str(config_path)!r})}}).open('wheel'); "
                     "limits = DeterministicIntakeApplicationService().limits(session); "
-                    "assert limits['interface_version'] == '1.12'; "
+                    "assert limits['interface_version'] == '1.13'; "
                     "assert limits['ingress_modes'] == ['upload', 'watched_inbox']; "
                     f"reading = ReadingApplicationService().show_paper(session, {paper_id!r}); "
                     "assert reading['persistent_writes'] == 0 and 'source_ref' not in str(reading); "
@@ -1021,7 +1021,7 @@ def main() -> int:
                 (
                     "from pathlib import Path; "
                     "from research_kb.guardian import GuardianService; "
-                    "from research_kb.services import AgentTaskApplicationService, DeterministicTrunkService, PipelineJobService, ReadingApplicationService, RegistryService, WorkspaceSessionService; "
+                    "from research_kb.services import AgentTaskApplicationService, DeterministicTrunkService, PipelineJobService, ReadingApplicationService, RegistryService, TagApplicationService, WorkspaceSessionService; "
                     "from research_kb.storage.json_io import read_json_document; "
                     f"session = WorkspaceSessionService({{'wheel': Path({str(config_path)!r})}}).open('wheel'); "
                     "layout = session._layout; "
@@ -1069,8 +1069,13 @@ def main() -> int:
                     "organization_expected = {'state_id':organization_submitted['task']['state_id'],'state_digest':organization_submitted['task']['state_digest']}; "
                     "organization_approved = tasks.approve_organization_result(session, organization['task']['task_id'], organization_expected); "
                     "assert organization_approved['task']['status'] == 'approved' and organization_approved['canonical_scientific_write'] is True, 'organization approval'; "
+                    "tags = TagApplicationService(); "
+                    "tag = tags.promote_tag(session, {'name':'Installed-wheel priority','description':'Synthetic Tag smoke.','aliases':[],'status':'active','receipt_id':'installed-wheel-tag'}); "
+                    "assert tag['result'] == 'committed' and tag['canonical_scientific_write'] is False, 'tag create'; "
+                    "assignment = tags.set_assignment(session, {'tag_id':tag['tag']['tag_id'],'target_kind':'paper','target_id':paper['paper_id'],'state':'assigned','receipt_id':'installed-wheel-tag-link'}); "
+                    "assert assignment['result'] == 'committed' and tags.show_tag(session, tag['tag']['tag_id'])['assignments'][0]['target_id'] == paper['paper_id'], 'tag assignment'; "
                     "source_access = ReadingApplicationService().prepare_evidence_source(session, evidence_id); "
-                    "assert source_access.descriptor['application_service_interface_version'] == '1.12', 'source interface'; "
+                    "assert source_access.descriptor['application_service_interface_version'] == '1.13', 'source interface'; "
                     "assert source_access.descriptor['media_type'] == 'application/pdf' and source_access.descriptor['persistent_writes'] == 0, 'source descriptor'; "
                     "assert 'source_ref' not in str(source_access.descriptor) and 'fingerprint' not in str(source_access.descriptor), 'source redaction'; "
                     "opened = ReadingApplicationService().open_evidence_source(session, source_access.handle); "

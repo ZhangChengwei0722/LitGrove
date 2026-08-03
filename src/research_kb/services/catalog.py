@@ -21,7 +21,7 @@ from research_kb.catalog.models import (
     CatalogSourceRecord,
     canonical_digest,
 )
-from research_kb.catalog.storage import CATALOG_PROJECTION_ERROR
+from research_kb.catalog.storage import CATALOG_PROJECTION_ERROR, CATALOG_SCHEMA_VERSION
 from research_kb.contracts.validator import RecordValidationSession, validate_record
 from research_kb.contracts.registry import SchemaRegistry
 from research_kb.errors import (
@@ -116,8 +116,26 @@ class CatalogProjectionService:
 
     def update(self) -> dict[str, Any]:
         _validate_existing_catalog_paths(self.paths)
-        if not self.paths.database_path.is_file():
+        inspection = CatalogDatabase.inspect(self.paths.database_path)
+        if inspection.state == "missing":
             return self.rebuild()
+        if inspection.state == "corrupt":
+            raise _projection_error("catalog projection is corrupt and cannot be updated")
+        if inspection.metadata.get("workspace_id") != self.session.workspace_id:
+            raise _projection_error("catalog projection workspace does not match the active session")
+        if inspection.state == "incompatible":
+            try:
+                stored_schema_version = int(inspection.metadata.get("catalog_schema_version", "-1"))
+            except (TypeError, ValueError):
+                stored_schema_version = -1
+            if (
+                inspection.metadata.get("catalog_contract_version") == CATALOG_CONTRACT_VERSION
+                and 0 <= stored_schema_version < CATALOG_SCHEMA_VERSION
+            ):
+                return {**self.rebuild(), "reason": "schema_upgrade"}
+            raise _projection_error("catalog projection is not compatible with update")
+        if inspection.state != "ready":
+            raise _projection_error("catalog projection is not compatible with update")
         snapshot = self._snapshot()
         registry_input = self._registry_input() if self._uses_workspace_loader else None
         _prepare_managed_root(self.paths)
@@ -309,6 +327,7 @@ class CatalogQueryService:
         item_kinds: Iterable[str] = (),
         paper_id: str | None = None,
         question_id: str | None = None,
+        tag_id: str | None = None,
         page_size: int = 20,
         cursor: str | None = None,
     ) -> dict[str, Any]:
@@ -321,6 +340,7 @@ class CatalogQueryService:
             item_kinds=tuple(item_kinds),
             paper_id=paper_id,
             question_id=question_id,
+            tag_id=tag_id,
             page_size=page_size,
             cursor=cursor,
         )
@@ -425,7 +445,7 @@ class CatalogCapabilityService:
             "projection_storage": "disposable_sqlite_fts",
             "raw_parsed_text_indexed": False,
             "max_page_size": 100,
-            "query_filters": ["item_kinds", "paper_id", "question_id"],
+            "query_filters": ["item_kinds", "paper_id", "question_id", "tag_id"],
             **self.registry.capability(record_kinds),
         }
 
@@ -464,6 +484,10 @@ def _load_exact_workspace_record(layout, row: dict[str, Any]) -> dict[str, Any] 
             row["record_id"],
         )
         return None if bundle is None else _validated_organization_child(bundle, "field-map-bundle")
+    if kind == "tag-bundle":
+        return _read_bound_json(layout.tag_bundle_path(row["record_id"]), "tag_id", row["record_id"])
+    if kind == "tag-link-bundle":
+        return _read_bound_json(layout.tag_link_bundle_path(row["record_id"]), "tag_link_id", row["record_id"])
     if kind in {
         "step7-synthesis",
         "step7-review-angle",

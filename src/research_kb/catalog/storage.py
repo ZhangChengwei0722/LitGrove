@@ -23,7 +23,7 @@ from research_kb.identifiers import Namespace, validate_id
 
 CATALOG_PROJECTION_ERROR = "RKBC-036"
 CATALOG_CURSOR_INVALID = "RKBC-037"
-CATALOG_SCHEMA_VERSION = 2
+CATALOG_SCHEMA_VERSION = 3
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
 MAX_QUERY_CHARACTERS = 500
@@ -97,6 +97,27 @@ class CatalogDatabase:
                     for key in set(old_sources) | set(new_sources)
                     if old_sources.get(key) != new_sources.get(key)
                 }
+            old_item_tags = _item_tag_index(connection)
+            new_item_tags = {
+                item.item_id: tuple(zip(item.tag_ids, item.tag_names, strict=True))
+                for item in snapshot.documents
+            }
+            changed_item_ids = {
+                item_id
+                for item_id in set(old_item_tags) | set(new_item_tags)
+                if old_item_tags.get(item_id, ()) != new_item_tags.get(item_id, ())
+            }
+            old_item_sources = {
+                row["item_id"]: row["source_key"]
+                for row in connection.execute("SELECT item_id, source_key FROM catalog_items")
+            }
+            new_item_sources = {item.item_id: item.source_key for item in snapshot.documents}
+            changed.update(
+                source_key
+                for item_id in changed_item_ids
+                for source_key in (old_item_sources.get(item_id), new_item_sources.get(item_id))
+                if source_key is not None
+            )
             removed = set(old_sources) - set(new_sources)
             documents_by_source: dict[str, list[CatalogDocument]] = {}
             for document in snapshot.documents:
@@ -159,6 +180,10 @@ class CatalogDatabase:
                 raise _projection_error("Registry store digest does not match the projected base")
             if snapshot.unknown_record_kinds:
                 raise _projection_error("Registry delta cannot carry unknown record kinds")
+            if connection.execute("SELECT 1 FROM catalog_item_tags LIMIT 1").fetchone() is not None:
+                raise _projection_error(
+                    "Registry delta cannot preserve existing Tag facets; use a full Catalog update"
+                )
 
             old_sources = {
                 row["source_key"]: (row["source_record_digest"], row["adapter_version"])
@@ -207,6 +232,7 @@ class CatalogDatabase:
                 )
                 store_digests["registry"] = registry_store_digest
                 counts = _actual_counts(connection)
+                facet_count, facet_digest = _facet_integrity(connection)
                 _write_metadata_values(
                     connection,
                     workspace_id=snapshot.workspace_id,
@@ -217,6 +243,8 @@ class CatalogDatabase:
                     item_count=counts["catalog_items"],
                     unknown_record_kinds=(),
                     source_store_digests=store_digests,
+                    facet_count=facet_count,
+                    facet_digest=facet_digest,
                 )
                 _require_counts(connection, counts)
             return {
@@ -269,11 +297,17 @@ class CatalogDatabase:
                     or int(metadata.get("catalog_schema_version", "-1")) != CATALOG_SCHEMA_VERSION
                 ):
                     return CatalogInspection("incompatible", metadata, 0)
+                facet_count, facet_digest = _facet_integrity(connection)
+                if (
+                    int(metadata["facet_count"]) != facet_count
+                    or metadata["facet_digest"] != facet_digest
+                ):
+                    return CatalogInspection("corrupt", _decode_metadata(metadata), 0)
                 count = int(connection.execute("SELECT COUNT(*) FROM catalog_items").fetchone()[0])
                 return CatalogInspection("ready", _decode_metadata(metadata), count)
             finally:
                 connection.close()
-        except (OSError, sqlite3.DatabaseError, ValueError):
+        except (KeyError, OSError, sqlite3.DatabaseError, ValueError):
             return CatalogInspection("corrupt", {}, 0)
 
     @staticmethod
@@ -284,6 +318,7 @@ class CatalogDatabase:
         item_kinds: tuple[str, ...] = (),
         paper_id: str | None = None,
         question_id: str | None = None,
+        tag_id: str | None = None,
         page_size: int = DEFAULT_PAGE_SIZE,
         cursor: str | None = None,
     ) -> dict[str, Any]:
@@ -297,12 +332,15 @@ class CatalogDatabase:
             validate_id(paper_id, Namespace.PAPER)
         if question_id is not None:
             validate_id(question_id, Namespace.QUESTION)
+        if tag_id is not None:
+            validate_id(tag_id, Namespace.TAG)
         query_key = canonical_digest(
             {
                 "query": normalized_query,
                 "item_kinds": normalized_kinds,
                 "paper_id": paper_id,
                 "question_id": question_id,
+                "tag_id": tag_id,
                 "order": "sort_key,item_kind,item_id",
             }
         )
@@ -332,6 +370,9 @@ class CatalogDatabase:
             if question_id is not None:
                 sql += " AND question_id = ?"
                 parameters.append(question_id)
+            if tag_id is not None:
+                sql += " AND EXISTS (SELECT 1 FROM catalog_item_tags AS tags WHERE tags.item_id = catalog_items.item_id AND tags.tag_id = ?)"
+                parameters.append(tag_id)
             if after is not None:
                 sql += """
                     AND (
@@ -360,7 +401,7 @@ class CatalogDatabase:
                 "query": normalized_query,
                 "item_kinds": list(normalized_kinds),
                 "page_size": page_size,
-                "items": [_row_to_item(row) for row in selected],
+                "items": [_row_to_item(row, connection=connection) for row in selected],
                 "next_cursor": next_cursor,
                 "has_more": has_more,
             }
@@ -368,6 +409,8 @@ class CatalogDatabase:
                 result["paper_id"] = paper_id
             if question_id is not None:
                 result["question_id"] = question_id
+            if tag_id is not None:
+                result["tag_id"] = tag_id
             return result
         except sqlite3.DatabaseError as error:
             raise _projection_error("catalog query failed") from error
@@ -406,7 +449,7 @@ class CatalogDatabase:
                     "byte_length": row["byte_length"],
                 }
             return {
-                "item": _row_to_item(row, include_source=True),
+                "item": _row_to_item(row, include_source=True, connection=connection),
                 "locator": locator,
             }
         finally:
@@ -429,7 +472,7 @@ def _connect(path: Path, *, read_only: bool = False) -> sqlite3.Connection:
 def _create_schema(connection: sqlite3.Connection) -> None:
     connection.executescript(
         """
-        PRAGMA user_version = 2;
+        PRAGMA user_version = 3;
         CREATE TABLE catalog_metadata (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
@@ -467,6 +510,13 @@ def _create_schema(connection: sqlite3.Connection) -> None:
         CREATE INDEX catalog_items_source ON catalog_items(source_key);
         CREATE INDEX catalog_items_paper ON catalog_items(paper_id);
         CREATE INDEX catalog_items_question ON catalog_items(question_id);
+        CREATE TABLE catalog_item_tags (
+            item_id TEXT NOT NULL REFERENCES catalog_items(item_id) ON DELETE CASCADE,
+            tag_id TEXT NOT NULL,
+            tag_name TEXT NOT NULL,
+            PRIMARY KEY (item_id, tag_id)
+        );
+        CREATE INDEX catalog_item_tags_tag ON catalog_item_tags(tag_id, item_id);
         CREATE VIRTUAL TABLE catalog_fts USING fts5(
             item_id UNINDEXED,
             title,
@@ -559,6 +609,14 @@ def _insert_documents(
         (_document_row(document) for document in documents),
     )
     connection.executemany(
+        "INSERT INTO catalog_item_tags(item_id, tag_id, tag_name) VALUES (?, ?, ?)",
+        (
+            (document.item_id, tag_id, tag_name)
+            for document in documents
+            for tag_id, tag_name in zip(document.tag_ids, document.tag_names, strict=True)
+        ),
+    )
+    connection.executemany(
         "INSERT INTO catalog_fts(item_id, title, summary, search_text) VALUES (?, ?, ?, ?)",
         (
             (document.item_id, document.title, document.summary, document.search_text)
@@ -633,6 +691,7 @@ def _write_metadata(
     build_mode: str,
     source_store_digests: Mapping[str, str],
 ) -> None:
+    facet_count, facet_digest = _snapshot_facet_integrity(snapshot)
     _write_metadata_values(
         connection,
         workspace_id=snapshot.workspace_id,
@@ -643,6 +702,8 @@ def _write_metadata(
         item_count=len(snapshot.documents),
         unknown_record_kinds=snapshot.unknown_record_kinds,
         source_store_digests=source_store_digests,
+        facet_count=facet_count,
+        facet_digest=facet_digest,
     )
 
 
@@ -657,6 +718,8 @@ def _write_metadata_values(
     item_count: int,
     unknown_record_kinds: tuple[str, ...],
     source_store_digests: Mapping[str, str],
+    facet_count: int,
+    facet_digest: str,
 ) -> None:
     values = {
         "catalog_contract_version": CATALOG_CONTRACT_VERSION,
@@ -671,6 +734,8 @@ def _write_metadata_values(
         "source_store_digests": json.dumps(
             dict(sorted(source_store_digests.items())), separators=(",", ":")
         ),
+        "facet_count": str(facet_count),
+        "facet_digest": facet_digest,
     }
     connection.execute("DELETE FROM catalog_metadata")
     connection.executemany(
@@ -695,9 +760,12 @@ def _require_snapshot_counts(
         "source_records": len(snapshot.source_records),
         "catalog_items": len(snapshot.documents),
         "catalog_fts": len(snapshot.documents),
+        "catalog_item_tags": sum(len(document.tag_ids) for document in snapshot.documents),
     }
     if actual != expected:
         raise _projection_error("catalog projection integrity does not match its source snapshot")
+    if _facet_integrity(connection) != _snapshot_facet_integrity(snapshot):
+        raise _projection_error("catalog Tag facet integrity does not match its source snapshot")
     _require_counts(connection, actual)
 
 
@@ -708,6 +776,9 @@ def _actual_counts(connection: sqlite3.Connection) -> dict[str, int]:
         ),
         "catalog_items": int(connection.execute("SELECT COUNT(*) FROM catalog_items").fetchone()[0]),
         "catalog_fts": int(connection.execute("SELECT COUNT(*) FROM catalog_fts").fetchone()[0]),
+        "catalog_item_tags": int(
+            connection.execute("SELECT COUNT(*) FROM catalog_item_tags").fetchone()[0]
+        ),
     }
 
 
@@ -756,7 +827,7 @@ def _decode_store_digests(metadata: Mapping[str, str]) -> dict[str, str]:
 
 def _decode_metadata(metadata: dict[str, str]) -> dict[str, Any]:
     result: dict[str, Any] = dict(metadata)
-    for key in ("catalog_schema_version", "source_record_count", "item_count"):
+    for key in ("catalog_schema_version", "source_record_count", "item_count", "facet_count"):
         if key in result:
             result[key] = int(result[key])
     if "unknown_record_kinds" in result:
@@ -766,7 +837,12 @@ def _decode_metadata(metadata: dict[str, str]) -> dict[str, Any]:
     return result
 
 
-def _row_to_item(row: sqlite3.Row, *, include_source: bool = False) -> dict[str, Any]:
+def _row_to_item(
+    row: sqlite3.Row,
+    *,
+    include_source: bool = False,
+    connection: sqlite3.Connection | None = None,
+) -> dict[str, Any]:
     keys = (
         "item_id",
         "item_kind",
@@ -783,9 +859,44 @@ def _row_to_item(row: sqlite3.Row, *, include_source: bool = False) -> dict[str,
     )
     value = {key: row[key] for key in keys}
     value["status_labels"] = json.loads(row["status_labels"])
+    tags = []
+    if connection is not None:
+        tags = connection.execute(
+            "SELECT tag_id, tag_name FROM catalog_item_tags WHERE item_id = ? ORDER BY tag_id",
+            (row["item_id"],),
+        ).fetchall()
+    value["tags"] = [{"tag_id": item["tag_id"], "name": item["tag_name"]} for item in tags]
     if include_source:
         value["source_key"] = row["source_key"]
     return value
+
+
+def _item_tag_index(connection: sqlite3.Connection) -> dict[str, tuple[tuple[str, str], ...]]:
+    grouped: dict[str, list[tuple[str, str]]] = {}
+    for row in connection.execute(
+        "SELECT item_id, tag_id, tag_name FROM catalog_item_tags ORDER BY item_id, tag_id"
+    ):
+        grouped.setdefault(row["item_id"], []).append((row["tag_id"], row["tag_name"]))
+    return {item_id: tuple(tags) for item_id, tags in grouped.items()}
+
+
+def _facet_integrity(connection: sqlite3.Connection) -> tuple[int, str]:
+    rows = [
+        [row["item_id"], row["tag_id"], row["tag_name"]]
+        for row in connection.execute(
+            "SELECT item_id, tag_id, tag_name FROM catalog_item_tags ORDER BY item_id, tag_id"
+        )
+    ]
+    return len(rows), canonical_digest(rows)
+
+
+def _snapshot_facet_integrity(snapshot: CatalogSnapshot) -> tuple[int, str]:
+    rows = sorted(
+        [document.item_id, tag_id, tag_name]
+        for document in snapshot.documents
+        for tag_id, tag_name in zip(document.tag_ids, document.tag_names, strict=True)
+    )
+    return len(rows), canonical_digest(rows)
 
 
 def _fts_query(query: str) -> str:

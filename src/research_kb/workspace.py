@@ -123,6 +123,12 @@ class WorkspaceLayout:
     def question_revision_bundle_path(self, question_id: str) -> Path:
         return self.knowledge_root / "organization" / "questions" / "by_id" / f"{question_id}.question-revision-bundle.json"
 
+    def tag_bundle_path(self, tag_id: str) -> Path:
+        return self.knowledge_root / "organization" / "tags" / "by_id" / f"{tag_id}.tag-bundle.json"
+
+    def tag_link_bundle_path(self, tag_link_id: str) -> Path:
+        return self.knowledge_root / "organization" / "tag_links" / "by_id" / f"{tag_link_id}.tag-link-bundle.json"
+
     def step7_store_path(self, record_kind: str) -> Path:
         filenames = {
             "step7-synthesis": "synthesis.jsonl",

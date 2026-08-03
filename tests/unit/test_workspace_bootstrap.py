@@ -78,19 +78,18 @@ def _write_workspace(
     return path
 
 
-def _downgrade_marker_to_p4c_1(config_path: Path, *, keep_organization_directories: bool = False) -> bytes:
+def _downgrade_marker_to_p7a_1(config_path: Path, *, keep_tag_directories: bool = False) -> bytes:
     knowledge_root = config_path.parent / "knowledge"
     marker_path = knowledge_root / ".research-kb" / "workspace.json"
     marker = read_json_document(marker_path, record_kind="workspace-marker")
-    marker["layout_contract_version"] = "p4c-1"
+    marker["layout_contract_version"] = "p7a-1"
     marker_bytes = serialize_json(marker)
     atomic_write_bytes(marker_path, marker_bytes, "test-downgrade-marker")
     organization_root = knowledge_root / "organization"
-    if not keep_organization_directories:
-        for relative in ("directions/by_id", "field_map/by_id", "questions/by_id"):
+    if not keep_tag_directories:
+        for relative in ("tags/by_id", "tag_links/by_id"):
             (organization_root / relative).rmdir()
             (organization_root / Path(relative).parent).rmdir()
-        organization_root.rmdir()
     return marker_bytes
 
 
@@ -109,13 +108,13 @@ def test_workspace_marker_schema_and_serialization_are_deterministic(tmp_path: P
         "config_fingerprint",
     }
     assert str(tmp_path) not in serialize_json(marker).decode("utf-8")
-    assert marker["layout_contract_version"] == "p7a-1"
+    assert marker["layout_contract_version"] == "p7c-1"
 
 
 def test_old_layout_dry_run_plans_upgrade_without_mutation(tmp_path: Path) -> None:
     config_path = _write_workspace(tmp_path / "workspace")
     assert WorkspaceBootstrapService(config_path).run().result == "initialized"
-    marker_before = _downgrade_marker_to_p4c_1(config_path)
+    marker_before = _downgrade_marker_to_p7a_1(config_path)
     knowledge_root = config_path.parent / "knowledge"
     tree_before = {
         path.relative_to(knowledge_root).as_posix(): path.read_bytes()
@@ -128,13 +127,12 @@ def test_old_layout_dry_run_plans_upgrade_without_mutation(tmp_path: Path) -> No
     assert result.result == "planned"
     assert result.exit_code == 0
     assert {tuple(item.values()) for item in result.managed_actions} >= {
-        ("organization", "create_directory"),
-        ("organization/directions/by_id", "create_directory"),
-        ("organization/field_map/by_id", "create_directory"),
-        ("organization/questions/by_id", "create_directory"),
+        ("organization/tags/by_id", "create_directory"),
+        ("organization/tag_links/by_id", "create_directory"),
         (".research-kb/workspace.json", "upgrade_identity_marker"),
     }
-    assert not (knowledge_root / "organization").exists()
+    assert (knowledge_root / "organization" / "directions" / "by_id").is_dir()
+    assert not (knowledge_root / "organization" / "tags").exists()
     assert (knowledge_root / "primary_bundles" / "by_paper").is_dir()
     assert (knowledge_root / "review_memories" / "by_paper").is_dir()
     assert (knowledge_root / ".research-kb" / "workspace.json").read_bytes() == marker_before
@@ -148,7 +146,7 @@ def test_old_layout_dry_run_plans_upgrade_without_mutation(tmp_path: Path) -> No
 def test_old_layout_dry_run_rejects_invalid_structured_state(tmp_path: Path) -> None:
     config_path = _write_workspace(tmp_path / "workspace")
     assert WorkspaceBootstrapService(config_path).run().result == "initialized"
-    marker_before = _downgrade_marker_to_p4c_1(config_path)
+    marker_before = _downgrade_marker_to_p7a_1(config_path)
     knowledge_root = config_path.parent / "knowledge"
     (knowledge_root / "registry" / "papers.jsonl").write_bytes(b"{}")
 
@@ -158,13 +156,13 @@ def test_old_layout_dry_run_rejects_invalid_structured_state(tmp_path: Path) -> 
     assert result.exit_code == 4
     assert "RKBC-015" in {item.code for item in result.diagnostics}
     assert (knowledge_root / ".research-kb" / "workspace.json").read_bytes() == marker_before
-    assert not (knowledge_root / "organization").exists()
+    assert not (knowledge_root / "organization" / "tags").exists()
 
 
 def test_old_layout_apply_upgrades_only_directory_and_marker_then_converges(tmp_path: Path) -> None:
     config_path = _write_workspace(tmp_path / "workspace")
     assert WorkspaceBootstrapService(config_path).run().result == "initialized"
-    _downgrade_marker_to_p4c_1(config_path)
+    _downgrade_marker_to_p7a_1(config_path)
     knowledge_root = config_path.parent / "knowledge"
 
     upgraded = WorkspaceBootstrapService(config_path).run()
@@ -172,10 +170,8 @@ def test_old_layout_apply_upgrades_only_directory_and_marker_then_converges(tmp_
     assert upgraded.result == "initialized"
     assert upgraded.exit_code == 0
     actions = {tuple(item.values()) for item in upgraded.managed_actions}
-    assert ("organization", "create_directory") in actions
-    assert ("organization/directions/by_id", "create_directory") in actions
-    assert ("organization/field_map/by_id", "create_directory") in actions
-    assert ("organization/questions/by_id", "create_directory") in actions
+    assert ("organization/tags/by_id", "create_directory") in actions
+    assert ("organization/tag_links/by_id", "create_directory") in actions
     assert (".research-kb/workspace.json", "upgrade_identity_marker") in actions
     assert (knowledge_root / "questions").is_dir()
     assert not (knowledge_root / "questions" / "mappings.jsonl").exists()
@@ -191,17 +187,19 @@ def test_old_layout_apply_upgrades_only_directory_and_marker_then_converges(tmp_
     assert (knowledge_root / "organization" / "directions" / "by_id").is_dir()
     assert (knowledge_root / "organization" / "field_map" / "by_id").is_dir()
     assert (knowledge_root / "organization" / "questions" / "by_id").is_dir()
+    assert (knowledge_root / "organization" / "tags" / "by_id").is_dir()
+    assert (knowledge_root / "organization" / "tag_links" / "by_id").is_dir()
     assert read_json_document(
         knowledge_root / ".research-kb" / "workspace.json",
         record_kind="workspace-marker",
-    )["layout_contract_version"] == "p7a-1"
+    )["layout_contract_version"] == "p7c-1"
     assert WorkspaceBootstrapService(config_path).run().result == "no_change"
 
 
 def test_old_layout_upgrade_resumes_from_safe_empty_organization_directories(tmp_path: Path) -> None:
     config_path = _write_workspace(tmp_path / "workspace")
     assert WorkspaceBootstrapService(config_path).run().result == "initialized"
-    _downgrade_marker_to_p4c_1(config_path, keep_organization_directories=True)
+    _downgrade_marker_to_p7a_1(config_path, keep_tag_directories=True)
 
     result = WorkspaceBootstrapService(config_path).run()
 
@@ -209,13 +207,13 @@ def test_old_layout_upgrade_resumes_from_safe_empty_organization_directories(tmp
     assert read_json_document(
         config_path.parent / "knowledge" / ".research-kb" / "workspace.json",
         record_kind="workspace-marker",
-    )["layout_contract_version"] == "p7a-1"
+    )["layout_contract_version"] == "p7c-1"
 
 
 def test_old_layout_upgrade_rejects_nonempty_organization_directory(tmp_path: Path) -> None:
     config_path = _write_workspace(tmp_path / "workspace")
     assert WorkspaceBootstrapService(config_path).run().result == "initialized"
-    marker_before = _downgrade_marker_to_p4c_1(config_path, keep_organization_directories=True)
+    marker_before = _downgrade_marker_to_p7a_1(config_path, keep_tag_directories=True)
     organization_directory = config_path.parent / "knowledge" / "organization"
     (organization_directory / "unexpected.json").write_text("{}\n", encoding="utf-8", newline="\n")
 
@@ -230,7 +228,7 @@ def test_old_layout_upgrade_rejects_nonempty_organization_directory(tmp_path: Pa
 def test_old_layout_marker_write_failure_leaves_only_resumable_state(tmp_path: Path) -> None:
     config_path = _write_workspace(tmp_path / "workspace")
     assert WorkspaceBootstrapService(config_path).run().result == "initialized"
-    marker_before = _downgrade_marker_to_p4c_1(config_path)
+    marker_before = _downgrade_marker_to_p7a_1(config_path)
     knowledge_root = config_path.parent / "knowledge"
 
     def fail_marker(path: Path, content: bytes, write_id: str) -> None:
@@ -249,7 +247,7 @@ def test_old_layout_marker_write_failure_leaves_only_resumable_state(tmp_path: P
 def test_runtime_rejects_upgradeable_old_layout(tmp_path: Path) -> None:
     config_path = _write_workspace(tmp_path / "workspace")
     assert WorkspaceBootstrapService(config_path).run().result == "initialized"
-    _downgrade_marker_to_p4c_1(config_path)
+    _downgrade_marker_to_p7a_1(config_path)
 
     with pytest.raises(ResearchKBError) as caught:
         WorkspaceLayout.load(config_path)

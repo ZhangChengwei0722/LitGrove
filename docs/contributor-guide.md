@@ -257,6 +257,11 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Promote through exactly one `ResearchOrganizationService` writer after explicit user approval. Core allocates target, revision and link IDs and derives factual Evidence IDs.
 - Treat exact semantic duplicates as no canonical write while still retaining the Task approval receipt. Replay must resolve the basis-bound historical revision even when no Task-authored canonical revision exists.
 - Keep unresolved conflict notes previewable but approval-blocking. Organization proposals cannot carry Tags, Screening decisions or Research Synthesis candidates.
+- Keep P7-C Tags deterministic and user-authored. Do not route create, rename, archive, assign or remove through an Agent Task.
+- Allocate stable Tag and assignment IDs inside Core and append successor revisions. Never edit or delete accepted Tag history in place.
+- Treat Review Memory `scope_tags` as separate document metadata. Do not import or infer P7-C Tag vocabulary from them.
+- Tag only Paper, Direction, Field Map Entry or Question identities in P7-C. Do not attach Tags to Units, Evidence, Review Memory or Research Synthesis.
+- Keep Tag facets disposable: every Catalog Tag result must rebuild from canonical Tag and assignment bundles, and every assignment change must affect projection freshness.
 
 ## Primary Semantic Bundle Rules
 

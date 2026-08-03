@@ -259,7 +259,7 @@ def test_projection_rebuild_measurement_is_separate_and_restores_payload(tmp_pat
 
     assert receipt["measurement_contract_version"] == "p2-projection-rebuild-measurement@1.0"
     assert receipt["item_count"] == generated.profile.catalog_item_count
-    assert receipt["catalog_schema_version"] == 2
+    assert receipt["catalog_schema_version"] == 3
     assert receipt["payload_restored"] is True
 
 

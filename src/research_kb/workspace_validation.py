@@ -30,8 +30,8 @@ from research_kb.errors import (
 from research_kb.storage.json_io import read_json_document
 
 
-PREVIOUS_LAYOUT_CONTRACT_VERSION = "p4c-1"
-CURRENT_LAYOUT_CONTRACT_VERSION = "p7a-1"
+PREVIOUS_LAYOUT_CONTRACT_VERSION = "p7a-1"
+CURRENT_LAYOUT_CONTRACT_VERSION = "p7c-1"
 LAYOUT_CONTRACT_VERSION = CURRENT_LAYOUT_CONTRACT_VERSION
 MARKER_RELATIVE_PATH = ".research-kb/workspace.json"
 M2A_1_MANAGED_DIRECTORIES = (
@@ -73,7 +73,13 @@ P7A_1_MANAGED_DIRECTORIES = P4C_1_MANAGED_DIRECTORIES + (
     "organization/questions",
     "organization/questions/by_id",
 )
-MANAGED_DIRECTORIES = P7A_1_MANAGED_DIRECTORIES
+P7C_1_MANAGED_DIRECTORIES = P7A_1_MANAGED_DIRECTORIES + (
+    "organization/tags",
+    "organization/tags/by_id",
+    "organization/tag_links",
+    "organization/tag_links/by_id",
+)
+MANAGED_DIRECTORIES = P7C_1_MANAGED_DIRECTORIES
 
 
 @dataclass(frozen=True, slots=True)
@@ -390,7 +396,7 @@ def _layout_diagnostics(context: WorkspaceContext, *, require_initialized: bool)
     elif require_initialized:
         diagnostics.append(_not_initialized(context.workspace_id))
 
-    required_directories = P4C_1_MANAGED_DIRECTORIES if marker_is_predecessor else MANAGED_DIRECTORIES
+    required_directories = P7A_1_MANAGED_DIRECTORIES if marker_is_predecessor else MANAGED_DIRECTORIES
     allowed_directories = MANAGED_DIRECTORIES
     expected_names = {
         _normalized_name(Path(value).parts[0]): Path(value).parts[0]
@@ -469,6 +475,8 @@ def _recognized_descendant(
         ("organization/directions/by_id/", ".direction-bundle.json"),
         ("organization/field_map/by_id/", ".field-map-bundle.json"),
         ("organization/questions/by_id/", ".question-revision-bundle.json"),
+        ("organization/tags/by_id/", ".tag-bundle.json"),
+        ("organization/tag_links/by_id/", ".tag-link-bundle.json"),
     )
     if any(relative.startswith(prefix) and "/" not in relative[len(prefix) :] and relative.endswith(suffix) for prefix, suffix in patterns):
         return True

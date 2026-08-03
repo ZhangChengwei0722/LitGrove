@@ -63,6 +63,7 @@ from research_kb.organization_bundles import (
     expand_active_organization_entries,
     organization_entries_diagnostics,
 )
+from research_kb.tag_bundles import tag_entries_diagnostics
 from research_kb.source_assets import (
     current_source_asset_heads,
     source_asset_chain_diagnostics,
@@ -191,6 +192,7 @@ def validate_bundle(
     diagnostics.extend(mixed_primary_authority_diagnostics(normalized))
     diagnostics.extend(mixed_review_authority_diagnostics(normalized))
     diagnostics.extend(organization_entries_diagnostics(normalized))
+    diagnostics.extend(tag_entries_diagnostics(normalized))
     expanded = expand_active_primary_entries(normalized)
     expanded = expand_active_review_entries(expanded)
     expanded = expand_active_organization_entries(expanded)
@@ -856,6 +858,16 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                     for revision in record.get("revisions", [])
                     for item in revision.get("background_links", [])
             }))
+        elif kind == "tag-bundle":
+            defined["tag"].append(record.get("tag_id", ""))
+            defined["tagrev"].extend(
+                revision.get("revision_id", "") for revision in record.get("revisions", [])
+            )
+        elif kind == "tag-link-bundle":
+            defined["taglink"].append(record.get("tag_link_id", ""))
+            defined["taglinkrev"].extend(
+                revision.get("revision_id", "") for revision in record.get("revisions", [])
+            )
         elif kind == "direction":
             defined["direction"].append(record.get("direction_id", ""))
         elif kind == "field-map-entry":

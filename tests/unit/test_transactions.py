@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from filelock import FileLock
 
-from research_kb.errors import SCHEMA_VALIDATION_FAILED, Diagnostic, ResearchKBError
+from research_kb.errors import SCHEMA_VALIDATION_FAILED, WRITE_CONFLICT, Diagnostic, ResearchKBError
 from research_kb.process_events import read_process_events
 from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl, serialize_jsonl
 from research_kb.storage.transactions import TransactionManager
@@ -81,6 +81,31 @@ def test_validation_failure_preserves_original_and_records_failure(tmp_path: Pat
     journal = read_json_document(layout.journal_path(EVENT_ID))
     assert journal["phase"] == "complete"
     assert journal["result"] == "failure"
+
+
+def test_locked_precondition_rejects_before_journal_or_target_write(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    target = layout.registry_path
+
+    def reject() -> None:
+        raise ResearchKBError(Diagnostic(WRITE_CONFLICT, "synthetic", None, "", "locked conflict"))
+
+    with pytest.raises(ResearchKBError) as caught:
+        manager(layout).promote_bytes(
+            target=target,
+            content=b'{"new":true}\n',
+            target_store="registry",
+            operation="registry_replace",
+            actor="cli",
+            input_refs=[],
+            output_refs=[],
+            locked_precondition=reject,
+        )
+
+    assert caught.value.diagnostic.code == WRITE_CONFLICT
+    assert not target.exists()
+    assert not layout.journal_path(EVENT_ID).exists()
+    assert read_process_events(layout.process_events_path) == []
 
 
 def test_lock_timeout_and_digest_conflict_do_not_mutate_target(tmp_path: Path) -> None:
