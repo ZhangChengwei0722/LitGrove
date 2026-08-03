@@ -385,7 +385,10 @@ def _indexes(entries: list[tuple[str, dict[str, Any]]]) -> _Indexes:
         units=units,
         evidence={record["evidence_id"]: record for record in records_of_kind(entries, "evidence")},
         queues={record["queue_id"]: record for record in records_of_kind(entries, "review-queue")},
-        questions={record["question_id"]: record for kind, record in entries if kind == "question-mapping"},
+        questions={
+            record["question_id"]: record
+            for record in records_of_kind(entries, "question-mapping")
+        },
         candidates={record["candidate_id"]: record for kind, record in entries if kind in STEP7_RECORD_KINDS},
     )
 
