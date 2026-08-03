@@ -253,6 +253,8 @@ def test_active_question_revision_is_in_basis_and_concurrent_revision_rejects_su
     layout, session, by_kind = _workspace(tmp_path)
     source = by_kind["step7-synthesis"][0]
     legacy = next(item for item in by_kind["question-mapping"] if item["question_id"] == source["question_id"])
+    legacy["updated_at"] = "2025-12-31T23:59:59Z"
+    layout.question_mappings_path.write_bytes(serialize_jsonl(by_kind["question-mapping"]))
     factual_links = [
         {
             "paper_id": item["paper_id"],
