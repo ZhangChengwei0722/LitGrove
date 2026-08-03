@@ -8,7 +8,7 @@ Shared Core + CLI
 -> Separate private workspaces
 ```
 
-Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, Guardian checks, real-PDF page extraction, Step 7/discovery candidate persistence, and bounded stdout read surfaces including manuscript projection. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Persisted Markdown and additional derived views remain deferred.
+Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, Guardian checks, real-PDF page extraction, Research Synthesis/discovery candidate persistence, and bounded stdout read surfaces including manuscript projection. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Persisted Markdown and additional derived views remain deferred.
 
 ## P2-A Read-Only Artifact Catalog Boundary
 
@@ -23,7 +23,7 @@ trusted configured workspace option
 
 `WorkspaceSessionService` accepts only backend-configured option IDs and returns redacted workspace/profile display metadata. Absolute workspace paths stay inside the trusted backend process. `CatalogProjectionService` derives every projection path under one marker-owned App state root that must not overlap the workspace root, knowledge root, local inbox or any source root. Existing state, marker, workspace projection and database paths fail closed when they are links, reparse points or the wrong filesystem type.
 
-The catalog adapter registry covers current Registry papers, Paper Card Units, Evidence, Review Memories and Units, Question Mappings, Tags, Step 7 candidates, process events and Guardian reports. Raw parsed pages, review queue content and discovery candidates are deliberately excluded. Unknown future kinds are reported and included in the source watermark without schema guessing.
+The catalog adapter registry covers current Registry papers, Paper Card Units, Evidence, Review Memories and Units, Question Mappings, Tags, Research Synthesis candidates, process events and Guardian reports. Raw parsed pages, review queue content and discovery candidates are deliberately excluded. Unknown future kinds are reported and included in the source watermark without schema guessing.
 
 SQLite/FTS is a disposable projection, never canonical or operational authority. Full rebuild uses a temporary sibling plus atomic replacement. Incremental update removes and recreates only changed or removed source projections in one transaction, verifies source/item/FTS/facet counts, ordered Tag-facet integrity and foreign keys, and must converge to a full rebuild. The watermark binds the adapter registry version and indexed durable-record digests; upstream change makes the projection `stale` without rewriting the upstream record.
 
@@ -88,12 +88,12 @@ Source Intake -> Registry -> Parse
 -> Primary route: Paper Card Core -> Evidence Grounding -> Question Mapping
 -> Review route: background-only Review Memory
 -> Ephemeral query route: Paper Card Units -> optional Evidence trace-back -> task report
--> Candidate thinking route: mapped grounded Card Units -> Step 7 structured candidates
+-> Candidate thinking route: mapped grounded Card Units -> Research Synthesis structured candidates
 -> Manuscript route: exact local DOCX/PDF -> transient structured projection -> optional explicit-criteria Agent audit -> private task report
 -> Guardian / Feedback
 ```
 
-Canonical evidence is the provenance backbone. Paper Card Units are the semantic entry for later reasoning. Step 7 remains candidate-level and must expand back to canonical evidence. Discovery candidates are a separate metadata-only follow-up queue and never enter this evidence chain by selection alone.
+Canonical evidence is the provenance backbone. Paper Card Units are the semantic entry for later reasoning. Research Synthesis remains candidate-level and must expand back to canonical evidence. Discovery candidates are a separate metadata-only follow-up queue and never enter this evidence chain by selection alone.
 
 ## Milestone 1B Runtime
 
@@ -146,7 +146,7 @@ Shared Core owns adapter metadata validation, source-reference confinement, diff
 
 Compatibility inspection is not migration. It allocates no replacement canonical IDs, writes no report or process event, and does not alter the legacy source of truth. If declared protected input changes, disappears, changes type, or becomes unsafe during inspection, the run fails with `RKBC-026` even when the adapter also raises.
 
-Step 7 runtime, persisted Markdown views and migration remain outside the compatibility layer. Portable Skill orchestration is a separate Agent layer and never enters a compatibility adapter.
+Research Synthesis runtime, persisted Markdown views and migration remain outside the compatibility layer. Portable Skill orchestration is a separate Agent layer and never enters a compatibility adapter.
 
 ## M2B-1 Question Mapping Boundary
 
@@ -247,7 +247,7 @@ natural-language local primary-paper task
 -> non-canonical task report
 ```
 
-`skills/research-kb/` is the reviewed Agent-layer source. Its concise `SKILL.md` routes detailed command, discovery, primary intake, review intake, query/Step 7, authority and reporting rules to seven one-level reference files. It contains no scripts, duplicate schemas, persistent state or scientific fixtures.
+`skills/research-kb/` is the reviewed Agent-layer source. Its concise `SKILL.md` routes detailed command, discovery, primary intake, review intake, query/Research Synthesis, authority and reporting rules to one-level reference files. It contains no scripts, duplicate schemas, persistent state or scientific fixtures.
 
 The Skill processes sources sequentially, uses `intake inspect` for absolute local paths or `intake inspect-acquired` for separately authorized acquired candidates before registration, reads current state through `paper status` and `paper context`, reads scientific text through `parse show`, and submits candidates through existing CLI mutation authority. It classifies document type only in task memory and stops non-primary documents before Paper Card or Evidence promotion.
 
@@ -265,19 +265,19 @@ registered review + current immutable source + active parse
 
 All five supported review subtypes share `review-memory.schema.json`. Sections may be empty; a reusable record retains at least one actionable Unit, while low-value/redundant/outdated/out-of-scope records retain zero Units and a reason. Page/section paraphrases use a null locator; quote excerpts use exact character locators over the active same-paper parse.
 
-Review Memory and Review Unit IDs are generic record references for transactions and Guardian only. They are not Evidence IDs, Paper Card Unit IDs, Question Mapping support or Step 7 support. Primary Paper Card/Evidence and Review Memory routes are mutually exclusive per paper.
+Review Memory and Review Unit IDs are generic record references for transactions and Guardian only. They are not Evidence IDs, Paper Card Unit IDs, factual Question Mapping support or Research Synthesis evidence support. Primary Paper Card/Evidence and Review Memory routes are mutually exclusive per paper.
 
 `review context 1.0` is separate from `paper context 1.0`. It returns the complete selected memory, bounded freshness and transient exact local DOI matches. A stale parse produces `RKBC-014` warning and never rebinds old provenance; broken provenance against the current snapshot is an error.
 
-The Portable Skill adds one review route and no second deterministic implementation. Subtype-specific schemas, Field Map integration, Review Unit Question Mapping, Step 7, discovery and acquisition remain outside M3A-2A.
+The Portable Skill adds one review route and no second deterministic implementation. Subtype-specific schemas, Field Map integration, Review Unit Question Mapping, Research Synthesis, discovery and acquisition remain outside M3A-2A.
 
-## M3B-1 Deterministic Step 7 Candidate Runtime
+## M3B-1 Deterministic Research Synthesis Candidate Runtime
 
 ```text
 current Question Mapping + selected grounded/revised Card Units
 -> Agent semantic candidate
 -> Core-derived Evidence and Unit-boundary closure
--> one type-specific Step 7 JSONL store
+-> one type-specific Research Synthesis JSONL store
 -> context / stdout Markdown / Guardian freshness
 ```
 
@@ -287,7 +287,7 @@ The transaction validator reloads the current relevant mapping, Cards, Evidence,
 
 Valid upstream changes do not corrupt an older candidate. `candidate_freshness` projects `current` or `stale_upstream` with stable reasons; Guardian emits `RKBC-014` without rewriting. Missing IDs, impossible ownership, unexplained closure mismatches and cross-question references remain errors. `step7 context` is the structured recovery surface; `step7 render` is a one-way, non-canonical UTF-8/LF Markdown view on stdout. M3B-1 does not add Agent generation/refresh orchestration, Review Unit support, Field Map integration, persisted Markdown or an LLM inside Core.
 
-## M3B-2 Portable Skill Query And Step 7 Orchestration
+## M3B-2 Portable Skill Query And Research Synthesis Orchestration
 
 ```text
 ephemeral paper/question query
@@ -295,7 +295,7 @@ ephemeral paper/question query
 -> canonical Evidence expansion when trace-back is requested
 -> private task report with zero writes
 
-explicit Step 7 maintenance
+explicit Research Synthesis maintenance
 -> context and semantic reconciliation
 -> record promote through Core authority
 -> context / render / Guardian
@@ -303,7 +303,7 @@ explicit Step 7 maintenance
 
 The Skill classifies intent before mutation. Ordinary seven-section explanations, overview, methods, comparison, claim trace-back and research-direction discussions remain in the task report only. Review Memory may inform labeled background discussion but cannot become primary support.
 
-Step 7 persistence requires an explicit maintenance request or an intake invocation that explicitly requests the complete workflow. Exact semantic reruns write nothing; same-candidate changes use replace; materially distinct candidates may append; uncertain near-duplicates stop. Core still owns IDs, closure, snapshots and states, while the Agent owns scientific semantics and duplicate judgment. M3B-2 adds no Python runtime, schema, layout, dependency, query-answer store or direct JSONL access.
+Research Synthesis persistence requires an explicit maintenance request or an intake invocation that explicitly requests the complete workflow. Exact semantic reruns write nothing; same-candidate changes use replace; materially distinct candidates may append; uncertain near-duplicates stop. Core still owns IDs, closure, snapshots and states, while the Agent owns scientific semantics and duplicate judgment. M3B-2 adds no Python runtime, schema, layout, dependency, query-answer store or direct JSONL access.
 
 ## M3C-1 On-Demand Europe PMC Discovery
 
@@ -358,7 +358,7 @@ The Portable Skill may pass the returned values unchanged to the existing `regis
 
 M3C-2D adds no Core runtime, schema, layout or capability flag. It removes a Portable Skill stop after the existing acquired-candidate Registry handoff: a separately authorized intake task now feeds the returned paper ID into the same `paper status`, context, Parse and mutually exclusive primary/review route used for local sources.
 
-The acquisition command remains isolated and cannot chain into intake. An explicit `registry_only` intake may still stop after Registry; ordinary knowledge-base intake continues through Guardian, and Step 7 remains separately explicit and primary-question scoped. Provider paper type remains metadata rather than scientific classification.
+The acquisition command remains isolated and cannot chain into intake. An explicit `registry_only` intake may still stop after Registry; ordinary knowledge-base intake continues through Guardian, and Research Synthesis remains separately explicit and Question scoped. Provider paper type remains metadata rather than scientific classification.
 
 ## M3D-0A Read-Only Manuscript Projection
 
@@ -385,13 +385,13 @@ explicit criteria + exact current-request question/paper selectors
 -> scope-limited private report with zero writes
 ```
 
-M3D-1 is a Portable Skill and Agent-protocol route, not a Core semantic engine. Criteria must exist before manuscript inspection and request-resolved scope may resolve only selectors already present in the request. The Agent preserves source fingerprint and projection limits, uses exact unit slices or honest unit-level fallback, and cannot use Review Memory, review queue or Step 7 as factual support.
+M3D-1 is a Portable Skill and Agent-protocol route, not a Core semantic engine. Criteria must exist before manuscript inspection and request-resolved scope may resolve only selectors already present in the request. The Agent preserves source fingerprint and projection limits, uses exact unit slices or honest unit-level fallback, and cannot use Review Memory, review queue or Research Synthesis as factual support.
 
 The audit creates no schema, stable ID, workspace record, event, journal, cache, Markdown view or manuscript edit. Findings apply only to the requested criterion and checked local corpus; a local absence is not whole-field contradiction. Rewriting remains a separate task tied to the audited source fingerprint.
 
 ## P1 Shared Application-Service Facade
 
-The CLI and future App backend share focused Python application services. P1 extracts the remaining CLI-owned validation, Question query/render, Step 7 render, named Parse and transaction-recovery composition without introducing a generic command interpreter.
+The CLI and future App backend share focused Python application services. P1 extracts the remaining CLI-owned validation, Question query/render, Research Synthesis render, named Parse and transaction-recovery composition without introducing a generic command interpreter.
 
 ```text
 CLI or future host
@@ -400,7 +400,7 @@ CLI or future host
 -> typed mapping, bytes or result + exit classification
 ```
 
-`ContractValidationService`, `JsonlValidationService`, `PrivacyScanService`, `QuestionQueryService`, workspace-aware Question/Step 7 render services, `ParseApplicationService` and `TransactionRecoveryService` own the extracted rules. Existing Registry, record, discovery, capability, compatibility, intake, paper/review, Guardian and bootstrap services remain directly reusable.
+`ContractValidationService`, `JsonlValidationService`, `PrivacyScanService`, `QuestionQueryService`, workspace-aware Question/Research Synthesis render services, `ParseApplicationService` and `TransactionRecoveryService` own the extracted rules. Existing Registry, record, discovery, capability, compatibility, intake, paper/review, Guardian and bootstrap services remain directly reusable.
 
 The CLI owns only argument parsing, bounded stdin/file decoding, JSON/byte output, diagnostic redaction and process exit projection. Workspace-aware render services load and validate structured entries before invoking the existing pure renderers. The named Parse registry contains only explicit factories and never auto-detects, substitutes or falls back.
 

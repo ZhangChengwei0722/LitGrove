@@ -1,13 +1,15 @@
 # P8-A Research Synthesis Core Closure Manifest
 
-- status: `validated_pending_remote_closure`
+- status: `closed`
 - baseline: `16013d5c58cf4f592129bb93f07425adf522b32d`
 - branch: `feature/p8-research-synthesis`
 - plan_commit: `89c301b`
 - implementation_commit: `395d0365a80580984632bbbfb5ffccdab9ecfdd5`
-- merge_commit: `pending`
+- merge_commit: `0142e6d96595796a525e0f79ebae157017c44e8d`
+- post_merge_fix_commit: `aac28d4b96842383ce8548a2f13fa1e3e70e2ab5`
 - validation_receipt: `docs/p8a-research-synthesis-core-validation-receipt.md`
-- next_local_phase: `P8-B localhost App Research Synthesis workspace`
+- app_closure_commit: `c215560b8bc1eed688be5237bc7d64ce9a4582dd`
+- next_phase: `P9 Obsidian Generated Views`
 
 ## Closed Locally
 
@@ -24,13 +26,14 @@
 
 ## Remote Closure
 
-1. Commit the reviewed P8-A implementation and durable validation records.
-2. Push `feature/p8-research-synthesis`, create one focused PR and review the remote diff.
-3. Merge the PR, fast-forward local `main` and run post-merge affected validation.
-4. Rebuild the exact merged-head Core wheel and record its digest before P8-B pins Core.
+P8-A merged through PR #54 as `0142e6d`. App integration then exposed one active-Question
+revision bug: support closure read the legacy mapping instead of its current P7 successor.
+The focused correction merged through PR #55 as `aac28d4`, passed the full deterministic
+Core suite and produced the exact wheel pinned by the App.
 
-GitHub unavailability does not authorize an approximate App pin. Local P8-B planning may
-continue, but installed-package acceptance requires the exact merged Core wheel.
+P8-B closed in the local App repository at `c215560`; development and package browser
+flows, fresh-install smoke, privacy/path scans and the Portable Skill mirror all passed.
+No remote closure item remains.
 
 ## Deferred Cleanup Inventory
 
