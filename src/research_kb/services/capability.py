@@ -155,6 +155,7 @@ class CapabilityService:
                 "reading_evidence_source_access": True,
                 "research_organization_application": True,
                 "organization_proposal_agent_tasks": True,
+                "question_screening_agent_tasks": True,
                 "tag_application": True,
                 "embedded_agent_runtime": False,
             },

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:screening-criteria-proposal",
+  "$defs": {
+    "item": {"type": "object", "additionalProperties": false, "required": ["source_alias", "text"], "properties": {"source_alias": {"type": ["string", "null"], "pattern": "^criterion_alias_[0-9]{3}$"}, "text": {"type": "string", "minLength": 1, "maxLength": 1000}}}
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "task_id", "input_basis_digest", "title", "scope", "inclusion_criteria", "exclusion_criteria", "notes", "rationale", "known_limitations"],
+  "properties": {
+    "contract_version": {"const": "p7d-screening-criteria-proposal@1.0"},
+    "task_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/agent_task_id"},
+    "input_basis_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 200},
+    "scope": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "inclusion_criteria": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/item"}},
+    "exclusion_criteria": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/item"}},
+    "notes": {"type": "string", "maxLength": 4000},
+    "rationale": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "known_limitations": {"type": "array", "maxItems": 50, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 1000}}
+  },
+  "anyOf": [
+    {"properties": {"inclusion_criteria": {"minItems": 1}}},
+    {"properties": {"exclusion_criteria": {"minItems": 1}}}
+  ]
+}

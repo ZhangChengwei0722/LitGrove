@@ -823,3 +823,24 @@ closed. Screening remains organization metadata, never Evidence or a scientific
 credibility judgment. Catalog stores only rebuildable criteria/decision search documents
 and status labels, while Guardian checks identity, revision, reference, digest, freshness
 and transaction closure. Agent proposals and the localhost App work surface remain P7-D2.
+
+## P7-D2 Question Screening Proposals
+
+Application Service interface `1.15` and Agent privacy registry `p7d-v1` add two direct,
+no-Pipeline-Job proposal Tasks: `question_screening_criteria_proposal` and
+`question_screening_decision_proposal`. Core builds bounded Question, criteria, Paper
+metadata and optional current Paper Card context; the App exports a portable handoff for an
+external Codex CLI or Claude Code CLI and never launches an Agent.
+
+Criterion identities are represented to the Agent only by deterministic task-local aliases.
+Criteria candidates may retain an alias, omit it or add identity-free text. Decision
+candidates must close over every supplied alias exactly once and may return `uncertain`, but
+`uncertain` cannot be promoted. Canonical criteria and included/excluded decisions remain
+explicit-user authority. Approved Agent results use
+`origin: user_approved_agent_proposal`; they are never relabeled `user_authored`.
+
+Question, Paper, criteria, prior decision and optional Paper Card revisions are exact Task
+basis. Any successor makes lease, submission or approval stale. Canonical screening writes
+reuse the P7-D1 writer, preserve Core-owned IDs, recover a write-before-Task-receipt crash by
+Task/result digest, and retain a no-change approval receipt without inventing a new canonical
+revision. Guardian checks both Task-to-revision and revision-to-Task closure.

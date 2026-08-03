@@ -257,6 +257,11 @@ Schema, state, ID, path, and directory-protocol changes require explicit user ap
 - Promote through exactly one `ResearchOrganizationService` writer after explicit user approval. Core allocates target, revision and link IDs and derives factual Evidence IDs.
 - Treat exact semantic duplicates as no canonical write while still retaining the Task approval receipt. Replay must resolve the basis-bound historical revision even when no Task-authored canonical revision exists.
 - Keep unresolved conflict notes previewable but approval-blocking. Organization proposals cannot carry Tags, Screening decisions or Research Synthesis candidates.
+- Keep `p7d-v1` additive. Screening criteria and decision proposals are direct no-Job Tasks; do not route them through a semantic Pipeline Job.
+- Expose criterion identities to an Agent only through task-local aliases. Criteria revisions may retain existing aliases; decisions must close over every alias exactly once.
+- Keep Question screening membership separate from scientific credibility. Do not add Evidence or source-document payload merely to justify a screening proposal.
+- Promote screening proposals only through `approve_question_screening_result` after explicit user approval. `uncertain` is previewable but never promotable.
+- Preserve `user_approved_agent_proposal` provenance, exact stale-basis rejection, canonical-write recovery and no-change Task receipts.
 - Keep P7-C Tags deterministic and user-authored. Do not route create, rename, archive, assign or remove through an Agent Task.
 - Allocate stable Tag and assignment IDs inside Core and append successor revisions. Never edit or delete accepted Tag history in place.
 - Treat Review Memory `scope_tags` as separate document metadata. Do not import or infer P7-C Tag vocabulary from them.

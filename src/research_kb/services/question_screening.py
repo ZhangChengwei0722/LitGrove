@@ -363,9 +363,12 @@ def _string_list(value: object, path: str, count: int, limit: int) -> list[str]:
 
 
 def _require_approval(actor: str, approval: Mapping[str, Any]) -> None:
-    required = {"receipt_id", "approved_by", "approved_at", "origin"}
-    if actor != "user" or set(approval) != required or approval.get("approved_by") != "user" or approval.get("origin") != "user_authored" or not all(isinstance(approval[field], str) and approval[field] for field in required):
-        raise _error(INVALID_AUTHORITY, "screening", None, "/approval", "screening mutation requires explicit user-authored approval")
+    direct = {"receipt_id", "approved_by", "approved_at", "origin"}
+    agent = {"approved_by", "approved_at", "origin", "task_id", "task_result_digest"}
+    valid_direct = set(approval) == direct and approval.get("origin") == "user_authored"
+    valid_agent = set(approval) == agent and approval.get("origin") == "user_approved_agent_proposal"
+    if actor != "user" or approval.get("approved_by") != "user" or not (valid_direct or valid_agent) or not all(isinstance(value, str) and value for value in approval.values()):
+        raise _error(INVALID_AUTHORITY, "screening", None, "/approval", "screening mutation requires explicit user approval provenance")
 
 
 def _error(code: str, kind: str, record_id: str | None, path: str, message: str) -> ResearchKBError:

@@ -129,7 +129,8 @@ def main() -> int:
             capability["features"]["agent_task_staging"] is not True
             or capability["features"]["knowledge_query_agent_tasks"] is not True
             or capability["features"]["organization_proposal_agent_tasks"] is not True
-            or capability["agent_task_registry_version"] != "p7b-v1"
+            or capability["features"]["question_screening_agent_tasks"] is not True
+            or capability["agent_task_registry_version"] != "p7d-v1"
         ):
             raise SystemExit("base wheel capability report lacks current Agent Task staging")
         if capability["features"]["reading_evidence_source_access"] is not True:
@@ -284,7 +285,7 @@ def main() -> int:
                 "line_ending": "lf",
             },
             "agent_policy": {
-                "registry_version": "p7b-v1",
+                "registry_version": "p7d-v1",
                 "allowed_content_classes": ["metadata", "parsed_excerpt", "canonical_evidence", "paper_card_content", "operational_context", "review_background", "research_routing_context"],
                 "execution_scope": "cloud_allowed",
                 "max_prompt_bytes": 262_144,
@@ -970,10 +971,10 @@ def main() -> int:
                     "WorkspaceSessionService, SourceAssetService, RegistryIdentityCorrectionService, "
                     "AgentTaskApplicationService, DeterministicIntakeApplicationService, ReadingApplicationService, "
                     "DeterministicTrunkService, PipelineJobService; "
-                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.14'; "
+                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.15'; "
                     f"session = WorkspaceSessionService({{'wheel': Path({str(config_path)!r})}}).open('wheel'); "
                     "limits = DeterministicIntakeApplicationService().limits(session); "
-                    "assert limits['interface_version'] == '1.14'; "
+                    "assert limits['interface_version'] == '1.15'; "
                     "assert limits['ingress_modes'] == ['upload', 'watched_inbox']; "
                     f"reading = ReadingApplicationService().show_paper(session, {paper_id!r}); "
                     "assert reading['persistent_writes'] == 0 and 'source_ref' not in str(reading); "
@@ -987,7 +988,7 @@ def main() -> int:
                     "assert waiting.state['status'] == 'waiting_user'; "
                     "tasks = AgentTaskApplicationService(); "
                     "registry = tasks.registry(session); "
-                    "assert registry['registry_version'] == 'p7b-v1'; "
+                    "assert registry['registry_version'] == 'p7d-v1'; "
                     "assert registry['embedded_agent_runtime'] is False; "
                     f"created = tasks.create_from_pipeline(session, job['job_id'], {{'paper_id':{paper_id!r},'task_kind':'document_route_resolution','executor_id':'codex_cli','approved_content_classes':['metadata','parsed_excerpt','operational_context'],'idempotency_key':'installed-wheel-route-task'}}); "
                     "expected = {'state_id':created['task']['state_id'],'state_digest':created['task']['state_digest']}; "
@@ -1075,7 +1076,7 @@ def main() -> int:
                     "assignment = tags.set_assignment(session, {'tag_id':tag['tag']['tag_id'],'target_kind':'paper','target_id':paper['paper_id'],'state':'assigned','receipt_id':'installed-wheel-tag-link'}); "
                     "assert assignment['result'] == 'committed' and tags.show_tag(session, tag['tag']['tag_id'])['assignments'][0]['target_id'] == paper['paper_id'], 'tag assignment'; "
                     "source_access = ReadingApplicationService().prepare_evidence_source(session, evidence_id); "
-                    "assert source_access.descriptor['application_service_interface_version'] == '1.14', 'source interface'; "
+                    "assert source_access.descriptor['application_service_interface_version'] == '1.15', 'source interface'; "
                     "assert source_access.descriptor['media_type'] == 'application/pdf' and source_access.descriptor['persistent_writes'] == 0, 'source descriptor'; "
                     "assert 'source_ref' not in str(source_access.descriptor) and 'fingerprint' not in str(source_access.descriptor), 'source redaction'; "
                     "opened = ReadingApplicationService().open_evidence_source(session, source_access.handle); "

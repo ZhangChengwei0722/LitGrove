@@ -36,6 +36,8 @@ SCHEMA_FILES: dict[str, str] = {
     "tag-link-bundle": "tag-link-bundle.schema.json",
     "screening-criteria-bundle": "screening-criteria-bundle.schema.json",
     "screening-decision-bundle": "screening-decision-bundle.schema.json",
+    "screening-criteria-proposal": "screening-criteria-proposal.schema.json",
+    "screening-decision-proposal": "screening-decision-proposal.schema.json",
     "step7-common": "step7-common.schema.json",
     "step7-synthesis": "step7-synthesis.schema.json",
     "step7-review-angle": "step7-review-angle.schema.json",
