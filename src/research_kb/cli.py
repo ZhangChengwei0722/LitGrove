@@ -319,12 +319,12 @@ def build_parser() -> argparse.ArgumentParser:
     question_render.add_argument("--workspace", required=True, type=Path)
     question_render.add_argument("--question-id", required=True)
 
-    step7 = commands.add_parser("step7", help="inspect persisted Step 7 candidates")
+    step7 = commands.add_parser("step7", help="inspect persisted Research Synthesis candidates")
     step7_commands = step7.add_subparsers(dest="step7_command", required=True)
-    step7_context = step7_commands.add_parser("context", help="emit one question's Step 7 candidate context")
+    step7_context = step7_commands.add_parser("context", help="emit one question's Research Synthesis candidate context")
     step7_context.add_argument("--workspace", required=True, type=Path)
     step7_context.add_argument("--question-id", required=True)
-    step7_render = step7_commands.add_parser("render", help="render one Step 7 reading view")
+    step7_render = step7_commands.add_parser("render", help="render one Research Synthesis reading view")
     step7_render.add_argument("--workspace", required=True, type=Path)
     step7_render.add_argument("--question-id", required=True)
 

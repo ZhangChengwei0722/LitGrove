@@ -1,6 +1,6 @@
 # Application Service Interface
 
-Status: implemented in P1
+Status: implemented through P8 additive interface `1.16`
 
 ## Purpose
 
@@ -47,6 +47,13 @@ TransactionRecoveryService
 
 P1 preserves existing command names, arguments, JSON fields, Markdown bytes, exit codes and mutation effects. CLI file/stdin decoding remains an adapter concern. Service methods do not expose a stringly typed `execute(command, args)` endpoint.
 
+## P8 Additions
+
+`ResearchSynthesisApplicationService` exposes bounded, browser-safe candidate lists,
+candidate details, Question-level counts and limits. `AgentTaskApplicationService` owns
+the external-manual `research_synthesis_drafting` handoff, staging, preview and dedicated
+user approval. Ordinary Knowledge Query remains zero canonical scientific write.
+
 ## Deferred
 
-The interface does not define localhost HTTP routes, App sessions, Pipeline Jobs, Source Adequacy, Agent Tasks, staging, Exchange or backup. Those require their owning phase contracts.
+The Python interface does not itself define localhost HTTP transport, Exchange or backup. Those remain host or later-phase responsibilities.

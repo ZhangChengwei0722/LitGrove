@@ -50,7 +50,7 @@ COMMON_FIELDS = {
     "next_action",
     "trace_status",
 }
-OPTIONAL_FIELDS = {"rejection_rationale"}
+OPTIONAL_FIELDS = {"rejection_rationale", "review_background_unit_ids"}
 TYPE_FIELDS = {
     "step7-synthesis": {
         "claim",
@@ -87,6 +87,7 @@ OWNED_FIELDS = {
     "type",
     "evidence_base",
     "review_queue_refs",
+    "review_background_base",
     "input_snapshot",
     "not_fact",
     "review_status",
@@ -94,6 +95,7 @@ OWNED_FIELDS = {
     "created_at",
     "updated_at",
     "fixture_origin",
+    "approval",
 }
 
 
@@ -114,13 +116,34 @@ class Step7CandidateService:
         request: MutationRequest,
         *,
         actor: str = "agent",
+        approval: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], TransactionResult]:
+        if approval is not None and actor != "user":
+            raise ResearchKBError(
+                Diagnostic(
+                    INVALID_AUTHORITY,
+                    request.record_kind,
+                    request.target_record_id,
+                    "/approval",
+                    "Research Synthesis approval receipts require user authority",
+                )
+            )
         self._validate_request(request)
         self._validate_payload(request)
         entries = load_workspace_entries(self.layout)
         validate_workspace_entries(entries)
 
         existing = self._existing_candidate(request, entries)
+        if existing is not None and existing.get("approval") is not None and approval is None:
+            raise ResearchKBError(
+                Diagnostic(
+                    INVALID_AUTHORITY,
+                    request.record_kind,
+                    existing["candidate_id"],
+                    "/approval",
+                    "an approved Research Synthesis candidate requires a new user-approved proposal to replace it",
+                )
+            )
         question_id = request.payload["question_id"]
         if existing is not None and question_id != existing["question_id"]:
             raise ResearchKBError(
@@ -129,7 +152,7 @@ class Step7CandidateService:
                     request.record_kind,
                     existing["candidate_id"],
                     "/payload/question_id",
-                    "Step 7 replacement cannot move a candidate to another question",
+                    "Research Synthesis replacement cannot move a candidate to another question",
                 )
             )
 
@@ -137,6 +160,7 @@ class Step7CandidateService:
             entries,
             question_id=question_id,
             paper_card_base=request.payload["paper_card_base"],
+            review_background_unit_ids=request.payload.get("review_background_unit_ids", []),
             record_kind=request.record_kind,
             record_id=request.target_record_id,
         )
@@ -160,7 +184,7 @@ class Step7CandidateService:
                 )
             )
 
-        record = self._build_record(request, closure, existing, source_views)
+        record = self._build_record(request, closure, existing, source_views, approval)
         diagnostics = validate_record(request.record_kind, record, actor=actor)
         if diagnostics:
             raise ResearchKBError(diagnostics[0])
@@ -171,7 +195,7 @@ class Step7CandidateService:
                     request.record_kind,
                     record["candidate_id"],
                     "/input_snapshot",
-                    "new Step 7 candidate is stale before promotion",
+                    "new Research Synthesis candidate is stale before promotion",
                 )
             )
         return self._promote_store(request, entries, record, closure, source_views, actor)
@@ -200,7 +224,7 @@ class Step7CandidateService:
                     request.record_kind,
                     request.target_record_id,
                     "/target_record_id",
-                    "target Step 7 candidate does not exist",
+                    "target Research Synthesis candidate does not exist",
                 )
             )
         return existing
@@ -211,9 +235,11 @@ class Step7CandidateService:
         closure: SupportClosure,
         existing: dict[str, Any] | None,
         source_views: tuple[str, ...],
+        approval: dict[str, Any] | None,
     ) -> dict[str, Any]:
         now = timestamp(self.transactions.clock)
         payload = deepcopy(request.payload)
+        payload.pop("review_background_unit_ids", None)
         payload["paper_card_base"] = [dict(item) for item in closure.paper_card_base]
         if request.record_kind == "step7-cross-view":
             payload["source_views"] = list(source_views)
@@ -229,6 +255,11 @@ class Step7CandidateService:
             **payload,
             "evidence_base": list(closure.evidence_base),
             "review_queue_refs": list(closure.review_queue_refs),
+            **(
+                {"review_background_base": [dict(item) for item in closure.review_background_base]}
+                if closure.review_background_base
+                else {}
+            ),
             "input_snapshot": deepcopy(closure.input_snapshot),
             "not_fact": True,
             "review_status": "ai_draft",
@@ -240,6 +271,8 @@ class Step7CandidateService:
             record["fixture_origin"] = request.fixture_origin
         elif existing is not None and "fixture_origin" in existing:
             record["fixture_origin"] = existing["fixture_origin"]
+        if approval is not None:
+            record["approval"] = deepcopy(approval)
         return record
 
     def _promote_store(
@@ -279,6 +312,11 @@ class Step7CandidateService:
                 current_entries,
                 question_id=current_record["question_id"],
                 paper_card_base=current_record["paper_card_base"],
+                review_background_unit_ids=[
+                    unit_id
+                    for item in current_record.get("review_background_base", [])
+                    for unit_id in item.get("review_unit_ids", [])
+                ],
                 record_kind=request.record_kind,
                 record_id=current_record["candidate_id"],
             )
@@ -295,6 +333,7 @@ class Step7CandidateService:
                 list(current_closure.paper_card_base) != current_record["paper_card_base"]
                 or list(current_closure.evidence_base) != current_record["evidence_base"]
                 or list(current_closure.review_queue_refs) != current_record["review_queue_refs"]
+                or list(current_closure.review_background_base) != current_record.get("review_background_base", [])
                 or current_closure.input_snapshot != current_record["input_snapshot"]
             ):
                 raise ResearchKBError(
@@ -303,7 +342,7 @@ class Step7CandidateService:
                         request.record_kind,
                         current_record["candidate_id"],
                         "/input_snapshot",
-                        "Step 7 support closure changed during promotion",
+                        "Research Synthesis support closure changed during promotion",
                     )
                 )
             if _upstream_signature(current_entries, current_closure, current_sources) != initial_signature:
@@ -313,7 +352,7 @@ class Step7CandidateService:
                         request.record_kind,
                         current_record["candidate_id"],
                         "/input_snapshot",
-                        "Step 7 upstream records changed during promotion",
+                        "Research Synthesis upstream records changed during promotion",
                     )
                 )
             if candidate_freshness(current_record, current_entries)["state"] != "current":
@@ -323,7 +362,7 @@ class Step7CandidateService:
                         request.record_kind,
                         current_record["candidate_id"],
                         "/input_snapshot",
-                        "Step 7 candidate became stale during promotion",
+                        "Research Synthesis candidate became stale during promotion",
                     )
                 )
 
@@ -348,15 +387,15 @@ class Step7CandidateService:
     def _validate_request(request: MutationRequest) -> None:
         if request.record_kind not in STEP7_RECORD_KINDS or request.operation not in {"append", "replace"}:
             raise ResearchKBError(
-                Diagnostic(SCHEMA_VALIDATION_FAILED, "mutation-request", request.target_record_id, "", "unsupported Step 7 mutation")
+                Diagnostic(SCHEMA_VALIDATION_FAILED, "mutation-request", request.target_record_id, "", "unsupported Research Synthesis mutation")
             )
         if request.paper_id is not None:
             raise ResearchKBError(
-                Diagnostic(SCHEMA_VALIDATION_FAILED, "mutation-request", request.target_record_id, "/context/paper_id", "Step 7 requires null paper_id")
+                Diagnostic(SCHEMA_VALIDATION_FAILED, "mutation-request", request.target_record_id, "/context/paper_id", "Research Synthesis requires null paper_id")
             )
         if request.question_origin != "existing_question":
             raise ResearchKBError(
-                Diagnostic(SCHEMA_VALIDATION_FAILED, "mutation-request", request.target_record_id, "/context/question_origin", "Step 7 requires existing_question origin")
+                Diagnostic(SCHEMA_VALIDATION_FAILED, "mutation-request", request.target_record_id, "/context/question_origin", "Research Synthesis requires existing_question origin")
             )
         if request.operation == "append" and request.target_record_id is not None:
             raise ResearchKBError(
@@ -385,11 +424,11 @@ class Step7CandidateService:
         allowed = required | OPTIONAL_FIELDS
         if payload_fields - allowed:
             raise ResearchKBError(
-                Diagnostic(SCHEMA_VALIDATION_FAILED, request.record_kind, request.target_record_id, "/payload", "unsupported Step 7 payload field")
+                Diagnostic(SCHEMA_VALIDATION_FAILED, request.record_kind, request.target_record_id, "/payload", "unsupported Research Synthesis payload field")
             )
         if not required.issubset(payload_fields):
             raise ResearchKBError(
-                Diagnostic(SCHEMA_VALIDATION_FAILED, request.record_kind, request.target_record_id, "/payload", "complete Step 7 semantic payload is required")
+                Diagnostic(SCHEMA_VALIDATION_FAILED, request.record_kind, request.target_record_id, "/payload", "complete Research Synthesis semantic payload is required")
             )
         status = request.payload.get("candidate_status")
         rationale = request.payload.get("rejection_rationale")

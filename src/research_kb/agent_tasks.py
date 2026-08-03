@@ -82,6 +82,7 @@ def validate_task_state(state: Mapping[str, Any]) -> None:
             "organization_proposal",
             "question_screening_criteria_proposal",
             "question_screening_decision_proposal",
+            "research_synthesis_drafting",
         }
         if status == "approved" and not no_job_approval and decision.get("applied_job_state_id") is None:
             raise _task_error("approved scientific or route decision requires an applied Job state", "/decision/applied_job_state_id")
@@ -107,6 +108,7 @@ def validate_task_state(state: Mapping[str, Any]) -> None:
                 "organization_proposal": "organization_revision_committed",
                 "question_screening_criteria_proposal": "screening_revision_committed",
                 "question_screening_decision_proposal": "screening_revision_committed",
+                "research_synthesis_drafting": "research_synthesis_committed",
             }.get(state.get("task_kind"), "route_confirmed")
             if decision.get("reason_code") != expected_reason:
                 raise _task_error("approved decision reason does not match the Task kind", "/decision/reason_code")

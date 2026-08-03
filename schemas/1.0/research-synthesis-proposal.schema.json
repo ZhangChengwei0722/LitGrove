@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:research-synthesis-proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "task_id", "input_basis_digest", "candidate_type", "maintenance_intent", "target_candidate_id", "duplicate_disposition", "payload"],
+  "properties": {
+    "contract_version": {"const": "p8-research-synthesis-proposal@1.0"},
+    "task_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/agent_task_id"},
+    "input_basis_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "candidate_type": {"enum": ["synthesis", "review_angle", "insight", "cross_view"]},
+    "maintenance_intent": {"enum": ["append", "replace"]},
+    "target_candidate_id": {"anyOf": [{"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/step7_candidate_id"}, {"type": "null"}]},
+    "duplicate_disposition": {"enum": ["distinct", "updates_target", "uncertain_near_duplicate"]},
+    "payload": {"type": "object", "minProperties": 1, "maxProperties": 32}
+  }
+}

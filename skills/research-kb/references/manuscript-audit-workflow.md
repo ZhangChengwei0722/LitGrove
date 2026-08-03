@@ -50,7 +50,7 @@ Never guess character precision. PDF sections inferred from page text remain `ag
 
 Start from grounded/revised Paper Card Units returned by public reads. Expand to canonical Evidence IDs whenever a finding asserts exact factual support, checks a citation or judges wording strength. A Card Unit is the semantic entry, not a replacement for exact Evidence.
 
-Review Memory may provide labeled background orientation. Review Memory, review queue and Step 7 cannot become factual support: queue IDs are non-evidence boundaries, and Step 7 remains candidate thinking. Do not treat silence as contradiction or a local miss as a universal unsupported claim.
+Review Memory may provide labeled background orientation. Review Memory, review queue and Research Synthesis cannot become factual support: queue IDs are non-evidence boundaries, and Research Synthesis remains candidate thinking. Do not treat silence as contradiction or a local miss as a universal unsupported claim.
 
 ## Produce The Report
 
@@ -72,5 +72,5 @@ Stop or mark `not_assessable` for:
 - unsupported source, source change or relevant projection coverage limits;
 - exact support requiring unavailable OCR, geometry, figures, tables, supplements, comments, revisions, footnotes or external relationships;
 - a citation that cannot be resolved to the checked local knowledge;
-- a finding supported only by Review Memory, review queue or Step 7;
+- a finding supported only by Review Memory, review queue or Research Synthesis;
 - a manuscript fingerprint change before reporting.

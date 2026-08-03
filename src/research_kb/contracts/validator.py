@@ -80,6 +80,7 @@ RESULT_CONTRACT_KINDS = {
     "organization-proposal",
     "screening-criteria-proposal",
     "screening-decision-proposal",
+    "research-synthesis-proposal",
 }
 HUMAN_ONLY_REVIEW_STATES = {"human_checked", "verified"}
 NON_SUPPORTING_UNIT_STATES = {"interpretive", "background_only", "needs_resolution"}
@@ -1551,6 +1552,17 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                 )
         elif kind.startswith("step7-"):
             _require_ref(diagnostics, kind, record_id, "/question_id", record.get("question_id"), questions, "question")
+            approval = record.get("approval")
+            if isinstance(approval, dict):
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    "/approval/task_id",
+                    approval.get("task_id"),
+                    agent_tasks,
+                    "Agent Task",
+                )
             base_units: list[str] = []
             base_papers: set[str] = set()
             expanded_evidence: set[str] = set()
@@ -1580,7 +1592,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                         and not _timestamp_is_after(card_updated_at.get(paper_id, ""), candidate_updated_at)
                         and value in units
                     ):
-                        diagnostics.append(Diagnostic(STEP7_BOUNDARY, kind, record_id, f"/paper_card_base/{base_index}/card_unit_ids", "non-factual Card Unit cannot enter Step 7 support"))
+                        diagnostics.append(Diagnostic(STEP7_BOUNDARY, kind, record_id, f"/paper_card_base/{base_index}/card_unit_ids", "non-factual Card Unit cannot enter Research Synthesis support"))
                     expanded_evidence.update(referencable_unit_evidence.get(value, set()))
                     expanded_boundaries.update(referencable_unit_boundaries.get(value, set()))
             for value in record.get("evidence_base", []):
@@ -1593,6 +1605,66 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                 _require_ref(diagnostics, kind, record_id, "/review_queue_refs", value, referencable_queues, "review queue")
                 if value in referencable_queue_paper and referencable_queue_paper[value] not in base_papers:
                     diagnostics.append(Diagnostic(STEP7_BOUNDARY, kind, record_id, "/review_queue_refs", "review queue boundary belongs to a paper outside paper_card_base"))
+            review_unit_ids: list[str] = []
+            for background_index, background in enumerate(record.get("review_background_base", [])):
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    f"/review_background_base/{background_index}/paper_id",
+                    background.get("paper_id"),
+                    papers,
+                    "paper",
+                )
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    f"/review_background_base/{background_index}/review_memory_id",
+                    background.get("review_memory_id"),
+                    set(defined["reviewmem"]),
+                    "Review Memory",
+                )
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    f"/review_background_base/{background_index}/review_revision_id",
+                    background.get("review_revision_id"),
+                    set(defined["reviewrev"]),
+                    "Review revision",
+                )
+                for question_background_id in background.get("question_background_ids", []):
+                    _require_ref(
+                        diagnostics,
+                        kind,
+                        record_id,
+                        f"/review_background_base/{background_index}/question_background_ids",
+                        question_background_id,
+                        set(defined["qbackground"]),
+                        "Question background",
+                    )
+                for review_unit_id in background.get("review_unit_ids", []):
+                    if review_unit_id in review_unit_ids:
+                        diagnostics.append(
+                            Diagnostic(
+                                DUPLICATE_ID,
+                                kind,
+                                record_id,
+                                f"/review_background_base/{background_index}/review_unit_ids",
+                                "Review Unit appears more than once in Research Synthesis background",
+                            )
+                        )
+                    review_unit_ids.append(review_unit_id)
+                    _require_ref(
+                        diagnostics,
+                        kind,
+                        record_id,
+                        f"/review_background_base/{background_index}/review_unit_ids",
+                        review_unit_id,
+                        set(defined["reviewunit"]),
+                        "Review Unit",
+                    )
             card_is_newer = any(
                 _timestamp_is_after(card_updated_at.get(paper_id, ""), candidate_updated_at)
                 for paper_id in base_papers
@@ -1619,12 +1691,12 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                     or not selected_pairs.issubset(mapping_units)
                 )
                 if membership_changed and not _timestamp_is_after(mapping.get("updated_at", ""), candidate_updated_at):
-                    diagnostics.append(Diagnostic(STEP7_BOUNDARY, kind, record_id, "/paper_card_base", "Step 7 support is outside the current Question Mapping without a newer mapping"))
+                    diagnostics.append(Diagnostic(STEP7_BOUNDARY, kind, record_id, "/paper_card_base", "Research Synthesis support is outside the current Question Mapping without a newer mapping"))
             if kind == "step7-synthesis" and len(base_papers) < 2:
                 diagnostics.append(Diagnostic(STEP7_BOUNDARY, kind, record_id, "/paper_card_base", "Synthesis requires at least two distinct papers"))
             if kind == "step7-cross-view":
                 for value in record.get("source_views", []):
-                    _require_ref(diagnostics, kind, record_id, "/source_views", value, candidates, "Step 7 candidate")
+                    _require_ref(diagnostics, kind, record_id, "/source_views", value, candidates, "Research Synthesis candidate")
                     if value == record_id:
                         diagnostics.append(Diagnostic(STEP7_BOUNDARY, kind, record_id, "/source_views", "Cross-View cannot reference itself"))
                     source = candidate_records.get(value)
@@ -1644,6 +1716,8 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                     diagnostics.append(Diagnostic(SNAPSHOT_MISMATCH, kind, record_id, "/input_snapshot/evidence_ids", "snapshot evidence does not match evidence_base"))
                 if set(snapshot.get("review_queue_ids", [])) != set(record.get("review_queue_refs", [])):
                     diagnostics.append(Diagnostic(SNAPSHOT_MISMATCH, kind, record_id, "/input_snapshot/review_queue_ids", "snapshot review queue does not match review_queue_refs"))
+                if set(snapshot.get("review_unit_ids", [])) != set(review_unit_ids):
+                    diagnostics.append(Diagnostic(SNAPSHOT_MISMATCH, kind, record_id, "/input_snapshot/review_unit_ids", "snapshot Review Units do not match review_background_base"))
         elif kind == "process-event":
             if record.get("job_id") is not None and record.get("result") == "success":
                 _require_ref(diagnostics, kind, record_id, "/job_id", record.get("job_id"), jobs, "Pipeline Job")
@@ -1658,6 +1732,16 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
         elif kind == "agent-task-state":
             _require_ref(diagnostics, kind, record_id, "/workspace_id", record.get("workspace_id"), workspaces, "workspace")
             basis = record.get("input_basis", {})
+            if record.get("task_kind") == "research_synthesis_drafting":
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    "/input_basis/question_id",
+                    basis.get("question_id"),
+                    questions,
+                    "question",
+                )
             if record.get("task_kind") in {
                 "knowledge_query_report",
                 "organization_proposal",

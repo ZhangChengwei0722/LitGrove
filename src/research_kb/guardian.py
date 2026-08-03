@@ -1282,7 +1282,7 @@ def step7_freshness_diagnostics(
             kind,
             candidate["candidate_id"],
             "/input_snapshot",
-            "Step 7 candidate is stale relative to upstream records: "
+            "Research Synthesis candidate is stale relative to upstream records: "
             + ", ".join(freshness["reasons"]),
             severity="warning",
         )

@@ -156,6 +156,8 @@ class CapabilityService:
                 "research_organization_application": True,
                 "organization_proposal_agent_tasks": True,
                 "question_screening_agent_tasks": True,
+                "research_synthesis_application": True,
+                "research_synthesis_agent_tasks": True,
                 "tag_application": True,
                 "embedded_agent_runtime": False,
             },

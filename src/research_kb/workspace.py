@@ -145,7 +145,7 @@ class WorkspaceLayout:
         try:
             filename = filenames[record_kind]
         except KeyError as error:
-            raise ValueError(f"unsupported Step 7 record kind: {record_kind}") from error
+            raise ValueError(f"unsupported Research Synthesis record kind: {record_kind}") from error
         return self.knowledge_root / "step7" / filename
 
     def journal_path(self, event_id: str) -> Path:
