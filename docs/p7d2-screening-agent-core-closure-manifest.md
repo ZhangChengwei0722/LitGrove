@@ -4,7 +4,7 @@
 - baseline: `7bf01ea4e4b64a891590035df1c9940c7e669ab2`
 - branch: `feature/p7d2-screening-proposals`
 - plan_commit: `fb37501`
-- implementation_commit: `pending`
+- implementation_commit: `4f7a530f2923b386040d960384778e4d0f015361`
 - merge_commit: `pending`
 - remote_status: `plan push previously failed with connection reset; retry at closure`
 - validation_receipt: `docs/p7d2-screening-agent-core-validation-receipt.md`
