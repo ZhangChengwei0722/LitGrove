@@ -983,6 +983,7 @@ def main() -> int:
                     "assert limits['ingress_modes'] == ['upload', 'watched_inbox']; "
                     "obsidian = ObsidianGeneratedViewsApplicationService(); "
                     "assert obsidian.limits(session)['max_status_page_size'] == 100; "
+                    "assert hasattr(obsidian, 'stream_snapshot'); "
                     "assert obsidian.status(session)['projection_state'] == 'missing'; "
                     f"reading = ReadingApplicationService().show_paper(session, {paper_id!r}); "
                     "assert reading['persistent_writes'] == 0 and 'source_ref' not in str(reading); "

@@ -15,6 +15,11 @@ active manifest, exact per-view dependencies, source watermarks, current/stale p
 and explicit edited-file rejection. Generated Markdown remains disposable and cannot become
 canonical scientific input.
 
+The public Application Service includes a path-free streaming snapshot handoff for P9-B.
+It is bound to the expected active-manifest digest, verifies each emitted file and rechecks
+the active source after streaming. Core does not accept an external vault path or perform the
+destination write.
+
 The maintained view set covers Home, Papers, Reviews, Directions, Questions and
 `Research Synthesis / 科研综合与启发`, plus the closed optional `library_summary` and
 `question_coverage` tables. User-visible naming is `Research Synthesis`; internal `step7`
@@ -24,7 +29,7 @@ commands, record kinds, stores and classes remain compatibility identifiers.
 
 ```text
 tests/unit/test_obsidian_generated_views_application_service.py
--> 20 passed
+-> 22 passed
 ```
 
 The targeted suite covers deterministic generation and exact rerun, manifest validation,
@@ -33,21 +38,13 @@ projection, edited and unknown managed-file blocking, explicit user discard, unt
 Markdown/link/path escaping, unsafe filesystem links, CLI/service equivalence, pagination,
 Guardian/Catalog isolation and Unicode rendering.
 
+It additionally covers exact snapshot streaming, stale-manifest rejection, mid-stream source
+change rejection, zero writes and absence of source paths in emitted Markdown.
+
 ## Full Windows Validation
 
-The suite was executed in bounded shards because the command host terminates a single
-process after ten minutes. The shards cover the same complete repository test collection.
-
 ```text
-unit A-M:                 451 passed, 2 skipped
-unit O-P:                 154 passed
-unit Q:                    38 passed
-unit R:                    98 passed
-unit S:                    70 passed
-unit T-W:                  77 passed, 2 skipped
-contract + integration:   141 passed
-privacy + benchmark:       20 passed
-aggregate:               1049 passed, 4 skipped
+python -m pytest -q: 1051 passed, 4 skipped
 ```
 
 The four skips are the expected POSIX permission contracts on Windows.
@@ -64,12 +61,10 @@ Additional checks:
 
 ## Candidate Artifacts
 
-- wheel SHA-256: `9502a7799495eb738ad9e27fdd69e02398839c29ce65c9aab462227b3ba2f76d`;
-- wheel size: `434297` bytes;
-- sdist SHA-256: `0a0ed39f21f3cc24f7f1b8ba70aff4625baa82201c39c51f26b4f4e2bff15a9a`;
-- sdist size: `765382` bytes.
+- wheel SHA-256: `8e8f62883ecca01a0834e917ace47ebeef79b4793c497ae627eae6b011d6c205`;
+- wheel size: `434790` bytes.
 
-These are pre-merge candidates. P9-B must pin a wheel rebuilt from the exact merged P9-A
+This is a pre-merge candidate. P9-B must pin a wheel rebuilt from the exact merged P9-A
 head and record that commit and digest separately.
 
 ## Diff Review

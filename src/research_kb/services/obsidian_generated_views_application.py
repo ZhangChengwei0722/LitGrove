@@ -56,6 +56,19 @@ class ObsidianGeneratedViewsApplicationService:
         )
         return _read_response(result)
 
+    def stream_snapshot(
+        self,
+        session: WorkspaceSession,
+        *,
+        expected_manifest_digest: str,
+        sink: Callable[[str, str, bytes], None],
+    ) -> dict[str, Any]:
+        result = ObsidianGeneratedViewsService(_layout(session), clock=self.clock).stream_snapshot(
+            expected_manifest_digest=expected_manifest_digest,
+            sink=sink,
+        )
+        return _read_response(result)
+
     def render(
         self,
         session: WorkspaceSession,

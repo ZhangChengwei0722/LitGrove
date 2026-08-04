@@ -10,7 +10,7 @@ import pytest
 
 from research_kb.bundle import load_workspace_entries
 from research_kb.cli import main
-from research_kb.errors import ResearchKBError
+from research_kb.errors import SNAPSHOT_MISMATCH, ResearchKBError
 from research_kb.guardian import GuardianService
 from research_kb.obsidian_views import project_obsidian_views
 from research_kb.services import (
@@ -25,6 +25,7 @@ from research_kb.storage.json_io import (
     read_jsonl,
     serialize_json,
     serialize_jsonl,
+    sha256_bytes,
 )
 from tests.unit.test_review_memory_service import prepare_review_paper, review_request
 from tests.unit.test_step7_candidate_service import _seed_workspace
@@ -686,6 +687,65 @@ def test_status_uses_stable_bounded_logical_path_pagination(tmp_path: Path) -> N
         service.status(session, page_size=101)
     with pytest.raises(ResearchKBError):
         service.status(session, cursor="missing.md")
+
+
+def test_snapshot_streams_verified_files_without_exposing_a_source_path(tmp_path: Path) -> None:
+    layout, session, service, _, _ = _workspace(tmp_path)
+    _render(service, session, tables=("library_summary",))
+    status = service.status(session, page_size=100)
+    streamed: list[tuple[str, str, bytes]] = []
+
+    result = service.stream_snapshot(
+        session,
+        expected_manifest_digest=status["manifest_digest"],
+        sink=lambda logical_path, content_digest, content: streamed.append(
+            (logical_path, content_digest, content)
+        ),
+    )
+
+    assert result["persistent_writes"] == 0
+    assert result["canonical_scientific_write"] is False
+    assert result["generation_id"] == status["generation_id"]
+    assert result["manifest_digest"] == status["manifest_digest"]
+    assert result["file_count"] == len(streamed) == status["file_count"]
+    assert result["byte_count"] == sum(len(content) for _, _, content in streamed)
+    assert [logical_path for logical_path, _, _ in streamed] == sorted(
+        logical_path for logical_path, _, _ in streamed
+    )
+    assert all(sha256_bytes(content) == digest for _, digest, content in streamed)
+    assert str(layout.config.path.parent).encode("utf-8") not in b"".join(
+        content for _, _, content in streamed
+    )
+
+
+def test_snapshot_rejects_stale_manifest_and_midstream_source_change(tmp_path: Path) -> None:
+    layout, session, service, _, _ = _workspace(tmp_path)
+    _render(service, session)
+    status = service.status(session, page_size=100)
+    with pytest.raises(ResearchKBError) as stale:
+        service.stream_snapshot(
+            session,
+            expected_manifest_digest="f" * 64,
+            sink=lambda *_: None,
+        )
+    assert stale.value.diagnostic.code == SNAPSHOT_MISMATCH
+
+    generation = layout.obsidian_generation_path(status["generation_id"])
+    changed = False
+
+    def mutate_after_first(logical_path: str, _digest: str, _content: bytes) -> None:
+        nonlocal changed
+        if not changed:
+            changed = True
+            (generation / logical_path).write_bytes(_content + b"\nchanged\n")
+
+    with pytest.raises(ResearchKBError) as raced:
+        service.stream_snapshot(
+            session,
+            expected_manifest_digest=status["manifest_digest"],
+            sink=mutate_after_first,
+        )
+    assert raced.value.diagnostic.code == SNAPSHOT_MISMATCH
 
 
 def test_unicode_titles_round_trip_without_becoming_link_syntax(tmp_path: Path) -> None:

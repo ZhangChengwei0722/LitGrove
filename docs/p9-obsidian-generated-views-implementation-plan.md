@@ -40,6 +40,12 @@ cutover or an embedded Agent runtime.
 P9-A is merged and validated before P9-B pins a Core wheel. It owns no external vault path
 and never writes outside the configured workspace `knowledge_root`.
 
+P9-A also exposes a path-free streaming snapshot method over the public Application Service.
+It accepts an expected active-manifest digest and a caller-owned sink callback, emits only
+allowlisted logical path, content digest and verified bytes under the workspace lock, and
+rechecks the active source after streaming. This lets P9-B write its own external staging
+without reading a Core path or loading the complete projection into memory.
+
 ### P9-B: App preview and one-way vault synchronization
 
 P9-B starts only from the exact merged P9-A wheel. The App receives configured target IDs,

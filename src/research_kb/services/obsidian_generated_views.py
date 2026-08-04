@@ -77,6 +77,7 @@ ENTRY_KEYS = {
 }
 DEPENDENCY_KEYS = {"record_kind", "record_id", "record_digest", "revision_id"}
 Clock = Callable[[], object]
+SnapshotSink = Callable[[str, str, bytes], None]
 
 
 class ObsidianGeneratedViewsService:
@@ -149,6 +150,81 @@ class ObsidianGeneratedViewsService:
 
     def preview_render(self, *, optional_tables: Iterable[str] = ()) -> dict[str, Any]:
         return self._preview(_normalize_tables(optional_tables))
+
+    def stream_snapshot(
+        self,
+        *,
+        expected_manifest_digest: str,
+        sink: SnapshotSink,
+    ) -> dict[str, Any]:
+        if not isinstance(expected_manifest_digest, str) or not DIGEST_PATTERN.fullmatch(
+            expected_manifest_digest
+        ):
+            raise _request_error(
+                "/expected_manifest_digest",
+                "expected manifest digest is invalid",
+            )
+        if not callable(sink):
+            raise _request_error("/sink", "snapshot sink must be callable")
+        with workspace_lock(self.layout.lock_path):
+            active = self._inspect_active()
+            if active is None:
+                raise _view_error("generated Obsidian projection has not been rendered")
+            if active.manifest["manifest_payload_digest"] != expected_manifest_digest:
+                raise ResearchKBError(
+                    Diagnostic(
+                        SNAPSHOT_MISMATCH,
+                        "obsidian-generated-view-snapshot",
+                        None,
+                        "/expected_manifest_digest",
+                        "Obsidian source manifest changed before snapshot streaming",
+                    )
+                )
+            if active.edited_paths:
+                raise ResearchKBError(
+                    Diagnostic(
+                        OBSIDIAN_MANAGED_EDIT,
+                        "obsidian-generated-view-snapshot",
+                        None,
+                        "",
+                        "edited managed generated files cannot be streamed",
+                    )
+                )
+            total_bytes = 0
+            for entry in active.manifest["files"]:
+                logical_path = entry["logical_path"]
+                source = active.generation / _logical_path(logical_path)
+                _require_safe_components(source)
+                content = source.read_bytes()
+                if (
+                    len(content) != entry["byte_count"]
+                    or sha256_bytes(content) != entry["content_digest"]
+                ):
+                    raise _view_error("generated Obsidian file changed during snapshot streaming")
+                sink(logical_path, entry["content_digest"], content)
+                total_bytes += len(content)
+            verified = self._inspect_active()
+            if (
+                verified is None
+                or verified.manifest["manifest_payload_digest"] != expected_manifest_digest
+                or verified.edited_paths
+            ):
+                raise ResearchKBError(
+                    Diagnostic(
+                        SNAPSHOT_MISMATCH,
+                        "obsidian-generated-view-snapshot",
+                        None,
+                        "/expected_manifest_digest",
+                        "Obsidian source changed during snapshot streaming",
+                    )
+                )
+            return {
+                "generation_id": active.manifest["generation_id"],
+                "manifest_digest": expected_manifest_digest,
+                "source_watermark": active.manifest["source_watermark"],
+                "file_count": len(active.manifest["files"]),
+                "byte_count": total_bytes,
+            }
 
     def render(self, request: Mapping[str, Any], *, actor: str) -> dict[str, Any]:
         normalized = _normalize_render_request(request)
