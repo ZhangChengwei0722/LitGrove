@@ -4,7 +4,8 @@ Date: 2026-08-04
 
 ## Scope
 
-Validated the P10 Core Exchange deliveries on `feature/p10-exchange` against baseline
+Validated the merged P10 Core Exchange head
+`f655037c27ad681e57be8f322eee481efccd2188` against baseline
 `f343389dce8f3908f775cc2c5c9bdea4a56bf4fb`.
 
 The validated surface includes:
@@ -21,32 +22,13 @@ Agent runtime was opened or modified.
 
 ## Test Results
 
-Final unit shards on the same source snapshot:
+Final full-suite validation on the merged source snapshot:
 
 ```text
-a-f: 366 passed
-g-l: 95 passed, 2 skipped
-m-r: 313 passed
-s-z: 147 passed, 2 skipped
-total: 921 passed, 4 skipped
+1083 passed, 4 skipped
 ```
 
 The four skips are the existing Windows-hosted POSIX permission cases.
-
-Additional groups:
-
-```text
-contract:    97 passed
-integration: 44 passed
-privacy:      4 passed
-benchmark:   16 passed
-```
-
-Combined deterministic pytest coverage:
-
-```text
-1082 passed, 4 skipped
-```
 
 Additional validation:
 
@@ -63,12 +45,15 @@ wheel Exchange payload/schema inspection: success
 ## Exact Wheel
 
 ```text
-file: dist/research_kb_core-0.1.0-py3-none-any.whl
-sha256: a4651aa0813d940a744f9e423c01ace00ce8e54113646a9a6129eab537f2c19e
+wheel: research_kb_core-0.1.0-py3-none-any.whl
+wheel_sha256: 89cfdcb776a68786803e90e06359d97d98e764fb10e04a7fcbef8c70a303081d
+sdist: research_kb_core-0.1.0.tar.gz
+sdist_sha256: 80cc30da722d8bff3d747a82a0be0f825f950b59cd20735ef1f9aad1eb660ab4
 ```
 
 The wheel contains the P10 Exchange runtime and all registered Exchange schemas, including
-`exchange-local-export-receipt`.
+`exchange-local-export-receipt`. The reviewed feature-branch and merged-head wheel builds
+were byte-identical.
 
 ## Security And Authority Assertions
 
@@ -83,6 +68,6 @@ The wheel contains the P10 Exchange runtime and all registered Exchange schemas,
 
 ## Result
 
-Core P10 Deliveries A/B are ready for commit and non-destructive local merge. App Delivery C
-must pin the exact merged Core wheel before implementing upload/download custody and the
-Exchange work surface.
+Core P10 Deliveries A/B are merged and closed at the final head above. App Delivery C must
+pin the exact merged Core commit and wheel digest before accepting Exchange custody or UI
+validation as complete.
