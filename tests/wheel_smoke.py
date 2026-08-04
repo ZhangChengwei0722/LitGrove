@@ -117,13 +117,13 @@ def main() -> int:
             "diagnostic_code": "RKBC-028",
         }:
             raise SystemExit("base wheel capability report did not expose the missing PDF dependency")
-        if not {"adequacy gate", "adequacy show", "discovery search", "discovery list", "discovery show", "discovery resolve", "identity list", "intake inspect", "intake inspect-acquired", "job list", "job show", "manuscript inspect", "paper context", "review context", "source list", "source scan", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
+        if not {"adequacy gate", "adequacy show", "discovery search", "discovery list", "discovery show", "discovery resolve", "identity list", "intake inspect", "intake inspect-acquired", "job list", "job show", "manuscript inspect", "obsidian render --dry-run", "obsidian status", "paper context", "review context", "source list", "source scan", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
             raise SystemExit("base wheel capability report lacks deterministic intake/context reads")
-        if not {"adequacy assess", "trunk advance"}.issubset(capability["write_commands"]):
+        if not {"adequacy assess", "obsidian render", "trunk advance"}.issubset(capability["write_commands"]):
             raise SystemExit("base wheel capability report lacks Source Adequacy writes")
         if capability["discovery_connectors"] != [{"connector": "europe-pmc", "availability": "available", "network_required": True}]:
             raise SystemExit("base wheel capability report lacks the Europe PMC connector")
-        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["approved_discovery_candidate_handoff"] is not True or capability["features"]["legal_oa_resolution"] is not True or capability["features"]["explicit_oa_acquisition"] is not True or capability["features"]["manuscript_projection"] is not True or capability["features"]["pipeline_jobs"] is not True or capability["features"]["source_asset_runtime"] is not True or capability["features"]["registry_identity_correction"] is not True or capability["features"]["source_adequacy"] is not True or capability["features"]["deterministic_trunk"] is not True or capability["features"]["deterministic_intake_application"] is not True:
+        if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["approved_discovery_candidate_handoff"] is not True or capability["features"]["legal_oa_resolution"] is not True or capability["features"]["explicit_oa_acquisition"] is not True or capability["features"]["manuscript_projection"] is not True or capability["features"]["pipeline_jobs"] is not True or capability["features"]["source_asset_runtime"] is not True or capability["features"]["registry_identity_correction"] is not True or capability["features"]["source_adequacy"] is not True or capability["features"]["deterministic_trunk"] is not True or capability["features"]["deterministic_intake_application"] is not True or capability["features"]["obsidian_generated_views"] is not True:
             raise SystemExit("base wheel capability report lacks Review Memory, Step 7 or discovery runtime")
         if (
             capability["features"]["agent_task_staging"] is not True
@@ -145,11 +145,12 @@ def main() -> int:
                 "from research_kb.guardian import GuardianService; "
                 "from research_kb.discovery.europe_pmc import EuropePmcConnector, EuropePmcResolver; "
                 "from research_kb.discovery.europe_pmc_pdf import EuropePmcPdfTransport; "
-                "from research_kb.services import AcquiredCandidateIntakeService, CompatibilityAdapterRegistry, CompatibilityInspectionService, DeterministicTrunkService, DiscoveryAcquisitionService, DiscoveryAcquisitionTransportRegistry, DiscoveryCandidateService, DiscoveryConnectorRegistry, DiscoveryResolutionService, DiscoveryResolverRegistry, DiscoveryService, GuardianFindingDispositionService, IntakeInspectService, ManuscriptProjectionService, PaperContextService, ParseService, PipelineJobService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService, ResearchSynthesisApplicationService, ReviewContextService, ReviewMemoryService, SourceAdequacyService, Step7CandidateService, Step7ContextService, Step7ReadingViewService; "
+                "from research_kb.services import AcquiredCandidateIntakeService, CompatibilityAdapterRegistry, CompatibilityInspectionService, DeterministicTrunkService, DiscoveryAcquisitionService, DiscoveryAcquisitionTransportRegistry, DiscoveryCandidateService, DiscoveryConnectorRegistry, DiscoveryResolutionService, DiscoveryResolverRegistry, DiscoveryService, GuardianFindingDispositionService, IntakeInspectService, ManuscriptProjectionService, ObsidianGeneratedViewsApplicationService, PaperContextService, ParseService, PipelineJobService, QuestionMappingService, QuestionReadingViewService, RecordService, RegistryService, ResearchSynthesisApplicationService, ReviewContextService, ReviewMemoryService, SourceAdequacyService, Step7CandidateService, Step7ContextService, Step7ReadingViewService; "
                 "registry = SchemaRegistry(); "
                 "assert registry.schema('mutation-request')['$id'].endswith('mutation-request'); "
                 "assert registry.schema('research-synthesis-proposal')['$id'].endswith('research-synthesis-proposal'); "
                 "assert ResearchSynthesisApplicationService is not None; "
+                "assert ObsidianGeneratedViewsApplicationService is not None; "
                 "assert registry.schema('compatibility-difference')['$id'].endswith('compatibility-difference'); "
                 "assert registry.schema('compatibility-report')['$id'].endswith('compatibility-report'); "
                 "assert registry.schema('question-mapping')['$id'].endswith('question-mapping'); "
@@ -974,12 +975,16 @@ def main() -> int:
                     "CatalogProjectionService, CatalogQueryService, WorkspaceSession, "
                     "WorkspaceSessionService, SourceAssetService, RegistryIdentityCorrectionService, "
                     "AgentTaskApplicationService, DeterministicIntakeApplicationService, ReadingApplicationService, "
-                    "DeterministicTrunkService, PipelineJobService; "
-                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.16'; "
+                    "DeterministicTrunkService, ObsidianGeneratedViewsApplicationService, PipelineJobService; "
+                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.17'; "
                     f"session = WorkspaceSessionService({{'wheel': Path({str(config_path)!r})}}).open('wheel'); "
                     "limits = DeterministicIntakeApplicationService().limits(session); "
-                    "assert limits['interface_version'] == '1.16'; "
+                    "assert limits['interface_version'] == '1.17'; "
                     "assert limits['ingress_modes'] == ['upload', 'watched_inbox']; "
+                    "obsidian = ObsidianGeneratedViewsApplicationService(); "
+                    "assert obsidian.limits(session)['max_status_page_size'] == 100; "
+                    "assert hasattr(obsidian, 'stream_snapshot'); "
+                    "assert obsidian.status(session)['projection_state'] == 'missing'; "
                     f"reading = ReadingApplicationService().show_paper(session, {paper_id!r}); "
                     "assert reading['persistent_writes'] == 0 and 'source_ref' not in str(reading); "
                     "layout = session._layout; "
@@ -1080,7 +1085,7 @@ def main() -> int:
                     "assignment = tags.set_assignment(session, {'tag_id':tag['tag']['tag_id'],'target_kind':'paper','target_id':paper['paper_id'],'state':'assigned','receipt_id':'installed-wheel-tag-link'}); "
                     "assert assignment['result'] == 'committed' and tags.show_tag(session, tag['tag']['tag_id'])['assignments'][0]['target_id'] == paper['paper_id'], 'tag assignment'; "
                     "source_access = ReadingApplicationService().prepare_evidence_source(session, evidence_id); "
-                    "assert source_access.descriptor['application_service_interface_version'] == '1.16', 'source interface'; "
+                    "assert source_access.descriptor['application_service_interface_version'] == '1.17', 'source interface'; "
                     "assert source_access.descriptor['media_type'] == 'application/pdf' and source_access.descriptor['persistent_writes'] == 0, 'source descriptor'; "
                     "assert 'source_ref' not in str(source_access.descriptor) and 'fingerprint' not in str(source_access.descriptor), 'source redaction'; "
                     "opened = ReadingApplicationService().open_evidence_source(session, source_access.handle); "

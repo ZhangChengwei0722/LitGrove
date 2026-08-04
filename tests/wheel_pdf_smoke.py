@@ -88,9 +88,9 @@ def main() -> int:
             "diagnostic_code": None,
         }:
             raise SystemExit("PDF wheel text-flow capability does not match the installed adapter")
-        if not {"adequacy gate", "adequacy show", "discovery search", "identity list", "intake inspect", "intake inspect-acquired", "job list", "job show", "manuscript inspect", "paper context", "review context", "source list", "source scan", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
+        if not {"adequacy gate", "adequacy show", "discovery search", "identity list", "intake inspect", "intake inspect-acquired", "job list", "job show", "manuscript inspect", "obsidian render --dry-run", "obsidian status", "paper context", "review context", "source list", "source scan", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
             raise SystemExit("PDF wheel capability report lacks deterministic intake/context reads")
-        if not {"adequacy assess", "trunk advance"}.issubset(capability["write_commands"]):
+        if not {"adequacy assess", "obsidian render", "trunk advance"}.issubset(capability["write_commands"]):
             raise SystemExit("PDF wheel capability report lacks Source Adequacy writes")
         if capability["discovery_connectors"] != [{"connector": "europe-pmc", "availability": "available", "network_required": True}]:
             raise SystemExit("PDF wheel capability report lacks the Europe PMC connector")

@@ -148,6 +148,21 @@ class WorkspaceLayout:
             raise ValueError(f"unsupported Research Synthesis record kind: {record_kind}") from error
         return self.knowledge_root / "step7" / filename
 
+    @property
+    def obsidian_views_root(self) -> Path:
+        return self.knowledge_root / "views" / "obsidian"
+
+    @property
+    def obsidian_manifest_path(self) -> Path:
+        return self.obsidian_views_root / "manifest.json"
+
+    @property
+    def obsidian_generations_root(self) -> Path:
+        return self.obsidian_views_root / "generations"
+
+    def obsidian_generation_path(self, generation_id: str) -> Path:
+        return self.obsidian_generations_root / generation_id
+
     def journal_path(self, event_id: str) -> Path:
         return self.transactions_root / f"{event_id}.json"
 

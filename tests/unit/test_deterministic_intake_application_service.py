@@ -428,7 +428,7 @@ def test_limits_are_authoritative_and_request_shape_is_strict(tmp_path: Path) ->
 
     assert limits == {
         "status": "success",
-        "interface_version": "1.16",
+        "interface_version": "1.17",
         "max_pdf_bytes": 64 * 1024 * 1024,
         "max_scan_entries": 1000,
         "max_job_page_size": 100,

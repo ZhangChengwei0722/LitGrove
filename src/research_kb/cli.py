@@ -32,6 +32,7 @@ from research_kb.errors import (
 )
 from research_kb.guardian import GuardianService
 from research_kb.mutation import load_mutation_request, mutation_request_from_mapping
+from research_kb.obsidian_views import OPTIONAL_TABLES
 from research_kb.services.acquired_candidate_intake import AcquiredCandidateIntakeService
 from research_kb.services.application_validation import ContractValidationService, JsonlValidationService
 from research_kb.services.capability import CapabilityService
@@ -56,6 +57,10 @@ from research_kb.services.bootstrap import WorkspaceBootstrapService
 from research_kb.services.compatibility import CompatibilityAdapterRegistry, CompatibilityInspectionService
 from research_kb.services.intake_inspect import IntakeInspectService
 from research_kb.services.manuscript_projection import ManuscriptProjectionService
+from research_kb.services.obsidian_generated_views_application import (
+    ObsidianGeneratedViewsApplicationService,
+)
+from research_kb.services.workspace_session import WorkspaceSessionService
 from research_kb.services.discovery import DiscoveryConnectorRegistry, DiscoveryService
 from research_kb.services.discovery_candidate import DiscoveryCandidateService
 from research_kb.services.discovery_acquisition import (
@@ -328,6 +333,25 @@ def build_parser() -> argparse.ArgumentParser:
     step7_render.add_argument("--workspace", required=True, type=Path)
     step7_render.add_argument("--question-id", required=True)
 
+    obsidian = commands.add_parser("obsidian", help="manage generated Obsidian reading views")
+    obsidian_commands = obsidian.add_subparsers(dest="obsidian_command", required=True)
+    obsidian_status = obsidian_commands.add_parser("status", help="inspect generated-view freshness")
+    obsidian_status.add_argument("--workspace", required=True, type=Path)
+    obsidian_status.add_argument("--page-size", type=int, default=20)
+    obsidian_status.add_argument("--cursor")
+    obsidian_render = obsidian_commands.add_parser("render", help="preview or render generated views")
+    obsidian_render.add_argument("--workspace", required=True, type=Path)
+    obsidian_render.add_argument(
+        "--table",
+        dest="optional_tables",
+        action="append",
+        choices=OPTIONAL_TABLES,
+        default=[],
+    )
+    obsidian_render.add_argument("--dry-run", action="store_true")
+    obsidian_render.add_argument("--discard-managed-edits", action="store_true")
+    obsidian_render.add_argument("--actor", choices=("cli", "user"), default="cli")
+
     transaction = commands.add_parser("transaction", help="inspect or recover interrupted writes")
     transaction_commands = transaction.add_subparsers(dest="transaction_command", required=True)
     recover = transaction_commands.add_parser("recover", help="recover transaction journals by digest")
@@ -444,6 +468,10 @@ def main(
             return _step7_context(args)
         if args.command == "step7" and args.step7_command == "render":
             return _step7_render(args)
+        if args.command == "obsidian" and args.obsidian_command == "status":
+            return _obsidian_status(args)
+        if args.command == "obsidian" and args.obsidian_command == "render":
+            return _obsidian_render(args)
         if args.command == "transaction" and args.transaction_command == "recover":
             return _transaction_recover(args)
     except ResearchKBError as error:
@@ -1230,6 +1258,52 @@ def _step7_render(args: argparse.Namespace) -> int:
     content = WorkspaceStep7ReadingViewService(layout).render(args.question_id)
     _write_bytes_once(content)
     return 0
+
+
+def _obsidian_status(args: argparse.Namespace) -> int:
+    service, session = _obsidian_application(args.workspace)
+    _write_json_once(
+        service.status(
+            session,
+            page_size=args.page_size,
+            cursor=args.cursor,
+        )
+    )
+    return 0
+
+
+def _obsidian_render(args: argparse.Namespace) -> int:
+    service, session = _obsidian_application(args.workspace)
+    preview = service.preview_render(session, optional_tables=args.optional_tables)
+    if args.dry_run:
+        if args.discard_managed_edits:
+            raise ResearchKBError(
+                Diagnostic(
+                    SCHEMA_VALIDATION_FAILED,
+                    "obsidian-generated-view-cli",
+                    None,
+                    "/discard_managed_edits",
+                    "discard-managed-edits is valid only for an applied render",
+                )
+            )
+        _write_json_once(preview)
+        return 0
+    result = service.render(
+        session,
+        {
+            "optional_tables": args.optional_tables,
+            "expected_state": preview["expected_state"],
+            "discard_managed_edits": args.discard_managed_edits,
+        },
+        actor=args.actor,
+    )
+    _write_json_once(result)
+    return 0
+
+
+def _obsidian_application(workspace: Path):
+    session = WorkspaceSessionService({"cli": workspace.resolve()}).open("cli")
+    return ObsidianGeneratedViewsApplicationService(), session
 
 
 def _record_id(kind: str, record: dict[str, Any]) -> str:

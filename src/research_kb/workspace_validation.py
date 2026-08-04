@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import stat
 import unicodedata
 from collections.abc import Iterator
@@ -86,6 +87,23 @@ P7D_1_MANAGED_DIRECTORIES = P7C_1_MANAGED_DIRECTORIES + (
     "organization/screening_decisions/by_id",
 )
 MANAGED_DIRECTORIES = P7D_1_MANAGED_DIRECTORIES
+P9_OPTIONAL_MANAGED_DIRECTORIES = (
+    "views",
+    "views/obsidian",
+    "views/obsidian/generations",
+)
+_OBSIDIAN_GENERATION_NAME = r"(?:gen-[0-9a-f]{64}|\.staging-[0-9a-f]{32})"
+_OBSIDIAN_GENERATION_DIRECTORY = re.compile(
+    rf"^views/obsidian/generations/{_OBSIDIAN_GENERATION_NAME}$"
+)
+_OBSIDIAN_GENERATION_CHILD_DIRECTORY = re.compile(
+    rf"^views/obsidian/generations/{_OBSIDIAN_GENERATION_NAME}/"
+    r"(?:Papers|Reviews|Directions|Questions|Research Synthesis|Tables)$"
+)
+_OBSIDIAN_GENERATED_FILE = re.compile(
+    rf"^views/obsidian/generations/{_OBSIDIAN_GENERATION_NAME}/"
+    r"(?:Home\.md|(?:Papers|Reviews|Directions|Questions|Research Synthesis|Tables)/[^/]+\.md)$"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -403,7 +421,7 @@ def _layout_diagnostics(context: WorkspaceContext, *, require_initialized: bool)
         diagnostics.append(_not_initialized(context.workspace_id))
 
     required_directories = P7A_1_MANAGED_DIRECTORIES if marker_is_predecessor else MANAGED_DIRECTORIES
-    allowed_directories = MANAGED_DIRECTORIES
+    allowed_directories = MANAGED_DIRECTORIES + P9_OPTIONAL_MANAGED_DIRECTORIES
     expected_names = {
         _normalized_name(Path(value).parts[0]): Path(value).parts[0]
         for value in allowed_directories
@@ -467,7 +485,7 @@ def _recognized_descendant(
     allow_discovery_store: bool,
 ) -> bool:
     if is_directory:
-        return relative in managed_directories
+        return _recognized_managed_directory(relative, managed_directories)
     if relative == MARKER_RELATIVE_PATH or relative == ".research-kb/locks/workspace.lock":
         return True
     patterns = (
@@ -507,7 +525,20 @@ def _recognized_descendant(
     }
     if allow_discovery_store:
         exact.add("discovery/candidates.jsonl")
-    return relative in exact
+    return relative in exact or relative == "views/obsidian/manifest.json" or bool(
+        _OBSIDIAN_GENERATED_FILE.fullmatch(relative)
+    )
+
+
+def _recognized_managed_directory(
+    relative: str,
+    managed_directories: tuple[str, ...],
+) -> bool:
+    return (
+        relative in managed_directories
+        or bool(_OBSIDIAN_GENERATION_DIRECTORY.fullmatch(relative))
+        or bool(_OBSIDIAN_GENERATION_CHILD_DIRECTORY.fullmatch(relative))
+    )
 
 
 def _mode_diagnostics(path: Path, workspace_id: str, json_path: str, *, directory: bool) -> list[Diagnostic]:
@@ -572,7 +603,7 @@ def _iter_managed_descendants(
                 relative = "/".join(relative_parts)
                 yield path, relative, is_directory, is_unsafe
                 if (
-                    relative in managed_directories
+                    _recognized_managed_directory(relative, managed_directories)
                     and is_directory
                     and not is_unsafe
                 ):
