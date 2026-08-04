@@ -85,6 +85,7 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert "intake inspect" in output["read_commands"]
     assert "intake inspect-acquired" in output["read_commands"]
     assert "manuscript inspect" in output["read_commands"]
+    assert {"obsidian render --dry-run", "obsidian status"} <= set(output["read_commands"])
     assert "paper context" in output["read_commands"]
     assert "paper status" in output["read_commands"]
     assert "review context" in output["read_commands"]
@@ -99,6 +100,7 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert "source select" in output["write_commands"]
     assert "identity correct" in output["write_commands"]
     assert {"adequacy assess", "trunk advance"} <= set(output["write_commands"])
+    assert "obsidian render" in output["write_commands"]
     assert "source-asset-state" in output["operational_record_kinds"]
     assert "registry-identity-correction" in output["operational_record_kinds"]
     assert "source-adequacy-profile" in output["operational_record_kinds"]
@@ -117,6 +119,7 @@ def test_capability_show_cli_is_workspace_independent(capsys) -> None:
     assert output["features"]["source_adequacy"] is True
     assert output["features"]["deterministic_trunk"] is True
     assert output["features"]["deterministic_intake_application"] is True
+    assert output["features"]["obsidian_generated_views"] is True
     assert {"job list", "job show"} <= set(output["read_commands"])
     assert {"job create", "job transition", "job cancel", "job recover"} <= set(output["write_commands"])
 
@@ -1195,6 +1198,8 @@ def test_step7_read_missing_id_has_empty_stdout(tmp_path, capsys, command) -> No
             "--question-id",
             "question_a1111111-1111-4111-8111-111111111111",
         ],
+        ["obsidian", "status"],
+        ["obsidian", "render", "--dry-run"],
     ],
 )
 def test_runtime_cli_reports_old_layout_as_upgrade_required(tmp_path, capsys, argv) -> None:
@@ -1238,6 +1243,9 @@ def test_runtime_cli_reports_old_layout_as_upgrade_required(tmp_path, capsys, ar
         ["question", "render", "--question-id", "question_a1111111-1111-4111-8111-111111111111"],
         ["step7", "context", "--question-id", "question_a1111111-1111-4111-8111-111111111111"],
         ["step7", "render", "--question-id", "question_a1111111-1111-4111-8111-111111111111"],
+        ["obsidian", "status"],
+        ["obsidian", "render", "--dry-run"],
+        ["obsidian", "render"],
         ["transaction", "recover", "--dry-run"],
     ],
 )

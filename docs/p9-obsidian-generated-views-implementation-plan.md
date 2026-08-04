@@ -5,7 +5,6 @@
 - core_baseline: `main@050aa51`
 - app_baseline: `feature/p8b-research-synthesis-work-surface@c215560`
 - delivery_split: `P9-A Core managed render contract; P9-B localhost App vault sync`
-- q001_access_authorized: false
 - private_workspace_access_authorized: false
 - real_vault_access_authorized: false
 - migration_authorized: false
@@ -422,7 +421,7 @@ Implementation may begin with P9-A tests. P9-B remains gated on the exact merged
 
 ## Hard Boundaries
 
-- no Q001, private scientific workspace, real PDF or real user vault access;
+- no private scientific workspace, real PDF or real user vault access;
 - no reverse Obsidian sync or Markdown-to-canonical import;
 - no raw parsed text, source path, HTML, embed or arbitrary external link in generated views;
 - no App-owned scientific rendering or direct canonical JSON/JSONL reads;

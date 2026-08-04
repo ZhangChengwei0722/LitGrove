@@ -93,6 +93,8 @@ class CapabilityService:
                     "question list",
                     "question show",
                     "question render",
+                    "obsidian status",
+                    "obsidian render --dry-run",
                     "review context",
                     "source list",
                     "source scan",
@@ -117,6 +119,7 @@ class CapabilityService:
                     "identity correct",
                     "adequacy assess",
                     "trunk advance",
+                    "obsidian render",
                 )
             ),
             "operational_record_kinds": sorted(
@@ -159,6 +162,7 @@ class CapabilityService:
                 "research_synthesis_application": True,
                 "research_synthesis_agent_tasks": True,
                 "tag_application": True,
+                "obsidian_generated_views": True,
                 "embedded_agent_runtime": False,
             },
             "agent_task_registry_version": PRIVACY_REGISTRY_VERSION,

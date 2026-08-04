@@ -51,6 +51,6 @@ fix head.
 ## Boundaries
 
 - no contract, schema, ID, store or workspace-layout change;
-- no private workspace, Q001 or real PDF access;
+- no private scientific workspace or real PDF access;
 - no compatibility rename of internal `step7-*` identifiers;
 - no migration, cutover, embedded Agent runtime or deployment.

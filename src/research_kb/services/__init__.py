@@ -21,6 +21,10 @@ from research_kb.services.intake_inspect import IntakeInspectService
 from research_kb.services.guardian_disposition import GuardianFindingDispositionService
 from research_kb.services.local_source_intake import LocalSourceIntakeService
 from research_kb.services.manuscript_projection import ManuscriptProjectionService
+from research_kb.services.obsidian_generated_views import ObsidianGeneratedViewsService
+from research_kb.services.obsidian_generated_views_application import (
+    ObsidianGeneratedViewsApplicationService,
+)
 from research_kb.services.parse import ParseService
 from research_kb.services.parse_application import ParseAdapterRegistry, ParseApplicationService
 from research_kb.services.parse_read import ParseReadService
@@ -84,6 +88,8 @@ __all__ = [
     "JsonlValidationService",
     "LocalSourceIntakeService",
     "ManuscriptProjectionService",
+    "ObsidianGeneratedViewsApplicationService",
+    "ObsidianGeneratedViewsService",
     "ParseService",
     "ParseAdapterRegistry",
     "ParseApplicationService",
