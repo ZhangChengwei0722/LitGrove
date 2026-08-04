@@ -43,6 +43,7 @@ from research_kb.source_assets import current_source_asset_heads
 from research_kb.storage.json_io import (
     atomic_write_bytes,
     ensure_private_directory,
+    file_sha256,
     read_json_document,
     read_jsonl,
     serialize_json,
@@ -75,6 +76,12 @@ class RegistryProjectionInput:
     store_digest: str
 
 
+@dataclass(frozen=True, slots=True)
+class ProjectionSourceBindings:
+    locators: tuple[CatalogSourceLocator, ...]
+    store_digests: dict[str, str]
+
+
 class CatalogProjectionService:
     def __init__(
         self,
@@ -96,6 +103,7 @@ class CatalogProjectionService:
         _validate_existing_catalog_paths(self.paths)
         snapshot = self._snapshot()
         registry_input = self._registry_input() if self._uses_workspace_loader else None
+        bindings = self._source_bindings(snapshot, registry_input)
         _prepare_managed_root(self.paths)
         temporary = self.paths.workspace_root / f".{DATABASE_FILENAME}.{uuid.uuid4().hex}.tmp"
         try:
@@ -103,10 +111,8 @@ class CatalogProjectionService:
                 temporary,
                 snapshot,
                 build_mode="full",
-                source_locators=() if registry_input is None else registry_input.locators,
-                source_store_digests=(
-                    {} if registry_input is None else {"registry": registry_input.store_digest}
-                ),
+                source_locators=bindings.locators,
+                source_store_digests=bindings.store_digests,
             )
             os.replace(temporary, self.paths.database_path)
         finally:
@@ -138,14 +144,13 @@ class CatalogProjectionService:
             raise _projection_error("catalog projection is not compatible with update")
         snapshot = self._snapshot()
         registry_input = self._registry_input() if self._uses_workspace_loader else None
+        bindings = self._source_bindings(snapshot, registry_input)
         _prepare_managed_root(self.paths)
         changes = CatalogDatabase.update(
             self.paths.database_path,
             snapshot,
-            source_locators=() if registry_input is None else registry_input.locators,
-            source_store_digests=(
-                {} if registry_input is None else {"registry": registry_input.store_digest}
-            ),
+            source_locators=bindings.locators,
+            source_store_digests=bindings.store_digests,
         )
         return {**_build_result(snapshot, mode="incremental"), **changes}
 
@@ -235,6 +240,35 @@ class CatalogProjectionService:
             workspace_id=self.session.workspace_id,
         )
 
+    def _source_bindings(
+        self,
+        snapshot: CatalogSnapshot,
+        registry_input: RegistryProjectionInput | None,
+    ) -> ProjectionSourceBindings:
+        if registry_input is None:
+            return ProjectionSourceBindings((), {})
+        locators = list(registry_input.locators)
+        store_digests = {"registry": registry_input.store_digest}
+        for path, record_kind, store_key in (
+            (self.session._layout.pipeline_jobs_path, "pipeline-job-state", "pipeline_jobs"),
+            (self.session._layout.agent_tasks_path, "agent-task-state", "agent_tasks"),
+        ):
+            selected = {
+                item.source_key
+                for item in snapshot.source_records
+                if item.record_kind == record_kind
+            }
+            store_locators, store_digest = _load_jsonl_projection_locators(
+                path,
+                record_kind=record_kind,
+                id_field="state_id",
+                store_key=store_key,
+                selected_source_keys=selected,
+            )
+            locators.extend(store_locators)
+            store_digests[store_key] = store_digest
+        return ProjectionSourceBindings(tuple(locators), store_digests)
+
     def _benchmark_registry_delta(
         self,
         *,
@@ -287,6 +321,7 @@ class CatalogQueryService:
     def __init__(self, projection: CatalogProjectionService):
         self.projection = projection
         self._status: dict[str, Any] | None = None
+        self._operational_status: dict[str, Any] | None = None
 
     def refresh_status(self) -> dict[str, Any]:
         self._status = self.projection.status()
@@ -294,6 +329,7 @@ class CatalogQueryService:
 
     def bind_existing_projection(self) -> dict[str, Any]:
         self._status = self.projection.inspect_status()
+        self._operational_status = None
         return dict(self._status)
 
     def bind_projection_result(self, result: dict[str, Any]) -> dict[str, Any]:
@@ -318,7 +354,43 @@ class CatalogQueryService:
             "current_source_watermark": result["source_watermark"],
             "unknown_record_kinds": result.get("unknown_record_kinds", []),
         }
+        self._operational_status = None
+        self.bind_operational_projection()
         return dict(self._status)
+
+    def bind_operational_projection(self) -> dict[str, Any]:
+        inspection = CatalogDatabase.inspect(self.projection.paths.database_path)
+        expected = {
+            "pipeline_jobs": file_sha256(self.projection.session._layout.pipeline_jobs_path),
+            "agent_tasks": file_sha256(self.projection.session._layout.agent_tasks_path),
+        }
+        stored = inspection.metadata.get("source_store_digests", {})
+        current = (
+            inspection.state == "ready"
+            and inspection.metadata.get("workspace_id") == self.projection.session.workspace_id
+            and inspection.metadata.get("adapter_registry_version")
+            == self.projection.registry.registry_version
+            and all(expected[key] is not None and stored.get(key) == expected[key] for key in expected)
+        )
+        self._operational_status = {
+            "status": "success",
+            "projection_state": "current" if current else inspection.state if inspection.state != "ready" else "stale",
+            "projection_scope": "operational_heads",
+            "workspace_id": self.projection.session.workspace_id,
+            "source_watermark": inspection.metadata.get("source_watermark"),
+            "store_digests_verified": current,
+        }
+        return dict(self._operational_status)
+
+    def mark_stale(self) -> None:
+        if self._status is not None:
+            self._status = {
+                **self._status,
+                "projection_state": "stale",
+                "freshness_verification": "upstream_write",
+                "current_source_watermark": None,
+            }
+        self._operational_status = None
 
     def search(
         self,
@@ -350,6 +422,71 @@ class CatalogQueryService:
         result["source_watermark"] = status["source_watermark"]
         return result
 
+    def operational_page(
+        self,
+        *,
+        item_kind: str,
+        page_size: int = 20,
+        cursor: str | None = None,
+    ) -> dict[str, Any]:
+        if item_kind not in {"pipeline_job", "agent_task"}:
+            raise _projection_error("operational page kind is not supported")
+        operational_status = self._operational_status or self.bind_operational_projection()
+        if operational_status["projection_state"] != "current":
+            raise _projection_error("operational projection is not current")
+        page = self.search(
+            item_kinds=(item_kind,),
+            page_size=page_size,
+            cursor=cursor,
+        )
+        item_ids = tuple(item["item_id"] for item in page["items"])
+        bindings = CatalogDatabase.detail_bindings(self.projection.paths.database_path, item_ids)
+        raw_records = _read_operational_page_records(self.projection.session._layout, bindings)
+        records = []
+        schema_registry = SchemaRegistry()
+        validation_sessions: dict[str, RecordValidationSession] = {}
+        for item_id in item_ids:
+            binding = bindings.get(item_id)
+            record = raw_records.get(item_id)
+            if binding is None or record is None:
+                raise _projection_error("operational projection record changed before page materialization")
+            row = binding["item"]
+            if canonical_digest(record) != row["source_record_digest"]:
+                raise _projection_error("operational projection record digest changed before page materialization")
+            record_kind = row["record_kind"]
+            session = validation_sessions.get(record_kind)
+            if session is None:
+                session = RecordValidationSession(record_kind, registry=schema_registry, actor="stored")
+                validation_sessions[record_kind] = session
+            diagnostics = session.validate(record)
+            if diagnostics:
+                raise ResearchKBError(diagnostics[0])
+            adapter = self.projection.registry.find_adapter(record_kind)
+            if adapter.record_id(record) != row["record_id"]:
+                raise _projection_error("operational projection record identity changed before page materialization")
+            records.append(adapter.detail(record, row["child_id"]))
+        return {
+            "status": "success",
+            "projection_state": operational_status["projection_state"],
+            "source_watermark": page["source_watermark"],
+            "item_kind": item_kind,
+            "records": records,
+            "next_cursor": page["next_cursor"],
+            "has_more": page["has_more"],
+        }
+
+    def operational_late_cursor(self, *, item_kind: str, page_size: int = 100) -> str | None:
+        if item_kind not in {"pipeline_job", "agent_task"}:
+            raise _projection_error("operational late cursor kind is not supported")
+        operational_status = self._operational_status or self.bind_operational_projection()
+        if operational_status["projection_state"] != "current":
+            raise _projection_error("operational projection is not current")
+        return CatalogDatabase.late_cursor(
+            self.projection.paths.database_path,
+            item_kind=item_kind,
+            page_size=page_size,
+        )
+
     def detail(self, item_id: str) -> dict[str, Any]:
         if not CATALOG_ITEM_PATTERN.fullmatch(item_id):
             raise ResearchKBError(
@@ -379,8 +516,8 @@ class CatalogQueryService:
         adapter = self.projection.registry.find_adapter(row["record_kind"])
         if self.projection._uses_workspace_loader:
             locator = binding["locator"]
-            if row["record_kind"] == "registry-paper" and locator is not None:
-                record = _read_registry_record_at_locator(
+            if locator is not None:
+                record = _read_jsonl_record_at_locator(
                     self.projection.session._layout,
                     row,
                     locator,
@@ -517,6 +654,8 @@ def _load_exact_workspace_record(layout, row: dict[str, Any]) -> dict[str, Any] 
         return _find_jsonl_record(layout.process_events_path, "event_id", row["record_id"])
     if kind == "pipeline-job-state":
         return _find_jsonl_record(layout.pipeline_jobs_path, "state_id", row["record_id"])
+    if kind == "agent-task-state":
+        return _find_jsonl_record(layout.agent_tasks_path, "state_id", row["record_id"])
     if kind == "source-adequacy-profile":
         return _find_jsonl_record(
             layout.source_adequacy_path,
@@ -649,19 +788,72 @@ def _load_registry_projection_input(
     return RegistryProjectionInput(snapshot, locators, sha256_bytes(content))
 
 
-def _read_registry_record_at_locator(
+def _load_jsonl_projection_locators(
+    path: Path,
+    *,
+    record_kind: str,
+    id_field: str,
+    store_key: str,
+    selected_source_keys: set[str],
+) -> tuple[tuple[CatalogSourceLocator, ...], str]:
+    try:
+        content = path.read_bytes() if path.exists() else b""
+    except OSError as error:
+        raise _jsonl_error(path, f"cannot read {store_key} store: {error}", record_kind=record_kind) from error
+    if content.startswith(b"\xef\xbb\xbf"):
+        raise _jsonl_error(path, "UTF-8 BOM is not permitted", record_kind=record_kind)
+    if b"\r" in content:
+        raise _jsonl_error(path, "canonical structured files must use LF line endings", record_kind=record_kind)
+    if content and not content.endswith(b"\n"):
+        raise _jsonl_error(path, "JSONL must end with LF", record_kind=record_kind)
+
+    locators: list[CatalogSourceLocator] = []
+    seen: set[str] = set()
+    offset = 0
+    for line_number, raw_line in enumerate(content.splitlines(keepends=True), start=1):
+        if raw_line == b"\n":
+            raise _jsonl_error(path, f"blank JSONL line at {line_number}", record_kind=record_kind)
+        try:
+            value = json.loads(raw_line[:-1].decode("utf-8", errors="strict"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise _jsonl_error(path, f"invalid JSONL at line {line_number}", record_kind=record_kind) from error
+        record_id = value.get(id_field) if isinstance(value, dict) else None
+        if not isinstance(record_id, str) or not record_id:
+            raise _jsonl_error(path, f"JSONL line {line_number} lacks {id_field}", record_kind=record_kind)
+        source_key = f"{record_kind}:{record_id}"
+        if source_key in seen:
+            raise _jsonl_error(path, f"duplicate {id_field} at line {line_number}", record_kind=record_kind)
+        seen.add(source_key)
+        if source_key in selected_source_keys:
+            locators.append(CatalogSourceLocator(source_key, store_key, offset, len(raw_line)))
+        offset += len(raw_line)
+    if {item.source_key for item in locators} != selected_source_keys:
+        raise _jsonl_error(path, "projected source locator set is incomplete", record_kind=record_kind)
+    return tuple(locators), sha256_bytes(content)
+
+
+def _read_jsonl_record_at_locator(
     layout,
     row: dict[str, Any],
     locator: dict[str, Any],
 ) -> dict[str, Any] | None:
-    if locator.get("store_key") != "registry":
+    stores = {
+        "registry": (layout.registry_path, "registry-paper", "paper_id"),
+        "pipeline_jobs": (layout.pipeline_jobs_path, "pipeline-job-state", "state_id"),
+        "agent_tasks": (layout.agent_tasks_path, "agent-task-state", "state_id"),
+    }
+    binding = stores.get(locator.get("store_key"))
+    if binding is None:
+        return None
+    path, record_kind, id_field = binding
+    if row.get("record_kind") != record_kind:
         return None
     offset = locator.get("byte_offset")
     length = locator.get("byte_length")
     if not isinstance(offset, int) or offset < 0 or not isinstance(length, int) or length < 2:
         return None
     try:
-        with layout.registry_path.open("rb") as handle:
+        with path.open("rb") as handle:
             handle.seek(offset)
             raw_line = handle.read(length)
     except OSError:
@@ -672,14 +864,64 @@ def _read_registry_record_at_locator(
         record = json.loads(raw_line[:-1].decode("utf-8", errors="strict"))
     except (UnicodeDecodeError, json.JSONDecodeError):
         return None
-    if not isinstance(record, dict) or record.get("paper_id") != row["record_id"]:
+    if not isinstance(record, dict) or record.get(id_field) != row["record_id"]:
         return None
     return record
 
 
-def _jsonl_error(path: Path, message: str) -> ResearchKBError:
+def _read_operational_page_records(
+    layout,
+    bindings: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    stores = {
+        "pipeline_jobs": (layout.pipeline_jobs_path, "pipeline-job-state", "state_id"),
+        "agent_tasks": (layout.agent_tasks_path, "agent-task-state", "state_id"),
+    }
+    grouped: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+    for item_id, binding in bindings.items():
+        locator = binding.get("locator")
+        store_key = None if locator is None else locator.get("store_key")
+        if store_key not in stores:
+            raise _projection_error("operational projection locator is unavailable")
+        grouped.setdefault(store_key, []).append((item_id, binding))
+
+    records: dict[str, dict[str, Any]] = {}
+    for store_key, selected in grouped.items():
+        path, record_kind, id_field = stores[store_key]
+        try:
+            with path.open("rb") as handle:
+                for item_id, binding in selected:
+                    row = binding["item"]
+                    locator = binding["locator"]
+                    offset = locator.get("byte_offset")
+                    length = locator.get("byte_length")
+                    if (
+                        row.get("record_kind") != record_kind
+                        or not isinstance(offset, int)
+                        or offset < 0
+                        or not isinstance(length, int)
+                        or length < 2
+                    ):
+                        raise _projection_error("operational projection locator is invalid")
+                    handle.seek(offset)
+                    raw_line = handle.read(length)
+                    if len(raw_line) != length or not raw_line.endswith(b"\n") or b"\r" in raw_line:
+                        raise _projection_error("operational projection locator no longer resolves")
+                    try:
+                        record = json.loads(raw_line[:-1].decode("utf-8", errors="strict"))
+                    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                        raise _projection_error("operational projection locator no longer contains JSON") from error
+                    if not isinstance(record, dict) or record.get(id_field) != row["record_id"]:
+                        raise _projection_error("operational projection locator identity changed")
+                    records[item_id] = record
+        except OSError as error:
+            raise _projection_error("operational projection store cannot be read") from error
+    return records
+
+
+def _jsonl_error(path: Path, message: str, *, record_kind: str = "registry-paper") -> ResearchKBError:
     return ResearchKBError(
-        Diagnostic(JSONL_FORMAT_ERROR, "registry-paper", None, "", f"{message}: {path.name}")
+        Diagnostic(JSONL_FORMAT_ERROR, record_kind, None, "", f"{message}: {path.name}")
     )
 
 

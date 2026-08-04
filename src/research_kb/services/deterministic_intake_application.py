@@ -245,7 +245,38 @@ class DeterministicIntakeApplicationService:
         *,
         page_size: int,
         cursor: str | None,
+        catalog_query: Any | None = None,
     ) -> dict[str, Any]:
+        if catalog_query is not None:
+            page = catalog_query.operational_page(
+                item_kind="pipeline_job",
+                page_size=page_size,
+                cursor=cursor,
+            )
+            fields = (
+                "job_id",
+                "state_id",
+                "revision",
+                "requested_route",
+                "requested_depth",
+                "current_node",
+                "status",
+                "wait_reason",
+                "retry_count",
+                "terminal_receipt",
+                "updated_at",
+                "state_digest",
+                "can_resume",
+                "can_cancel",
+            )
+            return {
+                "status": "success",
+                "interface_version": APPLICATION_SERVICE_INTERFACE_VERSION,
+                "jobs": [{field: item[field] for field in fields} for item in page["records"]],
+                "next_cursor": page["next_cursor"],
+                "projection_state": page["projection_state"],
+                "persistent_writes": 0,
+            }
         layout = _session_layout(session)
         jobs = PipelineJobService(layout)
         page = jobs.list(page_size=page_size, cursor=cursor)

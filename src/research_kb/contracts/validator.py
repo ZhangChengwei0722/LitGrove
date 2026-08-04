@@ -778,6 +778,14 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
             events.add(event_id)
             process_event_records[event_id] = record
             defined["event"].append(event_id)
+        elif kind == "operational-archive-manifest":
+            defined["oparchive"].append(record.get("archive_id", ""))
+        elif kind == "maintenance-work":
+            defined["maintenance"].append(record.get("maintenance_id", ""))
+        elif kind == "backup-local-receipt":
+            defined["backup"].append(record.get("backup_id", ""))
+        elif kind == "restore-receipt":
+            defined["restore"].append(record.get("restore_id", ""))
         elif kind == "pipeline-job-state":
             pipeline_states.append(record)
             jobs.add(record.get("job_id", ""))
@@ -1013,7 +1021,19 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                 )
             )
 
-    all_object_ids = {value for values in defined.values() for value in values if value}
+    defined_ids: defaultdict[str, set[str]] = defaultdict(
+        set,
+        {
+            namespace: {value for value in values if value}
+            for namespace, values in defined.items()
+        },
+    )
+    adequacy_profile_ids = set(adequacy_profiles)
+    all_object_ids = {
+        value
+        for values in defined_ids.values()
+        for value in values
+    }
     primary_route_papers = set(paper_cards) | set(evidence_paper.values())
 
     for kind, record in entries:
@@ -1084,7 +1104,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                     record_id,
                     "/basis_profile/profile_id",
                     basis_id,
-                    set(adequacy_profiles),
+                    adequacy_profile_ids,
                     "Source Adequacy profile",
                 )
                 if basis_id == record_id:
@@ -1622,7 +1642,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                     record_id,
                     f"/review_background_base/{background_index}/review_memory_id",
                     background.get("review_memory_id"),
-                    set(defined["reviewmem"]),
+                    defined_ids["reviewmem"],
                     "Review Memory",
                 )
                 _require_ref(
@@ -1631,7 +1651,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                     record_id,
                     f"/review_background_base/{background_index}/review_revision_id",
                     background.get("review_revision_id"),
-                    set(defined["reviewrev"]),
+                    defined_ids["reviewrev"],
                     "Review revision",
                 )
                 for question_background_id in background.get("question_background_ids", []):
@@ -1641,7 +1661,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                         record_id,
                         f"/review_background_base/{background_index}/question_background_ids",
                         question_background_id,
-                        set(defined["qbackground"]),
+                        defined_ids["qbackground"],
                         "Question background",
                     )
                 for review_unit_id in background.get("review_unit_ids", []):
@@ -1662,7 +1682,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                         record_id,
                         f"/review_background_base/{background_index}/review_unit_ids",
                         review_unit_id,
-                        set(defined["reviewunit"]),
+                        defined_ids["reviewunit"],
                         "Review Unit",
                     )
             card_is_newer = any(
@@ -1724,6 +1744,21 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
             for field in ("input_refs", "output_refs"):
                 for value in record.get(field, []):
                     _require_ref(diagnostics, kind, record_id, f"/{field}", value, all_object_ids, "record")
+        elif kind in {
+            "operational-archive-manifest",
+            "maintenance-work",
+            "backup-local-receipt",
+            "restore-receipt",
+        }:
+            _require_ref(
+                diagnostics,
+                kind,
+                record_id,
+                "/workspace_id",
+                record.get("workspace_id"),
+                workspaces,
+                "workspace",
+            )
         elif kind == "pipeline-job-state":
             _require_ref(diagnostics, kind, record_id, "/workspace_id", record.get("workspace_id"), workspaces, "workspace")
             for field in ("input_refs", "output_refs"):
@@ -1800,7 +1835,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                     record_id,
                     "/input_basis/job_state_id",
                     basis.get("job_state_id"),
-                    set(defined["jobstate"]),
+                    defined_ids["jobstate"],
                     "Pipeline Job state",
                 )
                 _require_ref(
@@ -1818,7 +1853,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                     record_id,
                     "/input_basis/adequacy_profile_id",
                     basis.get("adequacy_profile_id"),
-                    set(adequacy_profiles),
+                    adequacy_profile_ids,
                     "Source Adequacy profile",
                 )
             if record.get("task_kind") not in {
@@ -1843,7 +1878,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                     record_id,
                     f"/input_basis/adequacy_profiles/{index}/profile_id",
                     snapshot.get("profile_id"),
-                    set(adequacy_profiles),
+                    adequacy_profile_ids,
                     "Source Adequacy profile",
                 )
             predecessor = record.get("predecessor")
@@ -1854,7 +1889,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                     record_id,
                     "/predecessor/state_id",
                     predecessor.get("state_id"),
-                    set(defined["taskstate"]),
+                    defined_ids["taskstate"],
                     "Agent Task state",
                 )
             lineage = record.get("lineage")
@@ -1887,7 +1922,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                         record_id,
                         "/decision/applied_job_state_id",
                         decision.get("applied_job_state_id"),
-                        set(defined["jobstate"]),
+                        defined_ids["jobstate"],
                         "Pipeline Job state",
                     )
         elif kind == "primary-semantic-bundle":
@@ -1910,7 +1945,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                         record_id,
                         f"/revisions/{index}/input_snapshot/adequacy_profiles/{profile_index}/profile_id",
                         snapshot.get("profile_id"),
-                        set(adequacy_profiles),
+                        adequacy_profile_ids,
                         "Source Adequacy profile",
                     )
         elif kind == "review-semantic-bundle":
@@ -1933,7 +1968,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                         record_id,
                         f"/revisions/{index}/input_snapshot/adequacy_profiles/{profile_index}/profile_id",
                         snapshot.get("profile_id"),
-                        set(adequacy_profiles),
+                        adequacy_profile_ids,
                         "Source Adequacy profile",
                     )
                 for binding_index, binding in enumerate(revision.get("provenance_bindings", [])):
@@ -1943,7 +1978,7 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                         record_id,
                         f"/revisions/{index}/provenance_bindings/{binding_index}/profile_id",
                         binding.get("profile_id"),
-                        set(adequacy_profiles),
+                        adequacy_profile_ids,
                         "Source Adequacy profile",
                     )
         elif kind in {"screening-criteria-bundle", "screening-decision-bundle"}:
@@ -2010,6 +2045,10 @@ def _record_id(kind: str, record: dict[str, Any]) -> str | None:
         "step7-cross-view": "candidate_id",
         "discovery-candidate": "candidate_id",
         "process-event": "event_id",
+        "operational-archive-manifest": "archive_id",
+        "maintenance-work": "maintenance_id",
+        "backup-local-receipt": "backup_id",
+        "restore-receipt": "restore_id",
         "guardian-report": "guardian_report_id",
         "pipeline-job-state": "state_id",
         "guardian-finding-disposition": "disposition_id",

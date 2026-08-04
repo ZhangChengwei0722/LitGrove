@@ -7,7 +7,7 @@ from typing import Any
 
 from research_kb.bundle import load_workspace_entries, validate_workspace_entries
 from research_kb.catalog.models import canonical_digest
-from research_kb.contracts.validator import validate_record
+from research_kb.contracts.validator import RecordValidationSession, validate_record
 from research_kb.errors import (
     DUPLICATE_ID,
     INVALID_AUTHORITY,
@@ -369,8 +369,9 @@ class PipelineJobService:
             record_kind="pipeline-job-state",
             id_field="state_id",
         )
+        session = RecordValidationSession("pipeline-job-state", actor="stored")
         for state in states:
-            diagnostics = validate_record("pipeline-job-state", state, actor="stored")
+            diagnostics = session.validate(state)
             if diagnostics:
                 raise ResearchKBError(diagnostics[0])
         diagnostics = pipeline_job_chain_diagnostics(states)

@@ -63,7 +63,7 @@ def test_catalog_projects_and_filters_current_tag_facets(tmp_path: Path) -> None
         ("tag-link-bundle", read_json_document(layout.tag_link_bundle_path(link_bundle["tag_link_id"]))),
     ]
     snapshot = CatalogAdapterRegistry().project_entries(materialized, workspace_id=layout.workspace_id)
-    assert CatalogAdapterRegistry().registry_version == "1.2"
+    assert CatalogAdapterRegistry().registry_version == "1.3"
     paper = next(item for item in snapshot.documents if item.record_kind == "registry-paper" and item.record_id == paper_id)
     assert paper.tag_ids == (tag_bundle["tag_id"],)
     assert paper.tag_names == ("Priority",)

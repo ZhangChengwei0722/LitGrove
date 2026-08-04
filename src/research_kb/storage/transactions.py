@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from research_kb.contracts.validator import validate_record
+from research_kb.contracts.validator import RecordValidationSession, validate_record
 from research_kb.errors import INCOMPLETE_TRANSACTION, WRITE_CONFLICT, Diagnostic, ResearchKBError
 from research_kb.identifiers import Namespace, allocate_id
 from research_kb.process_events import Clock, append_process_event, build_process_event, read_process_events, timestamp, utc_now
@@ -178,12 +178,13 @@ class TransactionManager:
             if not self.layout.transactions_root.exists():
                 return actions
             events = {item["event_id"]: item for item in read_process_events(self.layout.process_events_path)}
+            journal_validation = RecordValidationSession("transaction-journal", actor="cli")
             for path in sorted(self.layout.transactions_root.glob("*.json"), key=lambda item: item.name):
                 journal = read_json_document(path, record_kind="transaction-journal")
-                self._validate_journal(journal)
+                self._validate_journal(journal, session=journal_validation)
                 existing_event = events.get(journal["event_id"])
                 if journal["phase"] == "complete":
-                    expected_event = build_journal_event(journal, journal["result"])
+                    expected_event = expected_journal_event(journal, journal["result"])
                     if existing_event is None:
                         actions.append(self._needs_resolution(journal, dry_run, "completed_event_missing"))
                     elif existing_event != expected_event:
@@ -204,7 +205,7 @@ class TransactionManager:
                     actions.append(self._needs_resolution(journal, dry_run, "journal_result_mismatch"))
                     continue
                 if existing_event is not None:
-                    expected_event = build_journal_event(journal, expected_result)
+                    expected_event = expected_journal_event(journal, expected_result)
                     if existing_event != expected_event:
                         actions.append(self._needs_resolution(journal, dry_run, "event_content_mismatch"))
                     else:
@@ -291,8 +292,16 @@ class TransactionManager:
         atomic_write_bytes(path, serialize_json(journal), f"{journal['event_id']}-journal")
 
     @staticmethod
-    def _validate_journal(journal: dict[str, Any]) -> None:
-        diagnostics = validate_record("transaction-journal", journal, actor="cli")
+    def _validate_journal(
+        journal: dict[str, Any],
+        *,
+        session: RecordValidationSession | None = None,
+    ) -> None:
+        diagnostics = (
+            session.validate(journal)
+            if session is not None
+            else validate_record("transaction-journal", journal, actor="cli")
+        )
         if diagnostics:
             raise ResearchKBError(diagnostics[0])
 
@@ -308,3 +317,19 @@ def build_journal_event(journal: dict[str, Any], result: str) -> dict[str, Any]:
         created_at=journal["created_at"],
         job_id=journal.get("job_id"),
     )
+
+
+def expected_journal_event(journal: dict[str, Any], result: str) -> dict[str, Any]:
+    event = {
+        "schema_version": "1.0",
+        "event_id": journal["event_id"],
+        "operation": journal["operation"],
+        "actor": journal["actor"],
+        "result": result,
+        "input_refs": journal["input_refs"],
+        "output_refs": journal["output_refs"] if result == "success" else [],
+        "created_at": journal["created_at"],
+    }
+    if journal.get("job_id") is not None:
+        event["job_id"] = journal["job_id"]
+    return event

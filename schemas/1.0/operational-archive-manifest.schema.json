@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:operational-archive-manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "archive_id", "workspace_id", "profile_id", "event_id", "event_ids", "journal_count", "segment_path", "segment_sha256", "basis_digest", "created_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "archive_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/operational_archive_id"},
+    "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "profile_id": {"const": "p11-transaction-journal-archive-v1"},
+    "event_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/event_id"},
+    "event_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/event_id"}},
+    "journal_count": {"type": "integer", "minimum": 1},
+    "segment_path": {"const": "journals.jsonl"},
+    "segment_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "basis_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+  }
+}

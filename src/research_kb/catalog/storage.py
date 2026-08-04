@@ -397,6 +397,10 @@ class CatalogDatabase:
             rows = connection.execute(sql, parameters).fetchall()
             has_more = len(rows) > page_size
             selected = rows[:page_size]
+            tag_index = _item_tags_for_ids(
+                connection,
+                tuple(row["item_id"] for row in selected),
+            )
             next_cursor = None
             if has_more and selected:
                 last = selected[-1]
@@ -409,7 +413,10 @@ class CatalogDatabase:
                 "query": normalized_query,
                 "item_kinds": list(normalized_kinds),
                 "page_size": page_size,
-                "items": [_row_to_item(row, connection=connection) for row in selected],
+                "items": [
+                    _row_to_item(row, tags=tag_index.get(row["item_id"], ()))
+                    for row in selected
+                ],
                 "next_cursor": next_cursor,
                 "has_more": has_more,
             }
@@ -462,6 +469,98 @@ class CatalogDatabase:
                 "item": _row_to_item(row, include_source=True, connection=connection),
                 "locator": locator,
             }
+        finally:
+            connection.close()
+
+    @staticmethod
+    def detail_bindings(path: Path, item_ids: tuple[str, ...]) -> dict[str, dict[str, Any]]:
+        if not item_ids:
+            return {}
+        if len(item_ids) > MAX_PAGE_SIZE or len(set(item_ids)) != len(item_ids):
+            raise _cursor_error("catalog detail binding batch is outside the supported bounds")
+        connection = _connect(path, read_only=True)
+        try:
+            placeholders = ",".join("?" for _ in item_ids)
+            rows = connection.execute(
+                f"""
+                SELECT i.item_id, i.item_kind, i.authority_layer, i.source_key,
+                       i.record_kind, i.record_id, i.child_id, i.paper_id,
+                       i.question_id, i.title, i.summary, i.status_labels, i.sort_key,
+                       i.source_record_digest, i.adapter_version, s.store_key,
+                       s.byte_offset, s.byte_length
+                FROM catalog_items AS i
+                JOIN source_records AS s ON s.source_key = i.source_key
+                WHERE i.item_id IN ({placeholders})
+                """,
+                item_ids,
+            ).fetchall()
+            tag_index = _item_tags_for_ids(
+                connection,
+                tuple(row["item_id"] for row in rows),
+            )
+            result: dict[str, dict[str, Any]] = {}
+            for row in rows:
+                locator = None
+                if row["store_key"] is not None:
+                    locator = {
+                        "store_key": row["store_key"],
+                        "byte_offset": row["byte_offset"],
+                        "byte_length": row["byte_length"],
+                    }
+                result[row["item_id"]] = {
+                    "item": _row_to_item(
+                        row,
+                        include_source=True,
+                        tags=tag_index.get(row["item_id"], ()),
+                    ),
+                    "locator": locator,
+                }
+            return result
+        except sqlite3.DatabaseError as error:
+            raise _projection_error("catalog detail binding batch failed") from error
+        finally:
+            connection.close()
+
+    @staticmethod
+    def late_cursor(path: Path, *, item_kind: str, page_size: int) -> str | None:
+        if not item_kind or page_size < 1 or page_size > MAX_PAGE_SIZE:
+            raise _cursor_error("catalog late cursor request is outside the supported bounds")
+        query_key = canonical_digest(
+            {
+                "query": "",
+                "item_kinds": [item_kind],
+                "paper_id": None,
+                "question_id": None,
+                "tag_id": None,
+                "status_labels": [],
+                "order": "sort_key,item_kind,item_id",
+            }
+        )
+        connection = _connect(path, read_only=True)
+        try:
+            count = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM catalog_items WHERE item_kind = ?",
+                    (item_kind,),
+                ).fetchone()[0]
+            )
+            if count <= page_size:
+                return None
+            row = connection.execute(
+                """
+                SELECT sort_key, item_kind, item_id
+                FROM catalog_items
+                WHERE item_kind = ?
+                ORDER BY sort_key, item_kind, item_id
+                LIMIT 1 OFFSET ?
+                """,
+                (item_kind, count - page_size - 1),
+            ).fetchone()
+            if row is None:
+                raise _cursor_error("catalog late cursor position is unavailable")
+            return _encode_cursor(query_key, (row["sort_key"], row["item_kind"], row["item_id"]))
+        except sqlite3.DatabaseError as error:
+            raise _projection_error("catalog late cursor query failed") from error
         finally:
             connection.close()
 
@@ -852,6 +951,7 @@ def _row_to_item(
     *,
     include_source: bool = False,
     connection: sqlite3.Connection | None = None,
+    tags: tuple[sqlite3.Row, ...] | list[sqlite3.Row] | None = None,
 ) -> dict[str, Any]:
     keys = (
         "item_id",
@@ -869,16 +969,40 @@ def _row_to_item(
     )
     value = {key: row[key] for key in keys}
     value["status_labels"] = json.loads(row["status_labels"])
-    tags = []
-    if connection is not None:
-        tags = connection.execute(
+    selected_tags = tags
+    if selected_tags is None and connection is not None:
+        selected_tags = connection.execute(
             "SELECT tag_id, tag_name FROM catalog_item_tags WHERE item_id = ? ORDER BY tag_id",
             (row["item_id"],),
         ).fetchall()
-    value["tags"] = [{"tag_id": item["tag_id"], "name": item["tag_name"]} for item in tags]
+    value["tags"] = [
+        {"tag_id": item["tag_id"], "name": item["tag_name"]}
+        for item in (selected_tags or ())
+    ]
     if include_source:
         value["source_key"] = row["source_key"]
     return value
+
+
+def _item_tags_for_ids(
+    connection: sqlite3.Connection,
+    item_ids: tuple[str, ...],
+) -> dict[str, tuple[sqlite3.Row, ...]]:
+    if not item_ids:
+        return {}
+    placeholders = ",".join("?" for _ in item_ids)
+    grouped: dict[str, list[sqlite3.Row]] = {}
+    for row in connection.execute(
+        f"""
+        SELECT item_id, tag_id, tag_name
+        FROM catalog_item_tags
+        WHERE item_id IN ({placeholders})
+        ORDER BY item_id, tag_id
+        """,
+        item_ids,
+    ):
+        grouped.setdefault(row["item_id"], []).append(row)
+    return {item_id: tuple(values) for item_id, values in grouped.items()}
 
 
 def _item_tag_index(connection: sqlite3.Connection) -> dict[str, tuple[tuple[str, str], ...]]:

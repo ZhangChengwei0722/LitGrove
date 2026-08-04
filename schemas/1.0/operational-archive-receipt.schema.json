@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:operational-archive-receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "archive_id", "workspace_id", "manifest_sha256", "segment_sha256", "journal_count", "event_id", "settled_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "archive_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/operational_archive_id"},
+    "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "segment_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "journal_count": {"type": "integer", "minimum": 1},
+    "event_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/event_id"},
+    "settled_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+  }
+}

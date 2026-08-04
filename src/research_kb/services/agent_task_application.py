@@ -12,12 +12,17 @@ from research_kb.agent_task_registry import (
     registry_projection,
     resolve_effective_classes,
 )
-from research_kb.agent_tasks import agent_task_chain_diagnostics, current_agent_task_states, validate_task_state
+from research_kb.agent_tasks import (
+    agent_task_chain_diagnostics,
+    current_agent_task_states,
+    project_agent_task_state,
+    validate_task_state,
+)
 from research_kb.application import APPLICATION_SERVICE_INTERFACE_VERSION
 from research_kb.bundle import load_workspace_entries, records_of_kind, validate_workspace_entries
 from research_kb.catalog.models import canonical_digest
 from research_kb.contracts.registry import SchemaRegistry
-from research_kb.contracts.validator import validate_record
+from research_kb.contracts.validator import RecordValidationSession, validate_record
 from research_kb.evidence_provenance import (
     index_active_pages,
     parse_locator,
@@ -2181,12 +2186,27 @@ class AgentTaskApplicationService:
         *,
         page_size: int = 20,
         cursor: str | None = None,
+        catalog_query: Any | None = None,
     ) -> dict[str, Any]:
         layout = _session_layout(session)
         if not isinstance(page_size, int) or isinstance(page_size, bool) or not 1 <= page_size <= MAX_PAGE_SIZE:
             raise _request_error(None, "/page_size", "page size must be between 1 and 100")
         if cursor is not None:
-            validate_id(cursor, Namespace.AGENT_TASK)
+            if catalog_query is None:
+                validate_id(cursor, Namespace.AGENT_TASK)
+        if catalog_query is not None:
+            page = catalog_query.operational_page(
+                item_kind="agent_task",
+                page_size=page_size,
+                cursor=cursor,
+            )
+            return {
+                "status": "success",
+                "interface_version": APPLICATION_SERVICE_INTERFACE_VERSION,
+                "tasks": page["records"],
+                "next_cursor": page["next_cursor"],
+                "projection_state": page["projection_state"],
+            }
         current = list(current_agent_task_states(self._read_states(layout)))
         if cursor is not None:
             current = [item for item in current if item["task_id"] > cursor]
@@ -3888,8 +3908,9 @@ class AgentTaskApplicationService:
     @staticmethod
     def _read_states(layout: WorkspaceLayout) -> list[dict[str, Any]]:
         states = read_jsonl(layout.agent_tasks_path, record_kind="agent-task-state", id_field="state_id")
+        session = RecordValidationSession("agent-task-state", actor="stored")
         for state in states:
-            diagnostics = validate_record("agent-task-state", state, actor="stored")
+            diagnostics = session.validate(state)
             if diagnostics:
                 raise ResearchKBError(diagnostics[0])
         diagnostics = agent_task_chain_diagnostics(states)
@@ -4034,80 +4055,7 @@ class AgentTaskApplicationService:
 
 
 def _task_projection(state: Mapping[str, Any]) -> dict[str, Any]:
-    projection = {
-        "task_id": state["task_id"],
-        "state_id": state["state_id"],
-        "state_digest": canonical_digest(state),
-        "revision": state["revision"],
-        "task_kind": state["task_kind"],
-        "result_contract": state["result_contract"],
-        "executor_id": state["executor_id"],
-        "execution_scope": state["execution_scope"],
-        "effective_content_classes": list(state["effective_content_classes"]),
-        "input_basis_digest": state["input_basis_digest"],
-        "lineage": state["lineage"],
-        "status": state["status"],
-        "terminal_receipt": state["terminal_receipt"],
-        "created_at": state["created_at"],
-        "updated_at": state["updated_at"],
-    }
-    if state["task_kind"] == "knowledge_query_report":
-        projection.update(
-            {
-                "paper_id": None,
-                "paper_ids": list(state["input_basis"]["paper_ids"]),
-                "job_id": None,
-                "query_type": state["input_basis"]["query_type"],
-                "retention_class": "current_task_report",
-            }
-        )
-    elif state["task_kind"] == "organization_proposal":
-        projection.update(
-            {
-                "paper_id": None,
-                "paper_ids": list(state["input_basis"]["paper_ids"]),
-                "job_id": None,
-                "target_kind": state["input_basis"]["target_kind"],
-                "target_id": state["input_basis"]["target_id"],
-            }
-        )
-    elif state["task_kind"] == "question_screening_criteria_proposal":
-        projection.update(
-            {
-                "paper_id": None,
-                "job_id": None,
-                "question_id": state["input_basis"]["question_id"],
-                "criteria_id": state["input_basis"]["criteria_id"],
-            }
-        )
-    elif state["task_kind"] == "question_screening_decision_proposal":
-        projection.update(
-            {
-                "paper_id": state["input_basis"]["paper_id"],
-                "job_id": None,
-                "question_id": state["input_basis"]["question_id"],
-                "criteria_id": state["input_basis"]["criteria_snapshot"]["criteria_id"],
-            }
-        )
-    elif state["task_kind"] == "research_synthesis_drafting":
-        projection.update(
-            {
-                "paper_id": None,
-                "job_id": None,
-                "question_id": state["input_basis"]["question_id"],
-                "candidate_type": state["input_basis"]["candidate_type"],
-                "maintenance_intent": state["input_basis"]["maintenance_intent"],
-                "target_candidate_id": state["input_basis"]["target_candidate_id"],
-            }
-        )
-    else:
-        projection.update(
-            {
-                "paper_id": state["input_basis"]["paper_id"],
-                "job_id": state["input_basis"]["job_id"],
-            }
-        )
-    return projection
+    return project_agent_task_state(state)
 
 
 def _normalize_create_request(request: Mapping[str, Any]) -> dict[str, Any]:

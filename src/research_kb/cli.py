@@ -10,6 +10,7 @@ from typing import Any, Sequence
 import yaml
 
 from research_kb import __version__
+from research_kb.backup import BackupArchiveReader, BackupService
 from research_kb.cli_input import read_bounded_json_object
 from research_kb.discovery import (
     DiscoveryAcquisitionTransport,
@@ -33,6 +34,7 @@ from research_kb.errors import (
 from research_kb.guardian import GuardianService
 from research_kb.mutation import load_mutation_request, mutation_request_from_mapping
 from research_kb.obsidian_views import OPTIONAL_TABLES
+from research_kb.operational_maintenance import MaintenanceWorkService, OperationalMaintenanceService
 from research_kb.services.acquired_candidate_intake import AcquiredCandidateIntakeService
 from research_kb.services.application_validation import ContractValidationService, JsonlValidationService
 from research_kb.services.capability import CapabilityService
@@ -85,6 +87,8 @@ SOURCE_REQUEST_INPUT_LIMIT = 64 * 1024
 IDENTITY_REQUEST_INPUT_LIMIT = 64 * 1024
 SOURCE_ADEQUACY_REQUEST_INPUT_LIMIT = 64 * 1024
 EXCHANGE_REQUEST_INPUT_LIMIT = 64 * 1024
+BACKUP_REQUEST_INPUT_LIMIT = 64 * 1024
+MAINTENANCE_REQUEST_INPUT_LIMIT = 4 * 1024 * 1024
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -378,6 +382,41 @@ def build_parser() -> argparse.ArgumentParser:
     exchange_recover.add_argument("--workspace", required=True, type=Path)
     exchange_recover.add_argument("--dry-run", action="store_true")
 
+    backup = commands.add_parser("backup", help="create, inspect or restore portable workspace backups")
+    backup_commands = backup.add_subparsers(dest="backup_command", required=True)
+    backup_preview = backup_commands.add_parser("preview", help="preview one writer-barrier backup")
+    backup_preview.add_argument("--workspace", required=True, type=Path)
+    backup_preview.add_argument("--request", required=True, type=Path)
+    backup_create = backup_commands.add_parser("create", help="create one preview-bound backup archive")
+    backup_create.add_argument("--workspace", required=True, type=Path)
+    backup_create.add_argument("--request", required=True, type=Path)
+    backup_create.add_argument("--output", required=True, type=Path)
+    backup_create.add_argument("--actor", choices=("cli", "user"), required=True)
+    backup_inspect = backup_commands.add_parser("inspect", help="safely inspect one backup archive")
+    backup_inspect.add_argument("--archive", required=True, type=Path)
+    backup_restore = backup_commands.add_parser("restore", help="restore one inspected backup to an absent root")
+    backup_restore.add_argument("--archive", required=True, type=Path)
+    backup_restore.add_argument("--request", required=True, type=Path)
+    backup_restore.add_argument("--target-root", required=True, type=Path)
+    backup_restore.add_argument("--actor", choices=("cli", "user"), required=True)
+
+    maintenance = commands.add_parser("maintenance", help="archive settled journals or persist explicit stale work")
+    maintenance_commands = maintenance.add_subparsers(dest="maintenance_command", required=True)
+    archive_preview = maintenance_commands.add_parser("archive-preview", help="preview settled journal archival")
+    archive_preview.add_argument("--workspace", required=True, type=Path)
+    archive_apply = maintenance_commands.add_parser("archive", help="archive the preview-bound journal set")
+    archive_apply.add_argument("--workspace", required=True, type=Path)
+    archive_apply.add_argument("--request", required=True, type=Path)
+    archive_apply.add_argument("--actor", choices=("user",), required=True)
+    maintenance_enqueue = maintenance_commands.add_parser("enqueue", help="coalesce explicit maintenance triggers")
+    maintenance_enqueue.add_argument("--workspace", required=True, type=Path)
+    maintenance_enqueue.add_argument("--request", required=True, type=Path)
+    maintenance_enqueue.add_argument("--actor", choices=("cli", "user"), required=True)
+    maintenance_list = maintenance_commands.add_parser("list", help="list bounded maintenance work")
+    maintenance_list.add_argument("--workspace", required=True, type=Path)
+    maintenance_list.add_argument("--page-size", type=int, default=20)
+    maintenance_list.add_argument("--cursor")
+
     transaction = commands.add_parser("transaction", help="inspect or recover interrupted writes")
     transaction_commands = transaction.add_subparsers(dest="transaction_command", required=True)
     recover = transaction_commands.add_parser("recover", help="recover transaction journals by digest")
@@ -510,6 +549,22 @@ def main(
             return _exchange_list_imports(args)
         if args.command == "exchange" and args.exchange_command == "recover":
             return _exchange_recover(args)
+        if args.command == "backup" and args.backup_command == "preview":
+            return _backup_preview(args)
+        if args.command == "backup" and args.backup_command == "create":
+            return _backup_create(args)
+        if args.command == "backup" and args.backup_command == "inspect":
+            return _backup_inspect(args)
+        if args.command == "backup" and args.backup_command == "restore":
+            return _backup_restore(args)
+        if args.command == "maintenance" and args.maintenance_command == "archive-preview":
+            return _maintenance_archive_preview(args)
+        if args.command == "maintenance" and args.maintenance_command == "archive":
+            return _maintenance_archive(args)
+        if args.command == "maintenance" and args.maintenance_command == "enqueue":
+            return _maintenance_enqueue(args)
+        if args.command == "maintenance" and args.maintenance_command == "list":
+            return _maintenance_list(args)
         if args.command == "transaction" and args.transaction_command == "recover":
             return _transaction_recover(args)
     except ResearchKBError as error:
@@ -1404,6 +1459,107 @@ def _exchange_list_imports(args: argparse.Namespace) -> int:
 def _exchange_recover(args: argparse.Namespace) -> int:
     service, session = _exchange_application(args.workspace)
     _write_json_once(service.recover_imports(session, dry_run=args.dry_run))
+    return 0
+
+
+def _backup_preview(args: argparse.Namespace) -> int:
+    request = _read_bounded_request(
+        args.request,
+        limit=BACKUP_REQUEST_INPUT_LIMIT,
+        record_kind="backup-preview-request",
+    )
+    allowed = {"include_sources", "rights_assertion"}
+    if set(request) - allowed or "include_sources" not in request:
+        raise ResearchKBError(
+            Diagnostic(SCHEMA_VALIDATION_FAILED, "backup-preview-request", None, "", "request fields do not match the contract")
+        )
+    service = BackupService(WorkspaceLayout.load(args.workspace))
+    _write_json_once(
+        service.preview(
+            include_sources=request["include_sources"],
+            rights_assertion=request.get("rights_assertion"),
+        )
+    )
+    return 0
+
+
+def _backup_create(args: argparse.Namespace) -> int:
+    request = _read_bounded_request(
+        args.request,
+        limit=BACKUP_REQUEST_INPUT_LIMIT,
+        record_kind="backup-create-request",
+    )
+    service = BackupService(WorkspaceLayout.load(args.workspace))
+    _write_json_once(service.create(request, target=args.output, actor=args.actor))
+    return 0
+
+
+def _backup_inspect(args: argparse.Namespace) -> int:
+    _write_json_once(BackupArchiveReader().inspect(args.archive))
+    return 0
+
+
+def _backup_restore(args: argparse.Namespace) -> int:
+    request = _read_bounded_request(
+        args.request,
+        limit=BACKUP_REQUEST_INPUT_LIMIT,
+        record_kind="backup-restore-request",
+    )
+    _write_json_once(
+        BackupService.restore(
+            args.archive,
+            request,
+            target_root=args.target_root,
+            actor=args.actor,
+        )
+    )
+    return 0
+
+
+def _maintenance_archive_preview(args: argparse.Namespace) -> int:
+    service = OperationalMaintenanceService(WorkspaceLayout.load(args.workspace))
+    _write_json_once(service.preview_journal_archive())
+    return 0
+
+
+def _maintenance_archive(args: argparse.Namespace) -> int:
+    request = _read_bounded_request(
+        args.request,
+        limit=MAINTENANCE_REQUEST_INPUT_LIMIT,
+        record_kind="maintenance-archive-request",
+    )
+    if set(request) != {"expected_basis_digest"}:
+        raise ResearchKBError(
+            Diagnostic(SCHEMA_VALIDATION_FAILED, "maintenance-archive-request", None, "", "request fields do not match the contract")
+        )
+    service = OperationalMaintenanceService(WorkspaceLayout.load(args.workspace))
+    _write_json_once(
+        service.archive_journals(
+            expected_basis_digest=request["expected_basis_digest"],
+            actor=args.actor,
+        )
+    )
+    return 0
+
+
+def _maintenance_enqueue(args: argparse.Namespace) -> int:
+    request = _read_bounded_request(
+        args.request,
+        limit=MAINTENANCE_REQUEST_INPUT_LIMIT,
+        record_kind="maintenance-enqueue-request",
+    )
+    if set(request) != {"triggers"} or not isinstance(request["triggers"], list):
+        raise ResearchKBError(
+            Diagnostic(SCHEMA_VALIDATION_FAILED, "maintenance-enqueue-request", None, "", "request fields do not match the contract")
+        )
+    service = MaintenanceWorkService(WorkspaceLayout.load(args.workspace))
+    _write_json_once(service.enqueue(request["triggers"], actor=args.actor))
+    return 0
+
+
+def _maintenance_list(args: argparse.Namespace) -> int:
+    service = MaintenanceWorkService(WorkspaceLayout.load(args.workspace))
+    _write_json_once(service.list(page_size=args.page_size, cursor=args.cursor))
     return 0
 
 

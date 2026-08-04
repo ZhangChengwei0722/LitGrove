@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+import research_kb.guardian as guardian_module
 from research_kb.bundle import load_workspace_entries
 from research_kb.guardian import GuardianService, status_for_findings
 from research_kb.mutation import MutationRequest
@@ -48,6 +49,31 @@ def test_guardian_check_only_is_read_only_and_succeeds(tmp_path: Path) -> None:
     assert result.report["findings"] == []
     assert result.transaction is None
     assert _tree_hashes(layout.knowledge_root) == before
+
+
+def test_guardian_can_reuse_an_explicitly_validated_entry_snapshot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    _register_source(layout)
+    entries = load_workspace_entries(layout)
+    monkeypatch.setattr(
+        guardian_module,
+        "load_workspace_entries",
+        lambda _layout: (_ for _ in ()).throw(AssertionError("unexpected reload")),
+    )
+    monkeypatch.setattr(
+        guardian_module,
+        "validate_bundle",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected revalidation")),
+    )
+
+    result = GuardianService(layout).check(entries=entries, entries_validated=True)
+
+    assert result.report["status"] == "success"
+    with pytest.raises(ValueError, match="requires supplied entries"):
+        GuardianService(layout).check(entries_validated=True)
 
 
 def test_guardian_detects_changed_source_fingerprint(tmp_path: Path) -> None:
