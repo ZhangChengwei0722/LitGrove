@@ -208,6 +208,30 @@ def test_source_inclusive_import_is_immutable_external_origin_and_registry_neutr
     assert repeat["existing_import_id"] == IMPORT_ID
     assert service.apply(archive, _apply_request(repeat), actor="user")["result"] == "no_change"
 
+    detail = service.show_import(IMPORT_ID)
+    assert detail["import"]["import_id"] == IMPORT_ID
+    assert detail["selection"]["scope"] == "paper"
+    assert detail["record_kind_counts"]["exchange-paper-identity"] == 1
+    assert detail["records_truncated"] is False
+    assert detail["records"]
+    assert all(item["local_admissibility"] == "external_unreviewed" for item in detail["records"])
+    assert all(item["trust_projection"] == "unsigned_external_claims" for item in detail["records"])
+
+
+def test_show_import_revalidates_package_before_returning_external_records(tmp_path: Path) -> None:
+    archive, _, _ = _export_with_source(tmp_path)
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    target = make_runtime_workspace(target_root, "beta")
+    service = ExchangeImportService(target, import_id_factory=lambda: IMPORT_ID)
+    preview = service.preflight(archive)
+    service.apply(archive, _apply_request(preview), actor="user")
+    record_path = target.exchange_import_path(IMPORT_ID) / "records" / "exchange-paper-identity.jsonl"
+    record_path.write_text("{}\n", encoding="utf-8")
+
+    with pytest.raises(ResearchKBError):
+        service.show_import(IMPORT_ID)
+
 
 def test_import_rejects_tamper_and_traversal_without_stage_or_package(tmp_path: Path) -> None:
     archive, _, _ = _export_with_source(tmp_path)

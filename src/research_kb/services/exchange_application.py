@@ -63,6 +63,22 @@ class ExchangeApplicationService:
         result = ExchangeImportService(_layout(session)).list_imports()
         return _response({"imports": result["imports"]})
 
+    def show_import(self, session: WorkspaceSession, import_id: str) -> dict[str, Any]:
+        result = ExchangeImportService(_layout(session)).show_import(import_id)
+        return _response(
+            {
+                key: value
+                for key, value in result.items()
+                if key
+                not in {
+                    "status",
+                    "interface_version",
+                    "persistent_writes",
+                    "canonical_scientific_write",
+                }
+            }
+        )
+
     def recover_imports(self, session: WorkspaceSession, *, dry_run: bool) -> dict[str, Any]:
         result = ExchangeImportService(_layout(session)).recover(dry_run=dry_run)
         return _response(

@@ -350,6 +350,39 @@ class ExchangeImportService:
                 imports.append(receipt)
         return {"status": "success", "imports": imports, "persistent_writes": 0, "canonical_scientific_write": False}
 
+    def show_import(self, import_id: str) -> dict[str, Any]:
+        resolved_id = validate_id(import_id, Namespace.IMPORT)
+        receipt, manifest, envelopes = _read_validated_import_package(
+            self.layout.exchange_import_path(resolved_id),
+            profile=self.reader.profile,
+        )
+        record_limit = 100
+        records = [
+            {
+                "origin_workspace_id": envelope["origin_workspace_id"],
+                "origin_record_id": envelope["origin_record_id"],
+                "record_kind": envelope["record_kind"],
+                "revision_digest": envelope["revision_digest"],
+                "label": _external_record_label(envelope),
+                "local_admissibility": "external_unreviewed",
+                "trust_projection": TRUST_PROJECTION,
+            }
+            for envelope in envelopes[:record_limit]
+        ]
+        return {
+            "status": "success",
+            "interface_version": "1.0",
+            "import": receipt,
+            "selection": manifest["selection"],
+            "record_kind_counts": manifest["record_kind_counts"],
+            "include_sources": manifest["include_sources"],
+            "rights_assertion": manifest["rights_assertion"],
+            "records": records,
+            "records_truncated": len(envelopes) > record_limit,
+            "persistent_writes": 0,
+            "canonical_scientific_write": False,
+        }
+
     def recover(self, *, dry_run: bool = True) -> dict[str, Any]:
         with workspace_lock(self.layout.lock_path, timeout=self.lock_timeout):
             return self._recover_locked(dry_run=dry_run)
@@ -616,6 +649,20 @@ def validate_import_package(
     *,
     profile: SafeReaderProfile | None = None,
 ) -> dict[str, Any]:
+    receipt, _, _ = _read_validated_import_package(
+        path,
+        archive_sha256,
+        profile=profile,
+    )
+    return receipt
+
+
+def _read_validated_import_package(
+    path: Path,
+    archive_sha256: str | None = None,
+    *,
+    profile: SafeReaderProfile | None = None,
+) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
     limits = profile or SafeReaderProfile()
     if not path.is_dir() or path.is_symlink():
         raise _error(PATH_ESCAPE, "/package", "Exchange import package is unavailable or unsafe")
@@ -667,7 +714,7 @@ def validate_import_package(
         structured_content=structured,
         canonical_serialization=True,
     )
-    validated_manifest, _, _, manifest_sha256 = _validate_supported_bundle(inspection, limits)
+    validated_manifest, envelopes, _, manifest_sha256 = _validate_supported_bundle(inspection, limits)
     if (
         receipt["manifest_sha256"] != manifest_sha256
         or receipt["origin_workspace_id"] != validated_manifest["origin_workspace_id"]
@@ -676,7 +723,26 @@ def validate_import_package(
         or receipt["source_count"] != validated_manifest["source_count"]
     ):
         raise _error(SCHEMA_VALIDATION_FAILED, "/package", "Exchange import receipt no longer binds its package")
-    return receipt
+    return receipt, validated_manifest, envelopes
+
+
+def _external_record_label(envelope: Mapping[str, Any]) -> str:
+    record = envelope.get("record")
+    if not isinstance(record, Mapping):
+        return str(envelope["origin_record_id"])
+    bibliography = record.get("bibliography")
+    if isinstance(bibliography, Mapping) and isinstance(bibliography.get("title"), str):
+        value = bibliography["title"]
+    else:
+        value = next(
+            (
+                record[field]
+                for field in ("title", "question_text", "statement", "content", "claim", "name")
+                if isinstance(record.get(field), str) and record[field]
+            ),
+            envelope["origin_record_id"],
+        )
+    return value[:500]
 
 
 def _scan_import_package(
