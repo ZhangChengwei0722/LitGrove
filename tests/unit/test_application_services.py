@@ -254,6 +254,7 @@ def test_application_service_facade_is_public_package_surface() -> None:
     expected = {
         "ContractValidationService",
         "JsonlValidationService",
+        "ExchangeApplicationService",
         "ParseAdapterRegistry",
         "ParseApplicationService",
         "PrivacyScanService",

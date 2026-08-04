@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:exchange-record-envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "origin_workspace_id", "origin_record_id", "record_kind", "revision_digest", "claimed_review_status", "local_admissibility", "record"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "origin_workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "origin_record_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "record_kind": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$"},
+    "revision_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "claimed_review_status": {"type": ["string", "null"], "maxLength": 64},
+    "local_admissibility": {"const": "external_unreviewed"},
+    "record": {"type": "object"}
+  }
+}

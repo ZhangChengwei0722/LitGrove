@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:exchange-paper-identity",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "paper_id", "source_fingerprint", "bibliography", "screening_status", "duplicate_candidate_ids", "review_status", "automation_status", "created_at", "updated_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "paper_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+    "source_fingerprint": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_fingerprint"},
+    "bibliography": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "authors", "year", "doi"],
+      "properties": {
+        "title": {"type": ["string", "null"]},
+        "authors": {"type": "array", "items": {"type": "string"}},
+        "year": {"type": ["integer", "null"], "minimum": 1500, "maximum": 3000},
+        "doi": {"type": ["string", "null"]}
+      }
+    },
+    "screening_status": {"enum": ["candidate", "included", "excluded", "needs_resolution"]},
+    "duplicate_candidate_ids": {"type": "array", "items": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"}, "uniqueItems": true},
+    "review_status": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/review_status"},
+    "automation_status": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/automation_status"},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "updated_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}
+  }
+}

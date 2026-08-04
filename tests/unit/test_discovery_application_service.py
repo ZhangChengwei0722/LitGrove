@@ -157,7 +157,7 @@ def test_search_is_workspace_independent_and_zero_write(tmp_path) -> None:
     service = _service()
     assert service.limits() == {
         "status": "success",
-        "interface_version": "1.17",
+        "interface_version": "1.18",
         "provider": "europe-pmc",
         "max_results": 15,
         "max_date_span_days": 31,

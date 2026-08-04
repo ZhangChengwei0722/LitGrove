@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:exchange-export-receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "export_id", "origin_workspace_id", "selection", "manifest_sha256", "basis_digest", "archive_digest_scope", "created_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "export_id": {"type": "string", "pattern": "^export_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "origin_workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "selection": {"type": "object", "required": ["scope"], "properties": {"scope": {"enum": ["paper", "question", "direction", "workspace"]}, "selector_id": {"type": "string"}}, "additionalProperties": false},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "basis_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "archive_digest_scope": {"const": "returned_out_of_band"},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:exchange-local-export-receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "export_id",
+    "origin_workspace_id",
+    "selection",
+    "include_sources",
+    "rights_assertion",
+    "record_count",
+    "source_count",
+    "manifest_sha256",
+    "basis_digest",
+    "archive_sha256",
+    "archive_bytes",
+    "actor",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "export_id": {"type": "string", "pattern": "^export_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "origin_workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope"],
+      "properties": {
+        "scope": {"enum": ["paper", "question", "direction", "workspace"]},
+        "selector_id": {"type": "string", "minLength": 1, "maxLength": 128}
+      }
+    },
+    "include_sources": {"type": "boolean"},
+    "rights_assertion": {"type": ["string", "null"], "enum": [null, "user_asserts_redistribution_authorized"]},
+    "record_count": {"type": "integer", "minimum": 1},
+    "source_count": {"type": "integer", "minimum": 0},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "basis_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "archive_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "archive_bytes": {"type": "integer", "minimum": 1},
+    "actor": {"enum": ["cli", "user"]},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"include_sources": {"const": true}}, "required": ["include_sources"]},
+      "then": {"properties": {"rights_assertion": {"const": "user_asserts_redistribution_authorized"}, "source_count": {"minimum": 1}}},
+      "else": {"properties": {"rights_assertion": {"type": "null"}, "source_count": {"const": 0}}}
+    },
+    {
+      "if": {"properties": {"selection": {"properties": {"scope": {"const": "workspace"}}, "required": ["scope"]}}, "required": ["selection"]},
+      "then": {"properties": {"selection": {"properties": {"selector_id": false}}}},
+      "else": {"properties": {"selection": {"required": ["selector_id"]}}}
+    }
+  ]
+}

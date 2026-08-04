@@ -17,6 +17,8 @@ from research_kb.services.discovery_acquisition import (
 from research_kb.services.discovery_resolution import DiscoveryResolutionService, DiscoveryResolverRegistry
 from research_kb.services.deterministic_trunk import DeterministicTrunkResult, DeterministicTrunkService
 from research_kb.services.deterministic_intake_application import DeterministicIntakeApplicationService
+from research_kb.services.exchange_application import ExchangeApplicationService
+from research_kb.exchange_import import ExchangeArchiveReader, ExchangeImportService, SafeReaderProfile
 from research_kb.services.intake_inspect import IntakeInspectService
 from research_kb.services.guardian_disposition import GuardianFindingDispositionService
 from research_kb.services.local_source_intake import LocalSourceIntakeService
@@ -83,6 +85,10 @@ __all__ = [
     "DeterministicTrunkResult",
     "DeterministicTrunkService",
     "DeterministicIntakeApplicationService",
+    "ExchangeApplicationService",
+    "ExchangeArchiveReader",
+    "ExchangeImportService",
+    "SafeReaderProfile",
     "IntakeInspectService",
     "GuardianFindingDispositionService",
     "JsonlValidationService",

@@ -163,6 +163,27 @@ class WorkspaceLayout:
     def obsidian_generation_path(self, generation_id: str) -> Path:
         return self.obsidian_generations_root / generation_id
 
+    @property
+    def exchange_imports_root(self) -> Path:
+        return self.knowledge_root / "exchange" / "imports"
+
+    def exchange_import_path(self, import_id: str) -> Path:
+        return self.exchange_imports_root / import_id
+
+    @property
+    def exchange_import_transactions_root(self) -> Path:
+        return self.knowledge_root / ".research-kb" / "exchange-import-transactions"
+
+    def exchange_import_journal_path(self, import_id: str) -> Path:
+        return self.exchange_import_transactions_root / f"{import_id}.json"
+
+    @property
+    def exchange_export_receipts_root(self) -> Path:
+        return self.knowledge_root / ".research-kb" / "exchange-export-receipts"
+
+    def exchange_export_receipt_path(self, export_id: str) -> Path:
+        return self.exchange_export_receipts_root / f"{export_id}.json"
+
     def journal_path(self, event_id: str) -> Path:
         return self.transactions_root / f"{event_id}.json"
 
