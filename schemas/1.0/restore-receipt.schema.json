@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:restore-receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "restore_id", "backup_id", "workspace_id", "archive_sha256", "manifest_sha256", "source_mode", "actor", "created_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "restore_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/restore_id"},
+    "backup_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/backup_id"},
+    "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "archive_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_mode": {"enum": ["inventory_only", "included"]},
+    "actor": {"enum": ["cli", "user"]},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:backup-manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "backup_format", "profile_id", "backup_id", "workspace_id", "source_mode", "rights_assertion", "basis_digest", "entries", "source_inventory", "process_watermark", "created_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "backup_format": {"const": "research-kb-backup@1.0"},
+    "profile_id": {"const": "p11-backup-restore-windows-v1"},
+    "backup_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/backup_id"},
+    "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "source_mode": {"enum": ["inventory_only", "included"]},
+    "rights_assertion": {"type": ["string", "null"]},
+    "basis_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "entries": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 300000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "bytes"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1, "maxLength": 512},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "bytes": {"type": "integer", "minimum": 0, "maximum": 1073741824}
+        }
+      }
+    },
+    "source_inventory": {
+      "type": "array",
+      "maxItems": 300000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["paper_id", "source_asset_id", "asset_role", "root_id", "relative_path", "sha256", "availability", "archive_path"],
+        "properties": {
+          "paper_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+          "source_asset_id": {"type": ["string", "null"]},
+          "asset_role": {"enum": ["main_pdf", "supplement", "source_data"]},
+          "root_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+          "relative_path": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "availability": {"enum": ["available", "missing", "inaccessible", "relink_required", "unknown"]},
+          "archive_path": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "process_watermark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_count", "events_sha256", "last_event_id", "active_journal_count", "first_journal_event_id", "last_journal_event_id"],
+      "properties": {
+        "event_count": {"type": "integer", "minimum": 0},
+        "events_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "last_event_id": {"type": ["string", "null"]},
+        "active_journal_count": {"type": "integer", "minimum": 0},
+        "first_journal_event_id": {"type": ["string", "null"]},
+        "last_journal_event_id": {"type": ["string", "null"]}
+      }
+    },
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+  },
+  "allOf": [
+    {"if": {"properties": {"source_mode": {"const": "included"}}}, "then": {"properties": {"rights_assertion": {"const": "user_asserts_backup_authorized"}}}},
+    {"if": {"properties": {"source_mode": {"const": "inventory_only"}}}, "then": {"properties": {"rights_assertion": {"type": "null"}}}}
+  ]
+}

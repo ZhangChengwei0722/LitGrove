@@ -6,7 +6,7 @@ import os
 import stat
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from research_kb.errors import JSONL_FORMAT_ERROR, Diagnostic, ResearchKBError
 
@@ -42,33 +42,92 @@ def read_jsonl(
     missing_ok: bool = True,
     id_field: str | None = None,
 ) -> list[dict[str, Any]]:
+    return list(
+        iter_jsonl(
+            path,
+            record_kind=record_kind,
+            missing_ok=missing_ok,
+            id_field=id_field,
+        )
+    )
+
+
+def iter_jsonl(
+    path: Path,
+    *,
+    record_kind: str = "jsonl",
+    missing_ok: bool = True,
+    id_field: str | None = None,
+) -> Iterator[dict[str, Any]]:
     if not path.exists() and missing_ok:
-        return []
-    text = _strict_text(path, record_kind)
-    if not text:
-        return []
-    if not text.endswith("\n"):
-        raise _format_error(record_kind, path, "JSONL must end with LF")
-    records: list[dict[str, Any]] = []
+        return
     seen: set[str] = set()
-    for line_number, line in enumerate(text[:-1].split("\n"), start=1):
-        if not line:
-            raise _format_error(record_kind, path, f"blank JSONL line at {line_number}")
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError as error:
-            raise _format_error(record_kind, path, f"invalid JSONL at line {line_number}, column {error.colno}") from error
-        if not isinstance(value, dict):
-            raise _format_error(record_kind, path, f"JSONL line {line_number} must be an object")
-        if id_field is not None:
-            identifier = value.get(id_field)
-            if not isinstance(identifier, str) or not identifier:
-                raise _format_error(record_kind, path, f"JSONL line {line_number} lacks {id_field}")
-            if identifier in seen:
-                raise _format_error(record_kind, path, f"duplicate {id_field} at line {line_number}")
-            seen.add(identifier)
-        records.append(value)
-    return records
+    try:
+        with path.open("rb") as handle:
+            for line_number, raw_line in enumerate(handle, start=1):
+                if line_number == 1 and raw_line.startswith(UTF8_BOM):
+                    raise _format_error(record_kind, path, "UTF-8 BOM is not permitted")
+                if b"\r" in raw_line:
+                    raise _format_error(
+                        record_kind,
+                        path,
+                        "canonical structured files must use LF line endings",
+                    )
+                if not raw_line.endswith(b"\n"):
+                    raise _format_error(record_kind, path, "JSONL must end with LF")
+                content = raw_line[:-1]
+                if not content:
+                    raise _format_error(
+                        record_kind,
+                        path,
+                        f"blank JSONL line at {line_number}",
+                    )
+                try:
+                    line = content.decode("utf-8", errors="strict")
+                except UnicodeDecodeError as error:
+                    raise _format_error(
+                        record_kind,
+                        path,
+                        f"invalid UTF-8 at byte {error.start}",
+                    ) from error
+                try:
+                    value = json.loads(line)
+                except json.JSONDecodeError as error:
+                    raise _format_error(
+                        record_kind,
+                        path,
+                        f"invalid JSONL at line {line_number}, column {error.colno}",
+                    ) from error
+                if not isinstance(value, dict):
+                    raise _format_error(
+                        record_kind,
+                        path,
+                        f"JSONL line {line_number} must be an object",
+                    )
+                if id_field is not None:
+                    identifier = value.get(id_field)
+                    if not isinstance(identifier, str) or not identifier:
+                        raise _format_error(
+                            record_kind,
+                            path,
+                            f"JSONL line {line_number} lacks {id_field}",
+                        )
+                    if identifier in seen:
+                        raise _format_error(
+                            record_kind,
+                            path,
+                            f"duplicate {id_field} at line {line_number}",
+                        )
+                    seen.add(identifier)
+                yield value
+    except ResearchKBError:
+        raise
+    except OSError as error:
+        raise _format_error(
+            record_kind,
+            path,
+            f"cannot read structured file: {error}",
+        ) from error
 
 
 def serialize_json(value: dict[str, Any]) -> bytes:

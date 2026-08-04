@@ -68,7 +68,7 @@ class CatalogAdapterRegistry:
         self,
         adapters: Iterable[CatalogRecordAdapter] | None = None,
         *,
-        registry_version: str = "1.2",
+        registry_version: str = "1.3",
         ignored_record_kinds: Iterable[str] = (),
     ):
         selected = tuple(_default_adapters() if adapters is None else adapters)
@@ -263,6 +263,7 @@ def _default_adapters() -> tuple[CatalogRecordAdapter, ...]:
         _adapter("step7-cross-view", "candidate_id", _project_step7, _step7_detail),
         _adapter("process-event", "event_id", _project_event, _event_detail),
         _adapter("pipeline-job-state", "state_id", _project_job, _job_detail),
+        _adapter("agent-task-state", "state_id", _project_agent_task, _agent_task_detail),
         _adapter(
             "source-adequacy-profile",
             "profile_id",
@@ -636,6 +637,39 @@ def _project_job(record: Record, workspace_id: str, digest: str) -> tuple[Catalo
     )
 
 
+def _project_agent_task(record: Record, workspace_id: str, digest: str) -> tuple[CatalogDocument, ...]:
+    from research_kb.agent_tasks import project_agent_task_state
+
+    del workspace_id
+    return (
+        _document(
+            record_kind="agent-task-state",
+            record_id=str(record["state_id"]),
+            child_id=None,
+            item_kind="agent_task",
+            authority_layer="operational",
+            paper_id=None,
+            question_id=None,
+            title=f"Agent Task {record['task_id'][-12:]}",
+            summary=f"{record['task_kind']} / {record['executor_id']} / {record['status']}",
+            statuses=(
+                f"task:{record['status']}",
+                f"kind:{record['task_kind']}",
+                f"executor:{record['executor_id']}",
+            ),
+            search_text=_join(
+                [
+                    record["task_id"],
+                    record["task_kind"],
+                    record["executor_id"],
+                    record["status"],
+                ]
+            ),
+            digest=digest,
+        ),
+    )
+
+
 def _project_guardian(record: Record, workspace_id: str, digest: str) -> tuple[CatalogDocument, ...]:
     codes = [finding["code"] for finding in record["findings"]]
     return (
@@ -959,7 +993,7 @@ def _event_detail(record: Record, child_id: str | None) -> dict[str, Any]:
 
 def _job_detail(record: Record, child_id: str | None) -> dict[str, Any]:
     del child_id
-    return {
+    detail = {
         key: record[key]
         for key in (
             "job_id",
@@ -978,6 +1012,22 @@ def _job_detail(record: Record, child_id: str | None) -> dict[str, Any]:
         "input_ref_count": len(record["input_refs"]),
         "output_ref_count": len(record["output_refs"]),
     }
+    detail["state_digest"] = canonical_digest(record)
+    detail["can_resume"] = record["status"] not in {
+        "completed",
+        "completed_with_findings",
+        "failed",
+        "cancelled",
+    }
+    detail["can_cancel"] = detail["can_resume"]
+    return detail
+
+
+def _agent_task_detail(record: Record, child_id: str | None) -> dict[str, Any]:
+    from research_kb.agent_tasks import project_agent_task_state
+
+    del child_id
+    return project_agent_task_state(record)
 
 
 def _guardian_detail(record: Record, child_id: str | None) -> dict[str, Any]:
@@ -1074,15 +1124,22 @@ def _sort_key(value: str) -> str:
 def _select_catalog_entries(
     entries: tuple[tuple[str, dict[str, Any]], ...],
 ) -> tuple[tuple[str, dict[str, Any]], ...]:
+    from research_kb.agent_tasks import current_agent_task_states
+
     job_states = [record for kind, record in entries if kind == "pipeline-job-state"]
     current_state_ids = {
         item["state_id"] for item in current_pipeline_states(job_states)
+    }
+    task_states = [record for kind, record in entries if kind == "agent-task-state"]
+    current_task_state_ids = {
+        item["state_id"] for item in current_agent_task_states(task_states)
     }
     selected = [
         (kind, record)
         for kind, record in entries
         if (
             (kind != "pipeline-job-state" or record["state_id"] in current_state_ids)
+            and (kind != "agent-task-state" or record["state_id"] in current_task_state_ids)
             and kind not in {"source-asset-state", "registry-identity-correction"}
         )
     ]

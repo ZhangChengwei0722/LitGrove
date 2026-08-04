@@ -98,6 +98,12 @@ P10_OPTIONAL_MANAGED_DIRECTORIES = (
     "exchange",
     "exchange/imports",
 )
+P11_OPTIONAL_MANAGED_DIRECTORIES = (
+    ".research-kb/backup-receipts",
+    ".research-kb/restore-receipts",
+    "process/archives",
+    "process/archives/transaction_journals",
+)
 _OBSIDIAN_GENERATION_NAME = r"(?:gen-[0-9a-f]{64}|\.staging-[0-9a-f]{32})"
 _OBSIDIAN_GENERATION_DIRECTORY = re.compile(
     rf"^views/obsidian/generations/{_OBSIDIAN_GENERATION_NAME}$"
@@ -127,6 +133,14 @@ _EXCHANGE_IMPORT_JOURNAL = re.compile(
 )
 _EXCHANGE_EXPORT_RECEIPT = re.compile(
     rf"^\.research-kb/exchange-export-receipts/export_{_UUID4}\.json$"
+)
+_BACKUP_RECEIPT = re.compile(rf"^\.research-kb/backup-receipts/backup_{_UUID4}\.json$")
+_RESTORE_RECEIPT = re.compile(rf"^\.research-kb/restore-receipts/restore_{_UUID4}\.json$")
+_OPERATIONAL_ARCHIVE_DIRECTORY = re.compile(
+    rf"^process/archives/transaction_journals/(?:oparchive_{_UUID4}|\.oparchive_{_UUID4}\.stage)$"
+)
+_OPERATIONAL_ARCHIVE_FILE = re.compile(
+    rf"^process/archives/transaction_journals/oparchive_{_UUID4}/(?:manifest\.json|receipt\.json|journals\.jsonl)$"
 )
 
 
@@ -449,6 +463,7 @@ def _layout_diagnostics(context: WorkspaceContext, *, require_initialized: bool)
         MANAGED_DIRECTORIES
         + P9_OPTIONAL_MANAGED_DIRECTORIES
         + P10_OPTIONAL_MANAGED_DIRECTORIES
+        + P11_OPTIONAL_MANAGED_DIRECTORIES
     )
     expected_names = {
         _normalized_name(Path(value).parts[0]): Path(value).parts[0]
@@ -543,6 +558,7 @@ def _recognized_descendant(
         "process/jobs.jsonl",
         "process/source_adequacy.jsonl",
         "process/agent_tasks.jsonl",
+        "process/maintenance.jsonl",
         "guardian/reports.jsonl",
         "guardian/finding_dispositions.jsonl",
         "questions/mappings.jsonl",
@@ -560,6 +576,9 @@ def _recognized_descendant(
         or bool(_EXCHANGE_IMPORT_FILE.fullmatch(relative))
         or bool(_EXCHANGE_IMPORT_JOURNAL.fullmatch(relative))
         or bool(_EXCHANGE_EXPORT_RECEIPT.fullmatch(relative))
+        or bool(_BACKUP_RECEIPT.fullmatch(relative))
+        or bool(_RESTORE_RECEIPT.fullmatch(relative))
+        or bool(_OPERATIONAL_ARCHIVE_FILE.fullmatch(relative))
     )
 
 
@@ -573,6 +592,7 @@ def _recognized_managed_directory(
         or bool(_OBSIDIAN_GENERATION_CHILD_DIRECTORY.fullmatch(relative))
         or bool(_EXCHANGE_IMPORT_DIRECTORY.fullmatch(relative))
         or bool(_EXCHANGE_IMPORT_CHILD_DIRECTORY.fullmatch(relative))
+        or bool(_OPERATIONAL_ARCHIVE_DIRECTORY.fullmatch(relative))
     )
 
 

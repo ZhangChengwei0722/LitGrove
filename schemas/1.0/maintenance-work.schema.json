@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:maintenance-work",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "maintenance_id", "workspace_id", "dependent_id", "upstream_revision", "reason", "trigger_refs", "status", "created_at", "updated_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "maintenance_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/maintenance_id"},
+    "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "dependent_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/record_id"},
+    "upstream_revision": {"type": "string", "minLength": 1, "maxLength": 256},
+    "reason": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+    "trigger_refs": {"type": "array", "minItems": 1, "uniqueItems": true, "maxItems": 100000, "items": {"type": "string", "minLength": 1, "maxLength": 256}},
+    "status": {"const": "open"},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "updated_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+  }
+}

@@ -184,6 +184,31 @@ class WorkspaceLayout:
     def exchange_export_receipt_path(self, export_id: str) -> Path:
         return self.exchange_export_receipts_root / f"{export_id}.json"
 
+    @property
+    def backup_receipts_root(self) -> Path:
+        return self.knowledge_root / ".research-kb" / "backup-receipts"
+
+    def backup_receipt_path(self, backup_id: str) -> Path:
+        return self.backup_receipts_root / f"{backup_id}.json"
+
+    @property
+    def restore_receipts_root(self) -> Path:
+        return self.knowledge_root / ".research-kb" / "restore-receipts"
+
+    def restore_receipt_path(self, restore_id: str) -> Path:
+        return self.restore_receipts_root / f"{restore_id}.json"
+
+    @property
+    def operational_archives_root(self) -> Path:
+        return self.knowledge_root / "process" / "archives" / "transaction_journals"
+
+    def operational_archive_path(self, archive_id: str) -> Path:
+        return self.operational_archives_root / archive_id
+
+    @property
+    def maintenance_work_path(self) -> Path:
+        return self.knowledge_root / "process" / "maintenance.jsonl"
+
     def journal_path(self, event_id: str) -> Path:
         return self.transactions_root / f"{event_id}.json"
 

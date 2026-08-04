@@ -163,8 +163,23 @@ def load_workspace_entries(
         "step7-cross-view",
     ):
         add_jsonl(layout.step7_store_path(kind), kind, "candidate_id")
+    if layout.operational_archives_root.exists():
+        for path in sorted(layout.operational_archives_root.glob("*/manifest.json")):
+            entries.append(
+                (
+                    "operational-archive-manifest",
+                    read_json_document(path, record_kind="operational-archive-manifest"),
+                )
+            )
     add_jsonl(layout.process_events_path, "process-event", "event_id")
     add_jsonl(layout.pipeline_jobs_path, "pipeline-job-state", "state_id")
+    add_jsonl(layout.maintenance_work_path, "maintenance-work", "maintenance_id")
+    if layout.backup_receipts_root.exists():
+        for path in sorted(layout.backup_receipts_root.glob("*.json")):
+            entries.append(("backup-local-receipt", read_json_document(path, record_kind="backup-local-receipt")))
+    if layout.restore_receipts_root.exists():
+        for path in sorted(layout.restore_receipts_root.glob("*.json")):
+            entries.append(("restore-receipt", read_json_document(path, record_kind="restore-receipt")))
     add_jsonl(
         layout.source_adequacy_path,
         "source-adequacy-profile",

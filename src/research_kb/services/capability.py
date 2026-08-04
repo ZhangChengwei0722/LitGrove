@@ -98,6 +98,10 @@ class CapabilityService:
                     "exchange export-preview",
                     "exchange import-preview",
                     "exchange list-imports",
+                    "backup inspect",
+                    "backup preview",
+                    "maintenance archive-preview",
+                    "maintenance list",
                     "review context",
                     "source list",
                     "source scan",
@@ -126,6 +130,10 @@ class CapabilityService:
                     "exchange export",
                     "exchange import",
                     "exchange recover",
+                    "backup create",
+                    "backup restore",
+                    "maintenance archive",
+                    "maintenance enqueue",
                 )
             ),
             "operational_record_kinds": sorted(
@@ -142,6 +150,11 @@ class CapabilityService:
                     "source-adequacy-profile",
                     "agent-task-state",
                     "transaction-journal",
+                    "backup-local-receipt",
+                    "restore-receipt",
+                    "operational-archive-manifest",
+                    "operational-archive-receipt",
+                    "maintenance-work",
                 )
             ),
             "features": {
@@ -175,6 +188,9 @@ class CapabilityService:
                 "exchange_source_free_export": True,
                 "exchange_source_inclusive_export": True,
                 "exchange_import": True,
+                "backup_restore": True,
+                "operational_maintenance": True,
+                "lazy_stale_maintenance": True,
                 "embedded_agent_runtime": False,
             },
             "agent_task_registry_version": PRIVACY_REGISTRY_VERSION,

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import shutil
+import stat
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -7,7 +10,13 @@ from typing import Any
 
 from research_kb.contracts.validator import validate_record
 from research_kb.errors import SCHEMA_VALIDATION_FAILED, Diagnostic, ResearchKBError
-from research_kb.storage.json_io import atomic_write_bytes, read_jsonl, serialize_jsonl
+from research_kb.storage.json_io import (
+    ensure_private_directory,
+    iter_jsonl,
+    read_jsonl,
+    replace_temp,
+    serialize_json,
+)
 
 
 Clock = Callable[[], datetime]
@@ -54,17 +63,64 @@ def read_process_events(path: Path) -> list[dict[str, Any]]:
     return read_jsonl(path, record_kind="process-event", id_field="event_id")
 
 
+def read_process_event_subset(
+    path: Path,
+    event_ids: set[str],
+) -> dict[str, dict[str, Any]]:
+    selected: dict[str, dict[str, Any]] = {}
+    for event in iter_jsonl(
+        path,
+        record_kind="process-event",
+        id_field="event_id",
+    ):
+        if event["event_id"] in event_ids:
+            selected[event["event_id"]] = event
+    return selected
+
+
 def append_process_event(path: Path, event: dict[str, Any], *, write_id: str) -> None:
     diagnostics = validate_record("process-event", event, actor="cli")
     if diagnostics:
         raise ResearchKBError(diagnostics[0])
-    events = read_process_events(path)
     event_id = event["event_id"]
-    if any(item["event_id"] == event_id for item in events):
-        existing = next(item for item in events if item["event_id"] == event_id)
-        if existing == event:
+    matching_event: dict[str, Any] | None = None
+    for existing in iter_jsonl(
+        path,
+        record_kind="process-event",
+        id_field="event_id",
+    ):
+        if existing["event_id"] == event_id:
+            matching_event = existing
+    if matching_event is not None:
+        if matching_event == event:
             return
         raise ResearchKBError(
-            Diagnostic(SCHEMA_VALIDATION_FAILED, "process-event", event_id, "/event_id", "event ID already exists with different content")
+            Diagnostic(
+                SCHEMA_VALIDATION_FAILED,
+                "process-event",
+                event_id,
+                "/event_id",
+                "event ID already exists with different content",
+            )
         )
-    atomic_write_bytes(path, serialize_jsonl([*events, event]), write_id)
+    ensure_private_directory(path.parent)
+    temporary = path.parent / f".{path.name}.{write_id}.tmp"
+    target_mode = (
+        stat.S_IMODE(path.stat().st_mode)
+        if os.name == "posix" and path.exists()
+        else 0o600
+    )
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            if path.exists():
+                with path.open("rb") as source:
+                    shutil.copyfileobj(source, handle, length=1024 * 1024)
+            handle.write(serialize_json(event))
+            handle.flush()
+            if os.name == "posix":
+                os.fchmod(handle.fileno(), target_mode)
+            os.fsync(handle.fileno())
+        replace_temp(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)

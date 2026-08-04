@@ -10,7 +10,11 @@ from research_kb.acquisition_paths import acquisition_destination, local_inbox_d
 from research_kb.agent_tasks import agent_task_chain_diagnostics, current_agent_task_states
 from research_kb.bundle import BundleEntry, load_workspace_entries, records_of_kind
 from research_kb.catalog.models import canonical_digest
-from research_kb.contracts.validator import validate_bundle, validate_record
+from research_kb.contracts.validator import (
+    RecordValidationSession,
+    validate_bundle,
+    validate_record,
+)
 from research_kb.errors import (
     GROUNDING_MISMATCH,
     INCOMPLETE_TRANSACTION,
@@ -19,13 +23,16 @@ from research_kb.errors import (
     PATH_ESCAPE,
     SCHEMA_VALIDATION_FAILED,
     SNAPSHOT_MISMATCH,
+    UNKNOWN_SCHEMA_KIND,
+    UNSUPPORTED_VERSION,
     Diagnostic,
     ResearchKBError,
 )
 from research_kb.exchange_import import validate_import_package
 from research_kb.identifiers import Namespace, allocate_id
+from research_kb.operational_maintenance import read_operational_archive
 from research_kb.pipeline_jobs import current_pipeline_states, pipeline_job_chain_diagnostics
-from research_kb.process_events import timestamp
+from research_kb.process_events import build_process_event, timestamp
 from research_kb.primary_bundles import expand_active_primary_entries
 from research_kb.review_bundles import expand_active_review_entries
 from research_kb.organization_bundles import (
@@ -44,7 +51,11 @@ from research_kb.source_resolution import inspect_source_ref, observe_paper_sour
 from research_kb.source_adequacy import profile_freshness
 from research_kb.step7_support import STEP7_RECORD_KINDS, candidate_freshness
 from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl, serialize_jsonl
-from research_kb.storage.transactions import TransactionManager, TransactionResult, build_journal_event
+from research_kb.storage.transactions import (
+    TransactionManager,
+    TransactionResult,
+    expected_journal_event,
+)
 from research_kb.workspace import WorkspaceLayout
 
 
@@ -67,25 +78,54 @@ class GuardianService:
         self.layout = layout
         self.transactions = transaction_manager or TransactionManager(layout)
 
-    def check(self, *, write_report: bool = False) -> GuardianResult:
+    def check(
+        self,
+        *,
+        write_report: bool = False,
+        entries: list[BundleEntry] | None = None,
+        entries_validated: bool = False,
+    ) -> GuardianResult:
+        if entries_validated and entries is None:
+            raise ValueError("entries_validated requires supplied entries")
         diagnostics: list[Diagnostic] = []
-        entries: list[BundleEntry] = []
-        try:
-            entries = load_workspace_entries(self.layout)
-        except ResearchKBError as error:
-            diagnostics.append(error.diagnostic)
-        else:
-            diagnostics.extend(
-                validate_bundle(
-                    {"records": [{"kind": kind, "record": record} for kind, record in entries]},
+        workspace_entries: list[BundleEntry] = entries if entries is not None else []
+        record_shapes_validated = entries_validated
+        if entries is None:
+            try:
+                workspace_entries = load_workspace_entries(self.layout)
+            except ResearchKBError as error:
+                diagnostics.append(error.diagnostic)
+        if not diagnostics:
+            if not entries_validated:
+                bundle_diagnostics = validate_bundle(
+                    {
+                        "records": [
+                            {"kind": kind, "record": record}
+                            for kind, record in workspace_entries
+                        ]
+                    },
                     actor="stored",
                 )
+                diagnostics.extend(bundle_diagnostics)
+                record_shapes_validated = not any(
+                    item.code
+                    in {
+                        SCHEMA_VALIDATION_FAILED,
+                        UNKNOWN_SCHEMA_KIND,
+                        UNSUPPORTED_VERSION,
+                    }
+                    for item in bundle_diagnostics
+                )
+            diagnostics.extend(
+                self._source_diagnostics(
+                    workspace_entries,
+                    record_shapes_validated=record_shapes_validated,
+                )
             )
-            diagnostics.extend(self._source_diagnostics(entries))
-            diagnostics.extend(self._acquisition_diagnostics(entries))
-            diagnostics.extend(self._local_source_intake_diagnostics(entries))
+            diagnostics.extend(self._acquisition_diagnostics(workspace_entries))
+            diagnostics.extend(self._local_source_intake_diagnostics(workspace_entries))
             effective_entries = expand_active_organization_entries(
-                expand_active_review_entries(expand_active_primary_entries(entries))
+                expand_active_review_entries(expand_active_primary_entries(workspace_entries))
             )
             for kind, mapping in effective_entries:
                 if kind == "question-mapping" and not validate_record(
@@ -95,14 +135,14 @@ class GuardianService:
                 elif kind == "review-memory" and not validate_record(
                     "review-memory", mapping, actor="stored"
                 ):
-                    diagnostics.extend(review_memory_freshness_diagnostics(mapping, entries))
+                    diagnostics.extend(review_memory_freshness_diagnostics(mapping, workspace_entries))
                 elif kind in STEP7_RECORD_KINDS and not validate_record(
                     kind, mapping, actor="stored"
                 ):
-                    diagnostics.extend(step7_freshness_diagnostics(kind, mapping, entries))
+                    diagnostics.extend(step7_freshness_diagnostics(kind, mapping, workspace_entries))
                 elif kind in {"direction", "field-map-entry"}:
                     diagnostics.extend(_organization_freshness_diagnostics(kind, mapping, effective_entries))
-            for kind, bundle in entries:
+            for kind, bundle in workspace_entries:
                 if kind == "question-revision-bundle":
                     revision = next(
                         (
@@ -124,7 +164,7 @@ class GuardianService:
                             )
                         )
                 elif kind == "screening-decision-bundle":
-                    freshness = decision_freshness(bundle, entries)
+                    freshness = decision_freshness(bundle, workspace_entries)
                     if freshness["state"] != "current":
                         diagnostics.append(
                             Diagnostic(
@@ -137,15 +177,30 @@ class GuardianService:
                             )
                         )
         diagnostics.extend(self._canonical_path_diagnostics())
-        process_events = [record for kind, record in entries if kind == "process-event"]
-        diagnostics.extend(self._adequacy_diagnostics(entries, process_events))
+        process_events = [
+            record for kind, record in workspace_entries if kind == "process-event"
+        ]
+        diagnostics.extend(
+            self._adequacy_diagnostics(
+                workspace_entries,
+                process_events,
+                record_shapes_validated=record_shapes_validated,
+            )
+        )
         diagnostics.extend(self._transaction_diagnostics(process_events))
-        diagnostics.extend(self._job_event_diagnostics(entries, process_events))
-        diagnostics.extend(self._agent_task_diagnostics(entries, process_events))
-        diagnostics.extend(self._source_event_diagnostics(entries, process_events))
+        diagnostics.extend(self._operational_archive_diagnostics(process_events))
+        diagnostics.extend(self._job_event_diagnostics(workspace_entries, process_events))
+        diagnostics.extend(self._agent_task_diagnostics(workspace_entries, process_events))
+        diagnostics.extend(
+            self._source_event_diagnostics(
+                workspace_entries,
+                process_events,
+                record_shapes_validated=record_shapes_validated,
+            )
+        )
         diagnostics.extend(self._exchange_diagnostics())
         diagnostics = _deduplicate(diagnostics)
-        defined_ids = _defined_ids(entries)
+        defined_ids = _defined_ids(workspace_entries)
         findings = [_finding_from_diagnostic(item, defined_ids) for item in diagnostics]
         report = {
             "schema_version": "1.0",
@@ -161,10 +216,18 @@ class GuardianService:
         transaction = self._write_report(report) if write_report else None
         return GuardianResult(report=report, transaction=transaction)
 
-    def _source_diagnostics(self, entries: list[BundleEntry]) -> list[Diagnostic]:
+    def _source_diagnostics(
+        self,
+        entries: list[BundleEntry],
+        *,
+        record_shapes_validated: bool = False,
+    ) -> list[Diagnostic]:
         diagnostics: list[Diagnostic] = []
         source_states = [record for kind, record in entries if kind == "source-asset-state"]
-        if any(validate_record("source-asset-state", state, actor="stored") for state in source_states):
+        if not record_shapes_validated and any(
+            validate_record("source-asset-state", state, actor="stored")
+            for state in source_states
+        ):
             return diagnostics
         if source_asset_chain_diagnostics(source_states):
             return diagnostics
@@ -235,11 +298,13 @@ class GuardianService:
         self,
         entries: list[BundleEntry],
         process_events: list[dict[str, Any]],
+        *,
+        record_shapes_validated: bool = False,
     ) -> list[Diagnostic]:
         source_states = [record for kind, record in entries if kind == "source-asset-state"]
         corrections = [record for kind, record in entries if kind == "registry-identity-correction"]
         job_states = [record for kind, record in entries if kind == "pipeline-job-state"]
-        if (
+        if not record_shapes_validated and (
             any(validate_record("source-asset-state", state, actor="stored") for state in source_states)
             or any(validate_record("registry-identity-correction", item, actor="stored") for item in corrections)
             or any(validate_record("pipeline-job-state", state, actor="stored") for state in job_states)
@@ -251,7 +316,7 @@ class GuardianService:
             jobs = {state["job_id"]: state for state in current_pipeline_states(job_states)}
         except ResearchKBError:
             return []
-        valid_events = [
+        valid_events = process_events if record_shapes_validated else [
             event
             for event in process_events
             if not validate_record("process-event", event, actor="stored")
@@ -562,28 +627,13 @@ class GuardianService:
         if chain:
             return diagnostics
         state_ids = {state["state_id"] for state in states}
-        for state in states:
-            matching = [
-                event
-                for event in process_events
-                if event.get("operation", "").startswith("agent_task_")
-                and event.get("result") == "success"
-                and state["state_id"] in event.get("output_refs", [])
-            ]
-            if len(matching) != 1:
-                diagnostics.append(
-                    Diagnostic(
-                        INCOMPLETE_TRANSACTION,
-                        "agent-task-state",
-                        state["state_id"],
-                        "/state_id",
-                        f"Agent Task state must have exactly one correlated success event; found {len(matching)}",
-                    )
-                )
+        event_counts = {state_id: 0 for state_id in state_ids}
         for event in process_events:
             if not event.get("operation", "").startswith("agent_task_") or event.get("result") != "success":
                 continue
             correlated = set(event.get("output_refs", [])) & state_ids
+            for state_id in correlated:
+                event_counts[state_id] += 1
             if not correlated:
                 diagnostics.append(
                     Diagnostic(
@@ -592,6 +642,18 @@ class GuardianService:
                         event["event_id"],
                         "/output_refs",
                         "Agent Task success event does not reference an Agent Task state",
+                    )
+                )
+        for state in states:
+            count = event_counts[state["state_id"]]
+            if count != 1:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "agent-task-state",
+                        state["state_id"],
+                        "/state_id",
+                        f"Agent Task state must have exactly one correlated success event; found {count}",
                     )
                 )
         job_states = [record for kind, record in entries if kind == "pipeline-job-state"]
@@ -1029,25 +1091,8 @@ class GuardianService:
         diagnostics: list[Diagnostic] = []
         states = [record for kind, record in entries if kind == "pipeline-job-state"]
         state_ids = {state["state_id"] for state in states}
-        for state in states:
-            matching = [
-                event
-                for event in process_events
-                if event.get("job_id") == state["job_id"]
-                and state["state_id"] in event.get("output_refs", [])
-                and event.get("operation") in {"pipeline_job_create", "pipeline_job_transition"}
-                and event.get("result") == "success"
-            ]
-            if len(matching) != 1:
-                diagnostics.append(
-                    Diagnostic(
-                        INCOMPLETE_TRANSACTION,
-                        "pipeline-job-state",
-                        state["state_id"],
-                        "/state_id",
-                        f"Pipeline Job state must have exactly one correlated success event; found {len(matching)}",
-                    )
-                )
+        state_by_id = {state["state_id"]: state for state in states}
+        event_counts = {state_id: 0 for state_id in state_ids}
         for event in process_events:
             if event.get("job_id") is None:
                 continue
@@ -1055,15 +1100,30 @@ class GuardianService:
             if (
                 event.get("operation") in {"pipeline_job_create", "pipeline_job_transition"}
                 and event.get("result") == "success"
-                and len(correlated_states) != 1
             ):
+                for state_id in correlated_states:
+                    if event.get("job_id") == state_by_id[state_id]["job_id"]:
+                        event_counts[state_id] += 1
+                if len(correlated_states) != 1:
+                    diagnostics.append(
+                        Diagnostic(
+                            INCOMPLETE_TRANSACTION,
+                            "process-event",
+                            event["event_id"],
+                            "/output_refs",
+                            "correlated Pipeline Job event must reference exactly one Job state",
+                        )
+                    )
+        for state in states:
+            count = event_counts[state["state_id"]]
+            if count != 1:
                 diagnostics.append(
                     Diagnostic(
                         INCOMPLETE_TRANSACTION,
-                        "process-event",
-                        event["event_id"],
-                        "/output_refs",
-                        "correlated Pipeline Job event must reference exactly one Job state",
+                        "pipeline-job-state",
+                        state["state_id"],
+                        "/state_id",
+                        f"Pipeline Job state must have exactly one correlated success event; found {count}",
                     )
                 )
         return diagnostics
@@ -1072,20 +1132,28 @@ class GuardianService:
         self,
         entries: list[BundleEntry],
         process_events: list[dict[str, Any]],
+        *,
+        record_shapes_validated: bool = False,
     ) -> list[Diagnostic]:
         diagnostics: list[Diagnostic] = []
         profiles = [
             record
             for kind, record in entries
             if kind == "source-adequacy-profile"
-            and not validate_record("source-adequacy-profile", record, actor="stored")
+            and (
+                record_shapes_validated
+                or not validate_record("source-adequacy-profile", record, actor="stored")
+            )
         ]
         if not profiles:
             return diagnostics
         job_states = [record for kind, record in entries if kind == "pipeline-job-state"]
         if (
+            not record_shapes_validated
+            and (
             any(validate_record("pipeline-job-state", state, actor="stored") for state in job_states)
             or pipeline_job_chain_diagnostics(job_states)
+            )
         ):
             return diagnostics
         try:
@@ -1163,10 +1231,11 @@ class GuardianService:
         events_by_id: dict[str, list[dict[str, Any]]] = {}
         for event in process_events:
             events_by_id.setdefault(event["event_id"], []).append(event)
+        validation = RecordValidationSession("transaction-journal", actor="stored")
         for path in sorted(self.layout.transactions_root.glob("*.json"), key=lambda item: item.name):
             try:
                 journal = read_json_document(path, record_kind="transaction-journal")
-                journal_diagnostics = validate_record("transaction-journal", journal, actor="stored")
+                journal_diagnostics = validation.validate(journal)
             except ResearchKBError as error:
                 diagnostics.append(error.diagnostic)
                 continue
@@ -1196,7 +1265,7 @@ class GuardianService:
                     )
                 )
                 continue
-            expected_event = build_journal_event(journal, journal["result"])
+            expected_event = expected_journal_event(journal, journal["result"])
             if matching_events[0] != expected_event:
                 diagnostics.append(
                     Diagnostic(
@@ -1205,6 +1274,104 @@ class GuardianService:
                         journal["event_id"],
                         "/event_id",
                         "completed transaction process event does not match its journal",
+                    )
+                )
+        return diagnostics
+
+    def _operational_archive_diagnostics(
+        self,
+        process_events: list[dict[str, Any]],
+    ) -> list[Diagnostic]:
+        diagnostics: list[Diagnostic] = []
+        root = self.layout.operational_archives_root
+        if not root.exists():
+            return diagnostics
+        events = {item["event_id"]: item for item in process_events}
+        archived_event_owners: dict[str, str] = {}
+        for path in sorted(root.iterdir(), key=lambda item: item.name):
+            if not path.is_dir() or path.name.startswith("."):
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "operational-archive-manifest",
+                        None,
+                        "/archive",
+                        "operational archive root contains an unsettled or unexpected entry",
+                    )
+                )
+                continue
+            try:
+                manifest, journals, receipt = read_operational_archive(path)
+            except ResearchKBError as error:
+                diagnostics.append(error.diagnostic)
+                continue
+            archive_id = manifest["archive_id"]
+            if path.name != archive_id or manifest["workspace_id"] != self.layout.workspace_id:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "operational-archive-manifest",
+                        archive_id,
+                        "/archive_id",
+                        "operational archive path or workspace identity does not match",
+                    )
+                )
+            for journal in journals:
+                previous_owner = archived_event_owners.get(journal["event_id"])
+                if previous_owner is not None and previous_owner != archive_id:
+                    diagnostics.append(
+                        Diagnostic(
+                            INCOMPLETE_TRANSACTION,
+                            "operational-archive-manifest",
+                            archive_id,
+                            "/event_ids",
+                            "transaction journal is represented by more than one operational archive",
+                        )
+                    )
+                else:
+                    archived_event_owners[journal["event_id"]] = archive_id
+                if self.layout.journal_path(journal["event_id"]).exists():
+                    diagnostics.append(
+                        Diagnostic(
+                            INCOMPLETE_TRANSACTION,
+                            "operational-archive-manifest",
+                            archive_id,
+                            "/event_ids",
+                            "archived transaction journal still exists in the active journal root",
+                        )
+                    )
+                if events.get(journal["event_id"]) != expected_journal_event(
+                    journal,
+                    journal["result"],
+                ):
+                    diagnostics.append(
+                        Diagnostic(
+                            INCOMPLETE_TRANSACTION,
+                            "operational-archive-manifest",
+                            archive_id,
+                            "/event_ids",
+                            "archived transaction journal no longer matches its process event",
+                        )
+                    )
+            expected_archive_event = build_process_event(
+                event_id=manifest["event_id"],
+                operation="operational_journal_archive",
+                actor="user",
+                result="success",
+                input_refs=manifest["event_ids"],
+                output_refs=[archive_id],
+                created_at=manifest["created_at"],
+            )
+            if receipt["event_id"] != manifest["event_id"] or events.get(
+                manifest["event_id"]
+            ) != expected_archive_event:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "operational-archive-receipt",
+                        archive_id,
+                        "/event_id",
+                        "operational archive receipt does not match one process event",
                     )
                 )
         return diagnostics

@@ -34,6 +34,83 @@ _STABLE_FIELDS = (
 )
 
 
+def project_agent_task_state(state: Mapping[str, Any]) -> dict[str, Any]:
+    projection = {
+        "task_id": state["task_id"],
+        "state_id": state["state_id"],
+        "state_digest": canonical_digest(state),
+        "revision": state["revision"],
+        "task_kind": state["task_kind"],
+        "result_contract": state["result_contract"],
+        "executor_id": state["executor_id"],
+        "execution_scope": state["execution_scope"],
+        "effective_content_classes": list(state["effective_content_classes"]),
+        "input_basis_digest": state["input_basis_digest"],
+        "lineage": state["lineage"],
+        "status": state["status"],
+        "terminal_receipt": state["terminal_receipt"],
+        "created_at": state["created_at"],
+        "updated_at": state["updated_at"],
+    }
+    if state["task_kind"] == "knowledge_query_report":
+        projection.update(
+            {
+                "paper_id": None,
+                "paper_ids": list(state["input_basis"]["paper_ids"]),
+                "job_id": None,
+                "query_type": state["input_basis"]["query_type"],
+                "retention_class": "current_task_report",
+            }
+        )
+    elif state["task_kind"] == "organization_proposal":
+        projection.update(
+            {
+                "paper_id": None,
+                "paper_ids": list(state["input_basis"]["paper_ids"]),
+                "job_id": None,
+                "target_kind": state["input_basis"]["target_kind"],
+                "target_id": state["input_basis"]["target_id"],
+            }
+        )
+    elif state["task_kind"] == "question_screening_criteria_proposal":
+        projection.update(
+            {
+                "paper_id": None,
+                "job_id": None,
+                "question_id": state["input_basis"]["question_id"],
+                "criteria_id": state["input_basis"]["criteria_id"],
+            }
+        )
+    elif state["task_kind"] == "question_screening_decision_proposal":
+        projection.update(
+            {
+                "paper_id": state["input_basis"]["paper_id"],
+                "job_id": None,
+                "question_id": state["input_basis"]["question_id"],
+                "criteria_id": state["input_basis"]["criteria_snapshot"]["criteria_id"],
+            }
+        )
+    elif state["task_kind"] == "research_synthesis_drafting":
+        projection.update(
+            {
+                "paper_id": None,
+                "job_id": None,
+                "question_id": state["input_basis"]["question_id"],
+                "candidate_type": state["input_basis"]["candidate_type"],
+                "maintenance_intent": state["input_basis"]["maintenance_intent"],
+                "target_candidate_id": state["input_basis"]["target_candidate_id"],
+            }
+        )
+    else:
+        projection.update(
+            {
+                "paper_id": state["input_basis"]["paper_id"],
+                "job_id": state["input_basis"]["job_id"],
+            }
+        )
+    return projection
+
+
 def validate_task_state(state: Mapping[str, Any]) -> None:
     if state.get("input_basis_digest") != canonical_digest(state.get("input_basis")):
         raise _task_error("input basis digest does not match the exact input basis", "/input_basis_digest")

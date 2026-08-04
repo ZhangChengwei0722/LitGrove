@@ -69,6 +69,12 @@ SCHEMA_FILES: dict[str, str] = {
     "exchange-source-envelope": "exchange-source-envelope.schema.json",
     "exchange-import-receipt": "exchange-import-receipt.schema.json",
     "exchange-import-journal": "exchange-import-journal.schema.json",
+    "operational-archive-manifest": "operational-archive-manifest.schema.json",
+    "operational-archive-receipt": "operational-archive-receipt.schema.json",
+    "maintenance-work": "maintenance-work.schema.json",
+    "backup-manifest": "backup-manifest.schema.json",
+    "backup-local-receipt": "backup-local-receipt.schema.json",
+    "restore-receipt": "restore-receipt.schema.json",
 }
 
 
