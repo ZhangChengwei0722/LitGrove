@@ -30,6 +30,7 @@ def test_exchange_application_service_is_session_bound_and_source_free(tmp_path:
     assert preview["application_service_interface_version"] == "1.18"
     assert preview["persistent_writes"] == 0
     assert preview["canonical_scientific_write"] is False
+    assert callable(service.show_import)
 
 
 def test_exchange_cli_is_thin_application_service_adapter(tmp_path: Path, capsys) -> None:
