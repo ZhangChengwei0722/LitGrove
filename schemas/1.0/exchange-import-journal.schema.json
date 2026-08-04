@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:exchange-import-journal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "import_id", "archive_sha256", "basis_digest", "stage_name", "package_relative_path", "phase", "result", "created_at", "updated_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "import_id": {"type": "string", "pattern": "^import_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "archive_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "basis_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "stage_name": {"type": "string", "pattern": "^\\.import_[0-9a-f-]+\\.stage$"},
+    "package_relative_path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"},
+    "phase": {"enum": ["prepared", "staged", "published", "complete", "needs_resolution"]},
+    "result": {"type": ["string", "null"], "enum": [null, "success", "failure", "needs_resolution"]},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "updated_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+  }
+}

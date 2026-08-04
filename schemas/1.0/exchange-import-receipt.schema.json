@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:exchange-import-receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "import_id", "local_workspace_id", "origin_workspace_id", "export_id", "archive_sha256", "manifest_sha256", "basis_digest", "compatibility", "trust_projection", "record_count", "source_count", "conflict_counts", "local_review_status", "created_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "import_id": {"type": "string", "pattern": "^import_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "local_workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "origin_workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "export_id": {"type": "string", "pattern": "^export_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "archive_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "basis_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "compatibility": {"const": "supported"},
+    "trust_projection": {"const": "unsigned_external_claims"},
+    "record_count": {"type": "integer", "minimum": 1},
+    "source_count": {"type": "integer", "minimum": 0},
+    "conflict_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+    "local_review_status": {"const": "unreviewed"},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+  }
+}

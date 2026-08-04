@@ -117,9 +117,9 @@ def main() -> int:
             "diagnostic_code": "RKBC-028",
         }:
             raise SystemExit("base wheel capability report did not expose the missing PDF dependency")
-        if not {"adequacy gate", "adequacy show", "discovery search", "discovery list", "discovery show", "discovery resolve", "identity list", "intake inspect", "intake inspect-acquired", "job list", "job show", "manuscript inspect", "obsidian render --dry-run", "obsidian status", "paper context", "review context", "source list", "source scan", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
+        if not {"adequacy gate", "adequacy show", "discovery search", "discovery list", "discovery show", "discovery resolve", "exchange export-preview", "exchange import-preview", "exchange list-imports", "identity list", "intake inspect", "intake inspect-acquired", "job list", "job show", "manuscript inspect", "obsidian render --dry-run", "obsidian status", "paper context", "review context", "source list", "source scan", "step7 context", "step7 render"}.issubset(capability["read_commands"]):
             raise SystemExit("base wheel capability report lacks deterministic intake/context reads")
-        if not {"adequacy assess", "obsidian render", "trunk advance"}.issubset(capability["write_commands"]):
+        if not {"adequacy assess", "exchange export", "exchange import", "exchange recover", "obsidian render", "trunk advance"}.issubset(capability["write_commands"]):
             raise SystemExit("base wheel capability report lacks Source Adequacy writes")
         if capability["discovery_connectors"] != [{"connector": "europe-pmc", "availability": "available", "network_required": True}]:
             raise SystemExit("base wheel capability report lacks the Europe PMC connector")
@@ -137,6 +137,15 @@ def main() -> int:
             raise SystemExit("base wheel capability report lacks current Agent Task staging")
         if capability["features"]["reading_evidence_source_access"] is not True:
             raise SystemExit("base wheel capability report lacks P5-B Evidence source access")
+        if not all(
+            capability["features"][name]
+            for name in (
+                "exchange_source_free_export",
+                "exchange_source_inclusive_export",
+                "exchange_import",
+            )
+        ):
+            raise SystemExit("base wheel capability report lacks P10 Exchange")
         subprocess.run(
             [
                 str(python), "-c",
@@ -161,6 +170,7 @@ def main() -> int:
                 "assert registry.schema('source-asset-state')['$id'].endswith('source-asset-state'); "
                 "assert registry.schema('registry-identity-correction')['$id'].endswith('registry-identity-correction'); "
                 "assert registry.schema('source-adequacy-profile')['$id'].endswith('source-adequacy-profile'); "
+                "assert registry.schema('exchange-local-export-receipt')['$id'].endswith('exchange-local-export-receipt'); "
                 "assert LegacyReaderAdapter.__name__ == 'LegacyReaderAdapter'; "
                 "assert CompatibilitySourceRef.__name__ == 'CompatibilitySourceRef'; "
                 "assert CompatibilityAdapterRegistry.__name__ == 'CompatibilityAdapterRegistry'; "
@@ -975,16 +985,19 @@ def main() -> int:
                     "CatalogProjectionService, CatalogQueryService, WorkspaceSession, "
                     "WorkspaceSessionService, SourceAssetService, RegistryIdentityCorrectionService, "
                     "AgentTaskApplicationService, DeterministicIntakeApplicationService, ReadingApplicationService, "
-                    "DeterministicTrunkService, ObsidianGeneratedViewsApplicationService, PipelineJobService; "
-                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.17'; "
+                    "DeterministicTrunkService, ExchangeApplicationService, ObsidianGeneratedViewsApplicationService, PipelineJobService; "
+                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.18'; "
                     f"session = WorkspaceSessionService({{'wheel': Path({str(config_path)!r})}}).open('wheel'); "
                     "limits = DeterministicIntakeApplicationService().limits(session); "
-                    "assert limits['interface_version'] == '1.17'; "
+                    "assert limits['interface_version'] == '1.18'; "
                     "assert limits['ingress_modes'] == ['upload', 'watched_inbox']; "
                     "obsidian = ObsidianGeneratedViewsApplicationService(); "
                     "assert obsidian.limits(session)['max_status_page_size'] == 100; "
                     "assert hasattr(obsidian, 'stream_snapshot'); "
                     "assert obsidian.status(session)['projection_state'] == 'missing'; "
+                    "exchange = ExchangeApplicationService(); "
+                    "assert exchange.limits(session)['safe_reader_profile']['profile_id'] == 'p10-exchange-safe-reader-v1'; "
+                    "assert exchange.preview_export(session, {'scope':'workspace','include_sources':False})['persistent_writes'] == 0; "
                     f"reading = ReadingApplicationService().show_paper(session, {paper_id!r}); "
                     "assert reading['persistent_writes'] == 0 and 'source_ref' not in str(reading); "
                     "layout = session._layout; "
@@ -1085,7 +1098,7 @@ def main() -> int:
                     "assignment = tags.set_assignment(session, {'tag_id':tag['tag']['tag_id'],'target_kind':'paper','target_id':paper['paper_id'],'state':'assigned','receipt_id':'installed-wheel-tag-link'}); "
                     "assert assignment['result'] == 'committed' and tags.show_tag(session, tag['tag']['tag_id'])['assignments'][0]['target_id'] == paper['paper_id'], 'tag assignment'; "
                     "source_access = ReadingApplicationService().prepare_evidence_source(session, evidence_id); "
-                    "assert source_access.descriptor['application_service_interface_version'] == '1.17', 'source interface'; "
+                    "assert source_access.descriptor['application_service_interface_version'] == '1.18', 'source interface'; "
                     "assert source_access.descriptor['media_type'] == 'application/pdf' and source_access.descriptor['persistent_writes'] == 0, 'source descriptor'; "
                     "assert 'source_ref' not in str(source_access.descriptor) and 'fingerprint' not in str(source_access.descriptor), 'source redaction'; "
                     "opened = ReadingApplicationService().open_evidence_source(session, source_access.handle); "

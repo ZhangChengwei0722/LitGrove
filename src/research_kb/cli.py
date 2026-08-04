@@ -69,6 +69,7 @@ from research_kb.services.discovery_acquisition import (
 )
 from research_kb.services.discovery_resolution import DiscoveryResolutionService, DiscoveryResolverRegistry
 from research_kb.services.deterministic_trunk import DeterministicTrunkService
+from research_kb.services.exchange_application import ExchangeApplicationService
 from research_kb.services.source_adequacy import SourceAdequacyService
 from research_kb.compatibility import LegacyReaderAdapter
 from research_kb.storage.json_io import serialize_json
@@ -83,6 +84,7 @@ GUARDIAN_DISPOSITION_REQUEST_INPUT_LIMIT = 64 * 1024
 SOURCE_REQUEST_INPUT_LIMIT = 64 * 1024
 IDENTITY_REQUEST_INPUT_LIMIT = 64 * 1024
 SOURCE_ADEQUACY_REQUEST_INPUT_LIMIT = 64 * 1024
+EXCHANGE_REQUEST_INPUT_LIMIT = 64 * 1024
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -352,6 +354,30 @@ def build_parser() -> argparse.ArgumentParser:
     obsidian_render.add_argument("--discard-managed-edits", action="store_true")
     obsidian_render.add_argument("--actor", choices=("cli", "user"), default="cli")
 
+    exchange = commands.add_parser("exchange", help="preview and create portable knowledge bundles")
+    exchange_commands = exchange.add_subparsers(dest="exchange_command", required=True)
+    exchange_preview = exchange_commands.add_parser("export-preview", help="preview one bounded Exchange closure")
+    exchange_preview.add_argument("--workspace", required=True, type=Path)
+    exchange_preview.add_argument("--request", required=True, type=Path)
+    exchange_export = exchange_commands.add_parser("export", help="create one preview-bound Exchange archive")
+    exchange_export.add_argument("--workspace", required=True, type=Path)
+    exchange_export.add_argument("--request", required=True, type=Path)
+    exchange_export.add_argument("--output", required=True, type=Path)
+    exchange_export.add_argument("--actor", choices=("cli", "user"), required=True)
+    exchange_import_preview = exchange_commands.add_parser("import-preview", help="safely inspect one Exchange archive")
+    exchange_import_preview.add_argument("--workspace", required=True, type=Path)
+    exchange_import_preview.add_argument("--archive", required=True, type=Path)
+    exchange_import = exchange_commands.add_parser("import", help="publish one preview-bound immutable external package")
+    exchange_import.add_argument("--workspace", required=True, type=Path)
+    exchange_import.add_argument("--archive", required=True, type=Path)
+    exchange_import.add_argument("--request", required=True, type=Path)
+    exchange_import.add_argument("--actor", choices=("user",), required=True)
+    exchange_list = exchange_commands.add_parser("list-imports", help="list immutable external-origin packages")
+    exchange_list.add_argument("--workspace", required=True, type=Path)
+    exchange_recover = exchange_commands.add_parser("recover", help="recover interrupted Exchange imports")
+    exchange_recover.add_argument("--workspace", required=True, type=Path)
+    exchange_recover.add_argument("--dry-run", action="store_true")
+
     transaction = commands.add_parser("transaction", help="inspect or recover interrupted writes")
     transaction_commands = transaction.add_subparsers(dest="transaction_command", required=True)
     recover = transaction_commands.add_parser("recover", help="recover transaction journals by digest")
@@ -472,6 +498,18 @@ def main(
             return _obsidian_status(args)
         if args.command == "obsidian" and args.obsidian_command == "render":
             return _obsidian_render(args)
+        if args.command == "exchange" and args.exchange_command == "export-preview":
+            return _exchange_export_preview(args)
+        if args.command == "exchange" and args.exchange_command == "export":
+            return _exchange_export(args)
+        if args.command == "exchange" and args.exchange_command == "import-preview":
+            return _exchange_import_preview(args)
+        if args.command == "exchange" and args.exchange_command == "import":
+            return _exchange_import(args)
+        if args.command == "exchange" and args.exchange_command == "list-imports":
+            return _exchange_list_imports(args)
+        if args.command == "exchange" and args.exchange_command == "recover":
+            return _exchange_recover(args)
         if args.command == "transaction" and args.transaction_command == "recover":
             return _transaction_recover(args)
     except ResearchKBError as error:
@@ -1304,6 +1342,69 @@ def _obsidian_render(args: argparse.Namespace) -> int:
 def _obsidian_application(workspace: Path):
     session = WorkspaceSessionService({"cli": workspace.resolve()}).open("cli")
     return ObsidianGeneratedViewsApplicationService(), session
+
+
+def _exchange_export_preview(args: argparse.Namespace) -> int:
+    service, session = _exchange_application(args.workspace)
+    request = _read_bounded_request(
+        args.request,
+        limit=EXCHANGE_REQUEST_INPUT_LIMIT,
+        record_kind="exchange-export-preview-request",
+    )
+    _write_json_once(service.preview_export(session, request))
+    return 0
+
+
+def _exchange_export(args: argparse.Namespace) -> int:
+    service, session = _exchange_application(args.workspace)
+    request = _read_bounded_request(
+        args.request,
+        limit=EXCHANGE_REQUEST_INPUT_LIMIT,
+        record_kind="exchange-export-request",
+    )
+    _write_json_once(
+        service.build_export(
+            session,
+            request,
+            target=args.output,
+            actor=args.actor,
+        )
+    )
+    return 0
+
+
+def _exchange_application(workspace: Path):
+    session = WorkspaceSessionService({"cli": workspace.resolve()}).open("cli")
+    return ExchangeApplicationService(), session
+
+
+def _exchange_import_preview(args: argparse.Namespace) -> int:
+    service, session = _exchange_application(args.workspace)
+    _write_json_once(service.preview_import(session, archive=args.archive))
+    return 0
+
+
+def _exchange_import(args: argparse.Namespace) -> int:
+    service, session = _exchange_application(args.workspace)
+    request = _read_bounded_request(
+        args.request,
+        limit=EXCHANGE_REQUEST_INPUT_LIMIT,
+        record_kind="exchange-import-request",
+    )
+    _write_json_once(service.apply_import(session, request, archive=args.archive, actor=args.actor))
+    return 0
+
+
+def _exchange_list_imports(args: argparse.Namespace) -> int:
+    service, session = _exchange_application(args.workspace)
+    _write_json_once(service.list_imports(session))
+    return 0
+
+
+def _exchange_recover(args: argparse.Namespace) -> int:
+    service, session = _exchange_application(args.workspace)
+    _write_json_once(service.recover_imports(session, dry_run=args.dry_run))
+    return 0
 
 
 def _record_id(kind: str, record: dict[str, Any]) -> str:

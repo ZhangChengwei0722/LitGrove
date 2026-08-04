@@ -61,6 +61,14 @@ SCHEMA_FILES: dict[str, str] = {
     "organization-proposal": "organization-proposal.schema.json",
     "mutation-request": "mutation-request.schema.json",
     "transaction-journal": "transaction-journal.schema.json",
+    "exchange-paper-identity": "exchange-paper-identity.schema.json",
+    "exchange-record-envelope": "exchange-record-envelope.schema.json",
+    "exchange-bundle-manifest": "exchange-bundle-manifest.schema.json",
+    "exchange-export-receipt": "exchange-export-receipt.schema.json",
+    "exchange-local-export-receipt": "exchange-local-export-receipt.schema.json",
+    "exchange-source-envelope": "exchange-source-envelope.schema.json",
+    "exchange-import-receipt": "exchange-import-receipt.schema.json",
+    "exchange-import-journal": "exchange-import-journal.schema.json",
 }
 
 

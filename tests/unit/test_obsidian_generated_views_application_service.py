@@ -662,7 +662,7 @@ def test_cli_and_application_service_share_the_same_projection_contract(
     ) == 0
     rendered = json.loads(capsys.readouterr().out)
     assert rendered["result"] == "committed"
-    assert rendered["application_service_interface_version"] == "1.17"
+    assert rendered["application_service_interface_version"] == "1.18"
 
     assert main(["obsidian", "status", "--workspace", workspace]) == 0
     assert json.loads(capsys.readouterr().out) == service.status(session)

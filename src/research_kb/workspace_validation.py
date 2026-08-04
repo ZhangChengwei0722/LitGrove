@@ -92,6 +92,12 @@ P9_OPTIONAL_MANAGED_DIRECTORIES = (
     "views/obsidian",
     "views/obsidian/generations",
 )
+P10_OPTIONAL_MANAGED_DIRECTORIES = (
+    ".research-kb/exchange-import-transactions",
+    ".research-kb/exchange-export-receipts",
+    "exchange",
+    "exchange/imports",
+)
 _OBSIDIAN_GENERATION_NAME = r"(?:gen-[0-9a-f]{64}|\.staging-[0-9a-f]{32})"
 _OBSIDIAN_GENERATION_DIRECTORY = re.compile(
     rf"^views/obsidian/generations/{_OBSIDIAN_GENERATION_NAME}$"
@@ -103,6 +109,24 @@ _OBSIDIAN_GENERATION_CHILD_DIRECTORY = re.compile(
 _OBSIDIAN_GENERATED_FILE = re.compile(
     rf"^views/obsidian/generations/{_OBSIDIAN_GENERATION_NAME}/"
     r"(?:Home\.md|(?:Papers|Reviews|Directions|Questions|Research Synthesis|Tables)/[^/]+\.md)$"
+)
+_UUID4 = r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
+_EXCHANGE_IMPORT_NAME = rf"(?:import_{_UUID4}|\.import_{_UUID4}\.stage)"
+_EXCHANGE_IMPORT_DIRECTORY = re.compile(rf"^exchange/imports/{_EXCHANGE_IMPORT_NAME}$")
+_EXCHANGE_IMPORT_CHILD_DIRECTORY = re.compile(
+    rf"^exchange/imports/{_EXCHANGE_IMPORT_NAME}/(?:records|sources|sources/sha256)$"
+)
+_EXCHANGE_IMPORT_FILE = re.compile(
+    rf"^exchange/imports/{_EXCHANGE_IMPORT_NAME}/(?:"
+    r"manifest\.json|receipt\.json|import_receipt\.json|"
+    r"records/[a-z][a-z0-9-]{0,63}\.jsonl|sources/index\.jsonl|"
+    r"sources/sha256/[0-9a-f]{64}\.pdf)$"
+)
+_EXCHANGE_IMPORT_JOURNAL = re.compile(
+    rf"^\.research-kb/exchange-import-transactions/import_{_UUID4}\.json$"
+)
+_EXCHANGE_EXPORT_RECEIPT = re.compile(
+    rf"^\.research-kb/exchange-export-receipts/export_{_UUID4}\.json$"
 )
 
 
@@ -421,7 +445,11 @@ def _layout_diagnostics(context: WorkspaceContext, *, require_initialized: bool)
         diagnostics.append(_not_initialized(context.workspace_id))
 
     required_directories = P7A_1_MANAGED_DIRECTORIES if marker_is_predecessor else MANAGED_DIRECTORIES
-    allowed_directories = MANAGED_DIRECTORIES + P9_OPTIONAL_MANAGED_DIRECTORIES
+    allowed_directories = (
+        MANAGED_DIRECTORIES
+        + P9_OPTIONAL_MANAGED_DIRECTORIES
+        + P10_OPTIONAL_MANAGED_DIRECTORIES
+    )
     expected_names = {
         _normalized_name(Path(value).parts[0]): Path(value).parts[0]
         for value in allowed_directories
@@ -525,8 +553,13 @@ def _recognized_descendant(
     }
     if allow_discovery_store:
         exact.add("discovery/candidates.jsonl")
-    return relative in exact or relative == "views/obsidian/manifest.json" or bool(
-        _OBSIDIAN_GENERATED_FILE.fullmatch(relative)
+    return (
+        relative in exact
+        or relative == "views/obsidian/manifest.json"
+        or bool(_OBSIDIAN_GENERATED_FILE.fullmatch(relative))
+        or bool(_EXCHANGE_IMPORT_FILE.fullmatch(relative))
+        or bool(_EXCHANGE_IMPORT_JOURNAL.fullmatch(relative))
+        or bool(_EXCHANGE_EXPORT_RECEIPT.fullmatch(relative))
     )
 
 
@@ -538,6 +571,8 @@ def _recognized_managed_directory(
         relative in managed_directories
         or bool(_OBSIDIAN_GENERATION_DIRECTORY.fullmatch(relative))
         or bool(_OBSIDIAN_GENERATION_CHILD_DIRECTORY.fullmatch(relative))
+        or bool(_EXCHANGE_IMPORT_DIRECTORY.fullmatch(relative))
+        or bool(_EXCHANGE_IMPORT_CHILD_DIRECTORY.fullmatch(relative))
     )
 
 

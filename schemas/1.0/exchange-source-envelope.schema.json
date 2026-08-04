@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:exchange-source-envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "paper_id", "source_asset_id", "asset_role", "source_fingerprint", "manifestation_id", "content_type", "archive_path", "bytes"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "paper_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+    "source_asset_id": {
+      "anyOf": [
+        {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_asset_id"},
+        {"type": "null"}
+      ]
+    },
+    "asset_role": {"enum": ["main_pdf", "supplement", "source_data"]},
+    "source_fingerprint": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_fingerprint"},
+    "manifestation_id": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "content_type": {"const": "application/pdf"},
+    "archive_path": {"type": "string", "pattern": "^sources/sha256/[0-9a-f]{64}\\.pdf$"},
+    "bytes": {"type": "integer", "minimum": 1}
+  }
+}

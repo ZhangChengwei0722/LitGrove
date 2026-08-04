@@ -22,6 +22,7 @@ from research_kb.errors import (
     Diagnostic,
     ResearchKBError,
 )
+from research_kb.exchange_import import validate_import_package
 from research_kb.identifiers import Namespace, allocate_id
 from research_kb.pipeline_jobs import current_pipeline_states, pipeline_job_chain_diagnostics
 from research_kb.process_events import timestamp
@@ -142,6 +143,7 @@ class GuardianService:
         diagnostics.extend(self._job_event_diagnostics(entries, process_events))
         diagnostics.extend(self._agent_task_diagnostics(entries, process_events))
         diagnostics.extend(self._source_event_diagnostics(entries, process_events))
+        diagnostics.extend(self._exchange_diagnostics())
         diagnostics = _deduplicate(diagnostics)
         defined_ids = _defined_ids(entries)
         findings = [_finding_from_diagnostic(item, defined_ids) for item in diagnostics]
@@ -1207,6 +1209,142 @@ class GuardianService:
                 )
         return diagnostics
 
+    def _exchange_diagnostics(self) -> list[Diagnostic]:
+        diagnostics: list[Diagnostic] = []
+        journals: dict[str, dict[str, Any]] = {}
+        journal_root = self.layout.exchange_import_transactions_root
+        if journal_root.exists():
+            for unexpected in sorted(journal_root.iterdir(), key=lambda item: item.name):
+                if not unexpected.is_file() or unexpected.suffix != ".json":
+                    diagnostics.append(
+                        Diagnostic(
+                            INCOMPLETE_TRANSACTION,
+                            "exchange-import-journal",
+                            None,
+                            "/journal",
+                            "Exchange import transaction root contains an unexpected entry",
+                        )
+                    )
+            for path in sorted(journal_root.glob("*.json"), key=lambda item: item.name):
+                try:
+                    journal = read_json_document(path, record_kind="exchange-import-journal")
+                except ResearchKBError as error:
+                    diagnostics.append(error.diagnostic)
+                    continue
+                failures = validate_record("exchange-import-journal", journal, actor="stored")
+                diagnostics.extend(failures)
+                if failures:
+                    continue
+                import_id = journal["import_id"]
+                journals[import_id] = journal
+                target = self.layout.exchange_import_path(import_id)
+                stage = self.layout.exchange_imports_root / journal["stage_name"]
+                if journal["phase"] != "complete":
+                    diagnostics.append(
+                        Diagnostic(
+                            INCOMPLETE_TRANSACTION,
+                            "exchange-import-journal",
+                            import_id,
+                            "/phase",
+                            f"Exchange import journal is not complete: {journal['phase']}",
+                        )
+                    )
+                    continue
+                if journal["result"] == "success":
+                    try:
+                        validate_import_package(target, journal["archive_sha256"])
+                    except ResearchKBError as error:
+                        diagnostics.append(
+                            Diagnostic(
+                                error.diagnostic.code,
+                                "exchange-import-package",
+                                import_id,
+                                error.diagnostic.json_path,
+                                error.diagnostic.message,
+                            )
+                        )
+                elif target.exists() or stage.exists():
+                    diagnostics.append(
+                        Diagnostic(
+                            INCOMPLETE_TRANSACTION,
+                            "exchange-import-journal",
+                            import_id,
+                            "/result",
+                            "failed Exchange import retained a stage or published package",
+                        )
+                    )
+
+        imports_root = self.layout.exchange_imports_root
+        if imports_root.exists():
+            for path in sorted(imports_root.iterdir(), key=lambda item: item.name):
+                if path.name.startswith("."):
+                    if path.is_dir():
+                        diagnostics.append(
+                            Diagnostic(
+                                INCOMPLETE_TRANSACTION,
+                                "exchange-import-package",
+                                None,
+                                "/stage",
+                                "unpublished Exchange import stage requires recovery",
+                            )
+                        )
+                    continue
+                if not path.is_dir():
+                    diagnostics.append(
+                        Diagnostic(
+                            PATH_ESCAPE,
+                            "exchange-import-package",
+                            None,
+                            "/package",
+                            "Exchange imports root contains a non-package entry",
+                        )
+                    )
+                    continue
+                journal = journals.get(path.name)
+                if journal is None or journal.get("phase") != "complete" or journal.get("result") != "success":
+                    diagnostics.append(
+                        Diagnostic(
+                            INCOMPLETE_TRANSACTION,
+                            "exchange-import-package",
+                            path.name,
+                            "/package",
+                            "published Exchange import package lacks one completed success journal",
+                        )
+                    )
+
+        receipt_root = self.layout.exchange_export_receipts_root
+        if receipt_root.exists():
+            for unexpected in sorted(receipt_root.iterdir(), key=lambda item: item.name):
+                if not unexpected.is_file() or unexpected.suffix != ".json":
+                    diagnostics.append(
+                        Diagnostic(
+                            INCOMPLETE_TRANSACTION,
+                            "exchange-local-export-receipt",
+                            None,
+                            "/receipt",
+                            "Exchange export receipt root contains an unexpected entry",
+                        )
+                    )
+            for path in sorted(receipt_root.glob("*.json"), key=lambda item: item.name):
+                try:
+                    receipt = read_json_document(path, record_kind="exchange-local-export-receipt")
+                except ResearchKBError as error:
+                    diagnostics.append(error.diagnostic)
+                    continue
+                failures = validate_record("exchange-local-export-receipt", receipt, actor="stored")
+                diagnostics.extend(failures)
+                if not failures and path.stem != receipt["export_id"]:
+                    diagnostics.append(
+                        Diagnostic(
+                            INCOMPLETE_TRANSACTION,
+                            "exchange-local-export-receipt",
+                            receipt["export_id"],
+                            "/export_id",
+                            "Exchange export receipt filename does not match its export ID",
+                        )
+                    )
+        return diagnostics
+
     def _write_report(self, report: dict[str, Any]) -> TransactionResult:
         target = self.layout.guardian_reports_path
         target_before = file_sha256(target)
@@ -1316,6 +1454,12 @@ def _finding_from_diagnostic(diagnostic: Diagnostic, defined_ids: set[str]) -> d
         remediation = "Re-run the exact requested-use assessment or resume its owning Pipeline Job; do not edit or delete the historical profile."
     elif diagnostic.record_kind == "agent-task-state":
         remediation = "Inspect the Agent Task chain, its exact input basis and correlated transaction event; do not promote staged output automatically."
+    elif diagnostic.record_kind in {
+        "exchange-import-journal",
+        "exchange-import-package",
+        "exchange-local-export-receipt",
+    }:
+        remediation = "Run Exchange recovery or restore the immutable package from its original archive; do not promote, rewrite or partially adopt external records."
     elif diagnostic.record_kind == "primary-semantic-bundle":
         remediation = "Inspect the immutable Primary revision chain and active head; repair only through a new approved revision."
     elif diagnostic.record_kind in {"direction", "field-map-entry", "question-revision-bundle", "tag-bundle", "tag-link-bundle", "screening-criteria-bundle", "screening-decision-bundle"}:
