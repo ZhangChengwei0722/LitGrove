@@ -23,6 +23,19 @@ Release-resource smoke after `python -m build`:
 .\.venv\Scripts\python tests/wheel_pdf_smoke.py
 ```
 
+## Continuous Integration
+
+Every pull request and push to `main` runs two required checks:
+
+- `Windows validation` uses Python 3.12 for the full test suite, source compilation,
+  distribution build, installed-wheel smoke tests, CLI smoke and privacy scan. This is the
+  required live acceptance platform.
+- `Linux validation` uses Python 3.11 for the full test suite, CLI smoke and privacy scan so
+  host-independent POSIX behavior is exercised.
+
+GitHub Actions are pinned to immutable commit SHAs. Dependabot proposes weekly Python and
+Actions updates; review and merge those updates through the same validation gates.
+
 Schema, state, ID, path, and directory-protocol changes require explicit user approval, focused self-review, targeted tests, and the full Windows validation gate. External collaborator review is optional.
 
 ## Fixture Rules
