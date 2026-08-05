@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from shutil import copytree, rmtree
 
 import pytest
 import yaml
@@ -13,11 +14,11 @@ from research_kb.services import AgentTaskApplicationService, WorkspaceSessionSe
 from research_kb.services.question_screening import QuestionScreeningService
 from research_kb.services.research_organization import ResearchOrganizationService
 from research_kb.workspace import WorkspaceLayout
-from tests.unit.test_organization_proposal_agent_task import P7B_CLASSES, _p7b_workspace
+from tests.unit.test_organization_proposal_agent_task import P7B_CLASSES, _build_p7b_workspace
 
 
-def _workspace(tmp_path: Path):
-    layout, _, papers, units, _ = _p7b_workspace(tmp_path)
+def _build_workspace(tmp_path: Path):
+    layout, _, papers, units, _ = _build_p7b_workspace(tmp_path)
     config = yaml.safe_load(layout.config.path.read_text(encoding="utf-8"))
     config["agent_policy"]["registry_version"] = "p7d-v1"
     config["agent_policy"]["allowed_content_classes"] = P7B_CLASSES
@@ -51,6 +52,35 @@ def _workspace(tmp_path: Path):
     )
     question_id = question_bundle["question_id"]
     return refreshed, session, question_id, papers[0]["paper_id"]
+
+
+def _restore_workspace(snapshot_root: Path, active_root: Path):
+    if active_root.exists():
+        rmtree(active_root)
+    copytree(snapshot_root, active_root)
+    config_path = active_root / "workspace.yaml"
+    layout = WorkspaceLayout.load(config_path)
+    session = WorkspaceSessionService({"alpha": config_path}).open("alpha")
+    return layout, session
+
+
+@pytest.fixture(scope="module")
+def screening_workspace_template(tmp_path_factory: pytest.TempPathFactory):
+    root = tmp_path_factory.mktemp("screening-p7d-template")
+    active_parent = root / "active"
+    active_parent.mkdir()
+    layout, _, question_id, paper_id = _build_workspace(active_parent)
+    active_root = layout.config.path.parent
+    snapshot_root = root / "snapshot"
+    copytree(active_root, snapshot_root)
+    return snapshot_root, active_root, question_id, paper_id
+
+
+@pytest.fixture
+def screening_workspace(screening_workspace_template):
+    snapshot_root, active_root, question_id, paper_id = screening_workspace_template
+    layout, session = _restore_workspace(snapshot_root, active_root)
+    return layout, session, question_id, paper_id
 
 
 def _expected(task: dict[str, object]) -> dict[str, str]:
@@ -106,8 +136,8 @@ def _commit_criteria(service, session, question_id: str):
     return approved, submitted
 
 
-def test_criteria_proposal_approval_revision_and_replay(tmp_path: Path) -> None:
-    layout, session, question_id, _ = _workspace(tmp_path)
+def test_criteria_proposal_approval_revision_and_replay(screening_workspace) -> None:
+    layout, session, question_id, _ = screening_workspace
     service = AgentTaskApplicationService()
     approved, submitted = _commit_criteria(service, session, question_id)
     screening = QuestionScreeningService(layout)
@@ -222,8 +252,8 @@ def _decision_result(task, aliases, outcome="included"):
     }
 
 
-def test_decision_proposal_alias_closure_card_scope_and_uncertain_gate(tmp_path: Path) -> None:
-    layout, session, question_id, paper_id = _workspace(tmp_path)
+def test_decision_proposal_alias_closure_card_scope_and_uncertain_gate(screening_workspace) -> None:
+    layout, session, question_id, paper_id = screening_workspace
     service = AgentTaskApplicationService()
     _commit_criteria(service, session, question_id)
     created = service.create_question_screening_decision_proposal(session, _decision_request(question_id, paper_id, key="decision-1"))

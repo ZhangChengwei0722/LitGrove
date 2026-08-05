@@ -39,11 +39,27 @@ jobs:
             level: L3
           - shard: application-semantic-a2
             level: L3
-          - shard: application-semantic-a3
+          - shard: application-semantic-a3a-source
+            level: L3
+          - shard: application-semantic-a3a-projection
+            level: L3
+          - shard: application-semantic-a3b
             level: L3
           - shard: application-semantic-a4
             level: L3
-          - shard: application-semantic-b1
+          - shard: application-semantic-b1a-route
+            level: L3
+          - shard: application-semantic-b1a-primary
+            level: L3
+          - shard: application-semantic-b1a-review
+            level: L3
+          - shard: application-semantic-b1b-knowledge
+            level: L3
+          - shard: application-semantic-b1b-organization
+            level: L3
+          - shard: application-semantic-b1b-screening
+            level: L3
+          - shard: application-semantic-b1c
             level: L3
           - shard: application-semantic-b2
             level: L3
@@ -73,7 +89,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install ".[test,pdf]"
-      - name: Run stable test shard
+      - name: Run stable L3 test shard
+        if: matrix.level == 'L3'
+        run: >-
+          python tools/run_validation.py
+          --level ${{ matrix.level }}
+          --shard ${{ matrix.shard }}
+          --timeout-seconds 240
+          --receipt .validation/${{ matrix.shard }}.json
+      - name: Run stable L4 test shard
+        if: matrix.level == 'L4'
         run: >-
           python tools/run_validation.py
           --level ${{ matrix.level }}
@@ -81,7 +106,7 @@ jobs:
           --receipt .validation/${{ matrix.shard }}.json
       - name: Upload shard receipt
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-test-receipt-${{ matrix.shard }}-${{ github.sha }}
           path: .validation/${{ matrix.shard }}.json
@@ -124,7 +149,7 @@ jobs:
           python -m research_kb privacy scan --root .
       - name: Upload manifest receipt
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-test-manifest-${{ github.sha }}
           path: .validation/manifest.json

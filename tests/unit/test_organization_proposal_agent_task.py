@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
+from shutil import copytree, rmtree
 
 import pytest
 import yaml
@@ -18,7 +20,7 @@ from research_kb.services import (
 from research_kb.services.agent_task_application import _normalize_organization_create_request
 from research_kb.services.organization_proposal_context import _organization_context
 from research_kb.workspace import WorkspaceLayout
-from tests.unit.test_reading_application_service import _commit_primary
+from tests.unit.test_reading_application_service import _build_committed_primary
 
 
 P7B_CLASSES = [
@@ -31,8 +33,8 @@ P7B_CLASSES = [
 ]
 
 
-def _p7b_workspace(tmp_path: Path):
-    layout, _, intake, _, _, bundle = _commit_primary(tmp_path)
+def _build_p7b_workspace(tmp_path: Path):
+    layout, _, intake, _, _, bundle = _build_committed_primary(tmp_path)
     config = yaml.safe_load(layout.config.path.read_text(encoding="utf-8"))
     config["agent_policy"]["registry_version"] = "p7b-v1"
     config["agent_policy"]["allowed_content_classes"] = P7B_CLASSES
@@ -54,6 +56,35 @@ def _p7b_workspace(tmp_path: Path):
         if unit["grounding_status"] == "grounded"
     ]
     return refreshed, session, [paper], units, revision["evidence"]
+
+
+def _restore_workspace(snapshot_root: Path, active_root: Path):
+    if active_root.exists():
+        rmtree(active_root)
+    copytree(snapshot_root, active_root)
+    config_path = active_root / "workspace.yaml"
+    layout = WorkspaceLayout.load(config_path)
+    session = WorkspaceSessionService({"alpha": config_path}).open("alpha")
+    return layout, session
+
+
+@pytest.fixture(scope="module")
+def p7b_workspace_template(tmp_path_factory: pytest.TempPathFactory):
+    root = tmp_path_factory.mktemp("organization-p7b-template")
+    active_parent = root / "active"
+    active_parent.mkdir()
+    layout, _, papers, units, evidence = _build_p7b_workspace(active_parent)
+    active_root = layout.config.path.parent
+    snapshot_root = root / "snapshot"
+    copytree(active_root, snapshot_root)
+    return snapshot_root, active_root, deepcopy(papers), deepcopy(units), deepcopy(evidence)
+
+
+@pytest.fixture
+def p7b_workspace(p7b_workspace_template):
+    snapshot_root, active_root, papers, units, evidence = p7b_workspace_template
+    layout, session = _restore_workspace(snapshot_root, active_root)
+    return layout, session, deepcopy(papers), deepcopy(units), deepcopy(evidence)
 
 
 def _expected(task: dict[str, object]) -> dict[str, str]:
@@ -127,8 +158,8 @@ def _submit_and_approve(
     )
 
 
-def test_organization_proposal_handoff_preview_and_approval(tmp_path: Path) -> None:
-    layout, session, papers, units, _ = _p7b_workspace(tmp_path)
+def test_organization_proposal_handoff_preview_and_approval(p7b_workspace) -> None:
+    layout, session, papers, units, _ = p7b_workspace
     service = AgentTaskApplicationService()
     request = _request(papers[0]["paper_id"])
 
@@ -173,8 +204,8 @@ def test_organization_proposal_handoff_preview_and_approval(tmp_path: Path) -> N
     assert GuardianService(layout).check().report["status"] == "success"
 
 
-def test_field_map_question_existing_target_and_no_change_approval(tmp_path: Path) -> None:
-    layout, session, papers, units, _ = _p7b_workspace(tmp_path)
+def test_field_map_question_existing_target_and_no_change_approval(p7b_workspace) -> None:
+    layout, session, papers, units, _ = p7b_workspace
     service = AgentTaskApplicationService()
     paper_id = papers[0]["paper_id"]
     unit_id = units[0]["unit_id"]
@@ -302,8 +333,8 @@ def test_field_map_question_existing_target_and_no_change_approval(tmp_path: Pat
     )
 
 
-def test_result_schema_rejects_target_incompatible_link_roles(tmp_path: Path) -> None:
-    _, session, papers, units, _ = _p7b_workspace(tmp_path)
+def test_result_schema_rejects_target_incompatible_link_roles(p7b_workspace) -> None:
+    _, session, papers, units, _ = p7b_workspace
     service = AgentTaskApplicationService()
     created = service.create_organization_proposal(session, _request(papers[0]["paper_id"]))
     candidate = _result(created["task"], papers[0]["paper_id"], units[0]["unit_id"])
@@ -340,8 +371,8 @@ def test_result_schema_rejects_target_incompatible_link_roles(tmp_path: Path) ->
     assert validate_record("organization-proposal", candidate, actor="agent")
 
 
-def test_organization_proposal_requires_current_semantic_units(tmp_path: Path) -> None:
-    layout, session, _, _, _ = _p7b_workspace(tmp_path)
+def test_organization_proposal_requires_current_semantic_units(p7b_workspace) -> None:
+    layout, session, _, _, _ = p7b_workspace
     source_root = next(iter(layout.source_roots.values()))
     source = source_root / "unprocessed-organization-source.txt"
     source.write_text("Synthetic unprocessed source.", encoding="utf-8", newline="\n")
@@ -410,8 +441,8 @@ def test_existing_field_map_directions_are_prioritized_before_context_truncation
     assert context["context_truncated"] is True
 
 
-def test_existing_target_change_rejects_stale_submission(tmp_path: Path) -> None:
-    layout, session, papers, units, _ = _p7b_workspace(tmp_path)
+def test_existing_target_change_rejects_stale_submission(p7b_workspace) -> None:
+    layout, session, papers, units, _ = p7b_workspace
     service = AgentTaskApplicationService()
     paper_id = papers[0]["paper_id"]
     unit_id = units[0]["unit_id"]
@@ -464,8 +495,8 @@ def test_existing_target_change_rejects_stale_submission(tmp_path: Path) -> None
         )
 
 
-def test_organization_revision_lineage_and_commit_recovery(tmp_path: Path) -> None:
-    layout, session, papers, units, _ = _p7b_workspace(tmp_path)
+def test_organization_revision_lineage_and_commit_recovery(p7b_workspace) -> None:
+    layout, session, papers, units, _ = p7b_workspace
     service = AgentTaskApplicationService()
     paper_id = papers[0]["paper_id"]
     unit_id = units[0]["unit_id"]
@@ -539,8 +570,8 @@ def test_organization_revision_lineage_and_commit_recovery(tmp_path: Path) -> No
     assert recovered["canonical_scientific_write"] is False
 
 
-def test_unresolved_organization_conflict_blocks_approval(tmp_path: Path) -> None:
-    _, session, papers, units, _ = _p7b_workspace(tmp_path)
+def test_unresolved_organization_conflict_blocks_approval(p7b_workspace) -> None:
+    _, session, papers, units, _ = p7b_workspace
     service = AgentTaskApplicationService()
     created = service.create_organization_proposal(session, _request(papers[0]["paper_id"]))
     prepared = service.prepare_handoff(

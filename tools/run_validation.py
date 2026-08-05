@@ -20,6 +20,7 @@ from tools.validation import (
     REPOSITORY_ROOT,
     collect_nodeids,
     load_manifest,
+    marker_for,
     nodeid_digest,
     selectors_for,
     verify_manifest,
@@ -62,13 +63,29 @@ def _portable_command(command: list[str]) -> list[str]:
     return portable
 
 
-def _run(command: list[str]) -> dict[str, Any]:
+def _run(command: list[str], *, timeout_seconds: float | None = None) -> dict[str, Any]:
     started = time.perf_counter()
-    result = subprocess.run(command, cwd=REPOSITORY_ROOT, check=False)
+    try:
+        result = subprocess.run(
+            command,
+            cwd=REPOSITORY_ROOT,
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "command": _portable_command(command),
+            "return_code": 124,
+            "duration_seconds": round(time.perf_counter() - started, 3),
+            "timed_out": True,
+            "timeout_seconds": timeout_seconds,
+        }
     return {
         "command": _portable_command(command),
         "return_code": result.returncode,
         "duration_seconds": round(time.perf_counter() - started, 3),
+        "timed_out": False,
+        "timeout_seconds": timeout_seconds,
     }
 
 
@@ -134,12 +151,33 @@ def _commands_for(level: str, shard: str | None, selectors: list[str], build_dir
         report = verify_manifest()
         if shard == "all":
             return [
-                [python, "-m", "pytest", "-p", "no:cacheprovider", "-q", *selectors_for(current)]
+                [
+                    python,
+                    "-m",
+                    "pytest",
+                    "-p",
+                    "no:cacheprovider",
+                    "-q",
+                    *([] if marker_for(current) is None else ["-m", marker_for(current)]),
+                    *selectors_for(current),
+                ]
                 for current in report.l3_shards
             ]
         if shard not in report.l3_shards:
             raise ValueError(f"L3 shard is not declared: {shard}")
-        return [[python, "-m", "pytest", "-p", "no:cacheprovider", "-q", *selectors_for(shard)]]
+        marker = marker_for(shard)
+        return [
+            [
+                python,
+                "-m",
+                "pytest",
+                "-p",
+                "no:cacheprovider",
+                "-q",
+                *([] if marker is None else ["-m", marker]),
+                *selectors_for(shard),
+            ]
+        ]
     if level == "L4":
         report = verify_manifest()
         selected_shard = shard or report.scale_shard
@@ -160,7 +198,10 @@ def main() -> int:
     parser.add_argument("--base", default="origin/main")
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--collect-nodeids", action="store_true")
+    parser.add_argument("--timeout-seconds", type=float)
     args = parser.parse_args()
+    if args.timeout_seconds is not None and args.timeout_seconds <= 0:
+        parser.error("--timeout-seconds must be greater than zero")
 
     started_at = datetime.now(timezone.utc)
     receipt: dict[str, Any] = {
@@ -170,10 +211,12 @@ def main() -> int:
         "python": platform.python_version(),
         "level": args.level,
         "shard": args.shard,
+        "timeout_seconds": args.timeout_seconds,
         "receipt_path": _portable_text(args.receipt.as_posix()),
     }
     overall_started = time.perf_counter()
     return_code = 1
+    timed_out = False
     try:
         if args.verify:
             verification = verify_nodeid_coverage() if args.collect_nodeids else verify_manifest().as_dict()
@@ -192,13 +235,16 @@ def main() -> int:
                 receipt["commands"] = []
                 if args.level in {"L1", "L2", "L3", "L4"}:
                     selected = args.selector
+                    selected_marker = None
                     if args.level == "L2":
                         selected = commands[0][6:]
                     elif args.level == "L3" and args.shard == "all":
                         selected = list(L3_DIRECTORIES)
                     elif args.level in {"L3", "L4"}:
                         selected = selectors_for(args.shard or verify_manifest().scale_shard)
-                    nodeids = collect_nodeids(selected)
+                        if args.level == "L3":
+                            selected_marker = marker_for(args.shard or "")
+                    nodeids = collect_nodeids(selected, marker=selected_marker)
                     receipt["selected_node_count"] = len(nodeids)
                     receipt["selected_nodeid_sha256"] = nodeid_digest(nodeids)
                 print(
@@ -215,12 +261,16 @@ def main() -> int:
                 )
                 return_code = 0
                 for command in commands:
-                    result = _run(command)
+                    result = _run(command, timeout_seconds=args.timeout_seconds)
                     receipt["commands"].append(result)
+                    if result["timed_out"]:
+                        timed_out = True
+                        return_code = int(result["return_code"])
+                        break
                     if result["return_code"] != 0:
                         return_code = int(result["return_code"])
                         break
-        receipt["status"] = "passed" if return_code == 0 else "failed"
+        receipt["status"] = "timed_out" if timed_out else "passed" if return_code == 0 else "failed"
         return return_code
     except Exception as error:
         return_code = 2

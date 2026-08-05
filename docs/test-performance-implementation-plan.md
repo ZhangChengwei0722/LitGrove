@@ -1,6 +1,6 @@
 # Test Performance Implementation Plan
 
-- status: `t1_t2_implementation_in_progress`
+- status: `t1_t3_implementation_complete_pending_ci`
 - audit: `docs/test-performance-audit.md`
 - baseline: `1faac4f4ce01d31c3828d1768b3954c86089eec0`
 - implementation_authorized: `true`
@@ -13,6 +13,18 @@ Make normal validation complete within the five-minute executor window while
 preserving every high-risk acceptance test. Separate fast feedback from full
 and scale validation, produce reproducible timing receipts and introduce
 parallel execution only for tests proven safe.
+
+## Current Implementation
+
+- T1/T2 define a reconciled manifest with 24 exhaustive L3 shards and one
+  separate L4 scale shard.
+- Each ordinary L3 shard enforces the `240 s` subprocess budget and records a
+  distinct `timed_out` receipt with exit code `124`.
+- The bounded T3 optimization restores module-scoped synthetic snapshots at
+  their original configured path before each test. No mutated tree is reused.
+- T4 `pytest-xdist` remains deferred. Independent GitHub-hosted matrix jobs
+  provide CI concurrency without introducing in-process worker sharing.
+- Final acceptance remains gated on fresh hosted receipts for every shard.
 
 ## Non-Goals
 

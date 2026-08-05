@@ -5,6 +5,7 @@ import io
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
+from shutil import copytree, rmtree
 
 import pytest
 import research_kb.source_resolution as source_resolution_module
@@ -14,6 +15,7 @@ from research_kb.catalog.models import canonical_digest
 from research_kb.errors import DUPLICATE_ID, ResearchKBError
 from research_kb.parse.synthetic_text import SyntheticTextAdapter
 from research_kb.services.parse import ParseService
+from research_kb.services.agent_task_application import AgentTaskApplicationService
 from research_kb.services.reading_application import ReadingApplicationService
 from research_kb.services.registry import RegistryService
 from research_kb.services.source_asset import SourceAssetService
@@ -21,15 +23,16 @@ from research_kb.services.source_adequacy import SourceAdequacyService
 from research_kb.services.workspace_session import WorkspaceSessionService
 from research_kb.source_assets import current_source_asset_heads
 from research_kb.storage.json_io import read_json_document, read_jsonl, serialize_json, serialize_jsonl
+from research_kb.workspace import WorkspaceLayout
 from tests.unit.test_agent_task_application_service import (
     APPROVED_CLASSES,
     NOW,
     P4B_POLICY,
     _expected,
     _primary_candidate,
-    _primary_ready,
+    _build_primary_ready,
     _review_candidate,
-    _review_ready,
+    _build_review_ready,
 )
 from tests.pdf_helpers import write_synthetic_pdf
 from tests.runtime_helpers import make_runtime_workspace
@@ -44,8 +47,8 @@ def _tree_snapshot(root: Path) -> dict[str, bytes]:
     }
 
 
-def _commit_primary(tmp_path: Path):
-    layout, session, intake, agent, created, text = _primary_ready(tmp_path)
+def _build_committed_primary(tmp_path: Path):
+    layout, session, intake, agent, created, text = _build_primary_ready(tmp_path)
     prepared = agent.prepare_handoff(
         session,
         created["task"]["task_id"],
@@ -72,8 +75,8 @@ def _commit_primary(tmp_path: Path):
     return layout, session, intake, agent, text, bundle
 
 
-def _commit_review(tmp_path: Path):
-    layout, session, intake, agent, created, _ = _review_ready(tmp_path)
+def _build_committed_review(tmp_path: Path):
+    layout, session, intake, agent, created, _ = _build_review_ready(tmp_path)
     prepared = agent.prepare_handoff(
         session,
         created["task"]["task_id"],
@@ -95,8 +98,7 @@ def _commit_review(tmp_path: Path):
     return layout, session, intake
 
 
-def _commit_primary_pdf(tmp_path: Path):
-    from research_kb.services.agent_task_application import AgentTaskApplicationService
+def _build_committed_primary_pdf(tmp_path: Path):
     from research_kb.services.deterministic_intake_application import (
         DeterministicIntakeApplicationService,
     )
@@ -201,8 +203,102 @@ def _commit_primary_pdf(tmp_path: Path):
     return layout, session, intake, agent, text, bundle
 
 
-def test_evidence_source_handle_opens_exact_synthetic_pdf_without_writes(tmp_path: Path) -> None:
-    layout, session, _, _, _, bundle = _commit_primary_pdf(tmp_path)
+def _restore_workspace(snapshot_root: Path, active_root: Path):
+    if active_root.exists():
+        rmtree(active_root)
+    copytree(snapshot_root, active_root)
+    config_path = active_root / "workspace.yaml"
+    layout = WorkspaceLayout.load(config_path)
+    session = WorkspaceSessionService({"alpha": config_path}).open("alpha")
+    return layout, session
+
+
+@pytest.fixture(scope="module")
+def committed_primary_template(tmp_path_factory: pytest.TempPathFactory):
+    root = tmp_path_factory.mktemp("reading-primary-template")
+    active_parent = root / "active"
+    active_parent.mkdir()
+    layout, _, intake, _, text, _ = _build_committed_primary(active_parent)
+    active_root = layout.config.path.parent
+    snapshot_root = root / "snapshot"
+    copytree(active_root, snapshot_root)
+    return snapshot_root, active_root, deepcopy(intake), text
+
+
+@pytest.fixture(scope="module")
+def committed_primary_pdf_template(tmp_path_factory: pytest.TempPathFactory):
+    root = tmp_path_factory.mktemp("reading-primary-pdf-template")
+    active_parent = root / "active"
+    active_parent.mkdir()
+    layout, _, intake, _, text, _ = _build_committed_primary_pdf(active_parent)
+    active_root = layout.config.path.parent
+    snapshot_root = root / "snapshot"
+    copytree(active_root, snapshot_root)
+    return snapshot_root, active_root, deepcopy(intake), text
+
+
+@pytest.fixture(scope="module")
+def committed_review_template(tmp_path_factory: pytest.TempPathFactory):
+    root = tmp_path_factory.mktemp("reading-review-template")
+    active_parent = root / "active"
+    active_parent.mkdir()
+    layout, _, intake = _build_committed_review(active_parent)
+    active_root = layout.config.path.parent
+    snapshot_root = root / "snapshot"
+    copytree(active_root, snapshot_root)
+    return snapshot_root, active_root, deepcopy(intake)
+
+
+@pytest.fixture
+def committed_primary(committed_primary_template):
+    snapshot_root, active_root, intake, text = committed_primary_template
+    layout, session = _restore_workspace(snapshot_root, active_root)
+    cloned_intake = deepcopy(intake)
+    bundle = read_json_document(
+        layout.primary_bundle_path(cloned_intake["paper_id"]),
+        record_kind="primary-semantic-bundle",
+    )
+    return (
+        layout,
+        session,
+        cloned_intake,
+        AgentTaskApplicationService(clock=lambda: NOW),
+        text,
+        bundle,
+    )
+
+
+@pytest.fixture
+def committed_primary_pdf(committed_primary_pdf_template):
+    snapshot_root, active_root, intake, text = committed_primary_pdf_template
+    layout, session = _restore_workspace(snapshot_root, active_root)
+    cloned_intake = deepcopy(intake)
+    bundle = read_json_document(
+        layout.primary_bundle_path(cloned_intake["paper_id"]),
+        record_kind="primary-semantic-bundle",
+    )
+    return (
+        layout,
+        session,
+        cloned_intake,
+        AgentTaskApplicationService(clock=lambda: NOW),
+        text,
+        bundle,
+    )
+
+
+@pytest.fixture
+def committed_review(committed_review_template):
+    snapshot_root, active_root, intake = committed_review_template
+    layout, session = _restore_workspace(snapshot_root, active_root)
+    return layout, session, deepcopy(intake)
+
+
+@pytest.mark.reading_source
+def test_evidence_source_handle_opens_exact_synthetic_pdf_without_writes(
+    committed_primary_pdf,
+) -> None:
+    layout, session, _, _, _, bundle = committed_primary_pdf
     evidence = bundle["revisions"][0]["evidence"][0]
     before_knowledge = _tree_snapshot(layout.knowledge_root)
     before_sources = {
@@ -229,7 +325,7 @@ def test_evidence_source_handle_opens_exact_synthetic_pdf_without_writes(tmp_pat
     assert prepared.descriptor["size_bytes"] > 100
     assert "source_ref" not in str(prepared.descriptor)
     assert "fingerprint" not in str(prepared.descriptor)
-    assert str(tmp_path) not in str(prepared.descriptor)
+    assert str(layout.config.base_dir) not in str(prepared.descriptor)
 
     with service.open_evidence_source(session, prepared.handle) as opened:
         assert opened.stream.read(5) == bytes((37, 80, 68, 70, 45))
@@ -243,8 +339,9 @@ def test_evidence_source_handle_opens_exact_synthetic_pdf_without_writes(tmp_pat
     } == before_sources
 
 
-def test_evidence_source_handle_rechecks_changed_bytes_before_open(tmp_path: Path) -> None:
-    layout, session, _, _, _, bundle = _commit_primary_pdf(tmp_path)
+@pytest.mark.reading_source
+def test_evidence_source_handle_rechecks_changed_bytes_before_open(committed_primary_pdf) -> None:
+    layout, session, _, _, _, bundle = committed_primary_pdf
     evidence_id = bundle["revisions"][0]["evidence"][0]["evidence_id"]
     service = ReadingApplicationService()
     prepared = service.prepare_evidence_source(session, evidence_id)
@@ -255,16 +352,20 @@ def test_evidence_source_handle_rechecks_changed_bytes_before_open(tmp_path: Pat
         service.open_evidence_source(session, prepared.handle)
 
 
-def test_evidence_source_handle_rejects_non_pdf_source(tmp_path: Path) -> None:
-    _, session, _, _, _, bundle = _commit_primary(tmp_path)
+@pytest.mark.reading_source
+def test_evidence_source_handle_rejects_non_pdf_source(committed_primary) -> None:
+    _, session, _, _, _, bundle = committed_primary
     evidence_id = bundle["revisions"][0]["evidence"][0]["evidence_id"]
 
     with pytest.raises(ResearchKBError, match="PDF"):
         ReadingApplicationService().prepare_evidence_source(session, evidence_id)
 
 
-def test_evidence_source_handle_rejects_same_digest_ref_outside_lineage(tmp_path: Path) -> None:
-    layout, session, _, _, _, bundle = _commit_primary_pdf(tmp_path)
+@pytest.mark.reading_source
+def test_evidence_source_handle_rejects_same_digest_ref_outside_lineage(
+    committed_primary_pdf,
+) -> None:
+    layout, session, _, _, _, bundle = committed_primary_pdf
     evidence_id = bundle["revisions"][0]["evidence"][0]["evidence_id"]
     service = ReadingApplicationService()
     prepared = service.prepare_evidence_source(session, evidence_id)
@@ -285,11 +386,12 @@ def test_evidence_source_handle_rejects_same_digest_ref_outside_lineage(tmp_path
         service.open_evidence_source(session, wrong_workspace)
 
 
+@pytest.mark.reading_source
 def test_evidence_source_handle_enforces_size_budget(
-    tmp_path: Path,
+    committed_primary_pdf,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _, session, _, _, _, bundle = _commit_primary_pdf(tmp_path)
+    _, session, _, _, _, bundle = committed_primary_pdf
     evidence_id = bundle["revisions"][0]["evidence"][0]["evidence_id"]
     monkeypatch.setattr(
         "research_kb.services.reading_application.MAX_EVIDENCE_SOURCE_BYTES",
@@ -300,8 +402,9 @@ def test_evidence_source_handle_enforces_size_budget(
         ReadingApplicationService().prepare_evidence_source(session, evidence_id)
 
 
-def test_evidence_source_handle_uses_current_same_digest_relink(tmp_path: Path) -> None:
-    layout, session, intake, _, _, bundle = _commit_primary_pdf(tmp_path)
+@pytest.mark.reading_source
+def test_evidence_source_handle_uses_current_same_digest_relink(committed_primary_pdf) -> None:
+    layout, session, intake, _, _, bundle = committed_primary_pdf
     evidence_id = bundle["revisions"][0]["evidence"][0]["evidence_id"]
     states = read_jsonl(
         layout.source_assets_path,
@@ -337,8 +440,11 @@ def test_evidence_source_handle_uses_current_same_digest_relink(tmp_path: Path) 
         assert opened.stream.read(5) == bytes((37, 80, 68, 70, 45))
 
 
-def test_historical_evidence_source_keeps_its_own_revision_lineage(tmp_path: Path) -> None:
-    layout, session, intake, agent, text, first_bundle = _commit_primary_pdf(tmp_path)
+@pytest.mark.reading_source
+def test_historical_evidence_source_keeps_its_own_revision_lineage(
+    committed_primary_pdf,
+) -> None:
+    layout, session, intake, agent, text, first_bundle = committed_primary_pdf
     first_revision = first_bundle["revisions"][0]
     first_evidence = first_revision["evidence"][0]
     correction = agent.create_from_pipeline(
@@ -382,8 +488,9 @@ def test_historical_evidence_source_keeps_its_own_revision_lineage(tmp_path: Pat
         assert opened.stream.read(5) == bytes((37, 80, 68, 70, 45))
 
 
-def test_evidence_source_handle_rejects_changed_evidence_lineage(tmp_path: Path) -> None:
-    layout, session, intake, _, _, bundle = _commit_primary_pdf(tmp_path)
+@pytest.mark.reading_source
+def test_evidence_source_handle_rejects_changed_evidence_lineage(committed_primary_pdf) -> None:
+    layout, session, intake, _, _, bundle = committed_primary_pdf
     evidence = bundle["revisions"][0]["evidence"][0]
     service = ReadingApplicationService()
     prepared = service.prepare_evidence_source(session, evidence["evidence_id"])
@@ -395,11 +502,12 @@ def test_evidence_source_handle_rejects_changed_evidence_lineage(tmp_path: Path)
         service.open_evidence_source(session, prepared.handle)
 
 
+@pytest.mark.reading_source
 def test_evidence_source_handle_rejects_missing_or_unsafe_source(
-    tmp_path: Path,
+    committed_primary_pdf,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    layout, session, _, _, _, bundle = _commit_primary_pdf(tmp_path)
+    layout, session, _, _, _, bundle = committed_primary_pdf
     evidence_id = bundle["revisions"][0]["evidence"][0]["evidence_id"]
     service = ReadingApplicationService()
     prepared = service.prepare_evidence_source(session, evidence_id)
@@ -421,11 +529,12 @@ def test_evidence_source_handle_rejects_missing_or_unsafe_source(
         service.open_evidence_source(session, prepared.handle)
 
 
+@pytest.mark.reading_source
 def test_evidence_source_handle_rejects_duplicate_provenance_ownership(
-    tmp_path: Path,
+    committed_primary_pdf,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    layout, session, intake, _, _, bundle = _commit_primary_pdf(tmp_path)
+    layout, session, intake, _, _, bundle = committed_primary_pdf
     evidence = bundle["revisions"][0]["evidence"][0]
     layout.evidence_path(intake["paper_id"]).write_bytes(serialize_jsonl([evidence]))
     monkeypatch.setattr(
@@ -439,10 +548,11 @@ def test_evidence_source_handle_rejects_duplicate_provenance_ownership(
     assert duplicate.value.diagnostic.code == DUPLICATE_ID
 
 
+@pytest.mark.reading_projection
 def test_primary_reading_and_evidence_trace_are_complete_current_and_read_only(
-    tmp_path: Path,
+    committed_primary,
 ) -> None:
-    layout, session, intake, _, _, bundle = _commit_primary(tmp_path)
+    layout, session, intake, _, _, bundle = committed_primary
     before = _tree_snapshot(layout.knowledge_root)
     service = ReadingApplicationService()
 
@@ -470,15 +580,16 @@ def test_primary_reading_and_evidence_trace_are_complete_current_and_read_only(
     assert trace["factual_support_eligible"] is True
     assert "source_ref" not in str(reading)
     assert "source_fingerprint" not in str(reading)
-    assert str(tmp_path) not in str(reading)
-    assert str(tmp_path) not in str(trace)
+    assert str(layout.config.base_dir) not in str(reading)
+    assert str(layout.config.base_dir) not in str(trace)
     assert _tree_snapshot(layout.knowledge_root) == before
 
 
+@pytest.mark.reading_projection
 def test_committed_primary_remains_readable_when_source_is_missing(
-    tmp_path: Path,
+    committed_primary,
 ) -> None:
-    layout, session, intake, _, _, bundle = _commit_primary(tmp_path)
+    layout, session, intake, _, _, bundle = committed_primary
     source = layout.source_roots["alpha-sources"] / "primary-semantic.txt"
     source.unlink()
     service = ReadingApplicationService()
@@ -496,8 +607,9 @@ def test_committed_primary_remains_readable_when_source_is_missing(
     assert trace["factual_support_eligible"] is False
 
 
-def test_same_digest_relink_preserves_evidence_trace_back(tmp_path: Path) -> None:
-    layout, session, intake, _, _, bundle = _commit_primary(tmp_path)
+@pytest.mark.reading_projection
+def test_same_digest_relink_preserves_evidence_trace_back(committed_primary) -> None:
+    layout, session, intake, _, _, bundle = committed_primary
     original = layout.source_roots["alpha-sources"] / "primary-semantic.txt"
     relocated = layout.source_roots["alpha-sources"] / "primary-relocated.txt"
     relocated.write_bytes(original.read_bytes())
@@ -535,8 +647,9 @@ def test_same_digest_relink_preserves_evidence_trace_back(tmp_path: Path) -> Non
     }
 
 
-def test_changed_asset_head_does_not_hide_behind_an_older_exact_copy(tmp_path: Path) -> None:
-    layout, session, intake, _, _, bundle = _commit_primary(tmp_path)
+@pytest.mark.reading_projection
+def test_changed_asset_head_does_not_hide_behind_an_older_exact_copy(committed_primary) -> None:
+    layout, session, intake, _, _, bundle = committed_primary
     original = layout.source_roots["alpha-sources"] / "primary-semantic.txt"
     relocated = layout.source_roots["alpha-sources"] / "primary-relocated.txt"
     relocated.write_bytes(original.read_bytes())
@@ -587,8 +700,11 @@ def test_changed_asset_head_does_not_hide_behind_an_older_exact_copy(tmp_path: P
     assert trace["factual_support_eligible"] is False
 
 
-def test_unobserved_changed_head_does_not_hide_behind_an_older_exact_copy(tmp_path: Path) -> None:
-    layout, session, intake, _, _, bundle = _commit_primary(tmp_path)
+@pytest.mark.reading_projection
+def test_unobserved_changed_head_does_not_hide_behind_an_older_exact_copy(
+    committed_primary,
+) -> None:
+    layout, session, intake, _, _, bundle = committed_primary
     original = layout.source_roots["alpha-sources"] / "primary-semantic.txt"
     relocated = layout.source_roots["alpha-sources"] / "primary-relocated.txt"
     relocated.write_bytes(original.read_bytes())
@@ -627,11 +743,12 @@ def test_unobserved_changed_head_does_not_hide_behind_an_older_exact_copy(tmp_pa
     assert trace["factual_support_eligible"] is False
 
 
+@pytest.mark.reading_projection
 def test_source_change_during_projection_disables_trace_back(
-    tmp_path: Path,
+    committed_primary,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _, session, intake, _, _, _ = _commit_primary(tmp_path)
+    _, session, intake, _, _, _ = committed_primary
     import research_kb.services.reading_application as module
 
     original = module.inspect_source_ref
@@ -654,8 +771,9 @@ def test_source_change_during_projection_disables_trace_back(
     }
 
 
-def test_historical_evidence_keeps_its_revision_and_parse_binding(tmp_path: Path) -> None:
-    layout, session, intake, agent, text, first_bundle = _commit_primary(tmp_path)
+@pytest.mark.reading_projection
+def test_historical_evidence_keeps_its_revision_and_parse_binding(committed_primary) -> None:
+    layout, session, intake, agent, text, first_bundle = committed_primary
     first_revision = first_bundle["revisions"][0]
     first_evidence_id = first_revision["evidence"][0]["evidence_id"]
     correction = agent.create_from_pipeline(
@@ -701,8 +819,9 @@ def test_historical_evidence_keeps_its_revision_and_parse_binding(tmp_path: Path
     assert trace["factual_support_eligible"] is False
 
 
-def test_review_reading_is_explicitly_background_only(tmp_path: Path) -> None:
-    layout, session, intake = _commit_review(tmp_path)
+@pytest.mark.reading_projection
+def test_review_reading_is_explicitly_background_only(committed_review) -> None:
+    layout, session, intake = committed_review
     before = _tree_snapshot(layout.knowledge_root)
 
     reading = ReadingApplicationService().show_paper(session, intake["paper_id"])
@@ -715,8 +834,9 @@ def test_review_reading_is_explicitly_background_only(tmp_path: Path) -> None:
     assert _tree_snapshot(layout.knowledge_root) == before
 
 
-def test_compare_is_bounded_unique_ordered_and_semantically_inert(tmp_path: Path) -> None:
-    layout, session, intake, _, _, _ = _commit_primary(tmp_path)
+@pytest.mark.reading_projection
+def test_compare_is_bounded_unique_ordered_and_semantically_inert(committed_primary) -> None:
+    layout, session, intake, _, _, _ = committed_primary
     source = layout.source_roots["alpha-sources"] / "second.txt"
     source.write_text("Second synthetic paper.", encoding="utf-8", newline="\n")
     second, _ = RegistryService(layout).add(
@@ -743,6 +863,7 @@ def test_compare_is_bounded_unique_ordered_and_semantically_inert(tmp_path: Path
         service.compare_papers(session, [second["paper_id"]])
 
 
+@pytest.mark.reading_projection
 def test_legacy_card_is_readable_without_primary_bundle(tmp_path: Path) -> None:
     from tests.unit.test_paper_context_service import _grounded_context, _promote_card
 

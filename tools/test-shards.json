@@ -7,9 +7,17 @@
     "storage-recovery-b2",
     "application-semantic-a1",
     "application-semantic-a2",
-    "application-semantic-a3",
+    "application-semantic-a3a-source",
+    "application-semantic-a3a-projection",
+    "application-semantic-a3b",
     "application-semantic-a4",
-    "application-semantic-b1",
+    "application-semantic-b1a-route",
+    "application-semantic-b1a-primary",
+    "application-semantic-b1a-review",
+    "application-semantic-b1b-knowledge",
+    "application-semantic-b1b-organization",
+    "application-semantic-b1b-screening",
+    "application-semantic-b1c",
     "application-semantic-b2",
     "discovery-views-exchange-a",
     "discovery-views-exchange-b",
@@ -19,6 +27,13 @@
     "serial"
   ],
   "scale_shard": "scale",
+  "shard_markers": {
+    "application-semantic-a3a-source": "reading_source",
+    "application-semantic-a3a-projection": "reading_projection",
+    "application-semantic-b1a-route": "agent_route",
+    "application-semantic-b1a-primary": "agent_primary",
+    "application-semantic-b1a-review": "agent_review"
+  },
   "shards": {
     "contract": [
       "tests/contract"
@@ -61,11 +76,16 @@
       "tests/unit/test_parse_service.py",
       "tests/unit/test_source_adequacy_service.py"
     ],
-    "application-semantic-a3": [
+    "application-semantic-a3a-source": [
+      "tests/unit/test_reading_application_service.py"
+    ],
+    "application-semantic-a3a-projection": [
+      "tests/unit/test_reading_application_service.py"
+    ],
+    "application-semantic-a3b": [
       "tests/unit/test_evidence_provenance.py",
       "tests/unit/test_paper_context_service.py",
-      "tests/unit/test_primary_semantic_bundle.py",
-      "tests/unit/test_reading_application_service.py"
+      "tests/unit/test_primary_semantic_bundle.py"
     ],
     "application-semantic-a4": [
       "tests/unit/test_review_context_service.py",
@@ -73,16 +93,30 @@
       "tests/unit/test_review_memory_service.py",
       "tests/unit/test_review_semantic_bundle.py"
     ],
-    "application-semantic-b1": [
-      "tests/unit/test_agent_task_application_service.py",
+    "application-semantic-b1a-route": [
+      "tests/unit/test_agent_task_application_service.py"
+    ],
+    "application-semantic-b1a-primary": [
+      "tests/unit/test_agent_task_application_service.py"
+    ],
+    "application-semantic-b1a-review": [
+      "tests/unit/test_agent_task_application_service.py"
+    ],
+    "application-semantic-b1b-knowledge": [
+      "tests/unit/test_knowledge_query_agent_task.py"
+    ],
+    "application-semantic-b1b-organization": [
+      "tests/unit/test_organization_proposal_agent_task.py"
+    ],
+    "application-semantic-b1b-screening": [
+      "tests/unit/test_screening_proposal_agent_task.py"
+    ],
+    "application-semantic-b1c": [
       "tests/unit/test_agent_task_registry.py",
-      "tests/unit/test_knowledge_query_agent_task.py",
       "tests/unit/test_organization_bundles.py",
-      "tests/unit/test_organization_proposal_agent_task.py",
       "tests/unit/test_p7a_contracts.py",
       "tests/unit/test_research_organization_application_service.py",
-      "tests/unit/test_research_organization_service.py",
-      "tests/unit/test_screening_proposal_agent_task.py"
+      "tests/unit/test_research_organization_service.py"
     ],
     "application-semantic-b2": [
       "tests/unit/test_question_mapping_service.py",

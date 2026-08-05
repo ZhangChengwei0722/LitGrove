@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -13,6 +14,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = REPOSITORY_ROOT / "tools" / "test-shards.json"
 L3_DIRECTORIES = ("tests/unit", "tests/contract", "tests/integration", "tests/privacy")
 SCALE_DIRECTORIES = ("tests/benchmark",)
+MARKER_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 class ManifestError(ValueError):
@@ -46,6 +48,14 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict[str, Any]:
     return data
 
 
+def marker_for(shard: str, path: Path = DEFAULT_MANIFEST) -> str | None:
+    manifest = load_manifest(path)
+    marker = manifest.get("shard_markers", {}).get(shard)
+    if marker is not None and (not isinstance(marker, str) or not MARKER_PATTERN.fullmatch(marker)):
+        raise ManifestError(f"invalid shard marker: {shard}")
+    return marker
+
+
 def expand_selectors(selectors: list[str]) -> tuple[str, ...]:
     files: set[str] = set()
     for selector in selectors:
@@ -72,12 +82,18 @@ def verify_manifest(path: Path = DEFAULT_MANIFEST) -> ManifestReport:
     l3_shards = tuple(manifest["l3_shards"])
     scale_shard = manifest.get("scale_shard")
     shards = manifest["shards"]
+    shard_markers = manifest.get("shard_markers", {})
     if len(l3_shards) != len(set(l3_shards)):
         raise ManifestError("L3 shard names are duplicated")
     if not isinstance(scale_shard, str) or scale_shard in l3_shards:
         raise ManifestError("scale shard is missing or overlaps L3")
     if set(shards) != set(l3_shards) | {scale_shard}:
         raise ManifestError("manifest contains a missing or undeclared shard")
+    if not isinstance(shard_markers, dict) or not set(shard_markers).issubset(l3_shards):
+        raise ManifestError("shard markers contain an undeclared or non-L3 shard")
+    for shard_name, marker in shard_markers.items():
+        if not isinstance(marker, str) or not MARKER_PATTERN.fullmatch(marker):
+            raise ManifestError(f"invalid shard marker: {shard_name}")
 
     owners: dict[str, list[str]] = {}
     shard_file_counts: dict[str, int] = {}
@@ -94,8 +110,10 @@ def verify_manifest(path: Path = DEFAULT_MANIFEST) -> ManifestReport:
     expected_scale = set(_expected_files(SCALE_DIRECTORIES))
     actual_scale = set(expand_selectors(shards[scale_shard]))
     duplicates = {name: assigned for name, assigned in owners.items() if len(assigned) > 1}
-    if duplicates:
-        raise ManifestError(f"test files have multiple shard owners: {duplicates}")
+    for name, assigned in duplicates.items():
+        markers = [shard_markers.get(shard) for shard in assigned]
+        if any(marker is None for marker in markers) or len(set(markers)) != len(markers):
+            raise ManifestError(f"test file has ambiguous shard owners: {name}: {assigned}")
     if actual_l3 != expected_l3:
         raise ManifestError(
             f"L3 coverage mismatch; missing={sorted(expected_l3 - actual_l3)}, "
@@ -125,7 +143,7 @@ def selectors_for(shard: str, path: Path = DEFAULT_MANIFEST) -> list[str]:
     return list(manifest["shards"][shard])
 
 
-def collect_nodeids(selectors: list[str]) -> tuple[str, ...]:
+def collect_nodeids(selectors: list[str], *, marker: str | None = None) -> tuple[str, ...]:
     command = [
         sys.executable,
         "-m",
@@ -134,6 +152,7 @@ def collect_nodeids(selectors: list[str]) -> tuple[str, ...]:
         "no:cacheprovider",
         "--collect-only",
         "-q",
+        *([] if marker is None else ["-m", marker]),
         *selectors,
     ]
     result = subprocess.run(
@@ -170,7 +189,10 @@ def verify_nodeid_coverage(path: Path = DEFAULT_MANIFEST) -> dict[str, Any]:
     assigned_l3: dict[str, str] = {}
     shard_counts: dict[str, int] = {}
     for shard in report.l3_shards:
-        nodeids = collect_nodeids(list(manifest["shards"][shard]))
+        nodeids = collect_nodeids(
+            list(manifest["shards"][shard]),
+            marker=marker_for(shard, path),
+        )
         shard_counts[shard] = len(nodeids)
         for nodeid in nodeids:
             if nodeid in assigned_l3:
