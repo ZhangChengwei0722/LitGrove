@@ -160,6 +160,14 @@ research-kb question show --workspace <workspace.yaml> --question-id <question_i
 research-kb question render --workspace <workspace.yaml> --question-id <question_id>
 research-kb step7 context --workspace <workspace.yaml> --question-id <question_id>
 research-kb step7 render --workspace <workspace.yaml> --question-id <question_id>
+research-kb backup preview --workspace <workspace.yaml> --request <request.json>
+research-kb backup create --workspace <workspace.yaml> --request <request.json> --output <absent-backup.zip> --actor user
+research-kb backup inspect --archive <backup.zip>
+research-kb backup restore --archive <backup.zip> --request <request.json> --target-root <absent-root> --actor user
+research-kb maintenance archive-preview --workspace <workspace.yaml>
+research-kb maintenance archive --workspace <workspace.yaml> --request <request.json> --actor user
+research-kb maintenance enqueue --workspace <workspace.yaml> --request <request.json> --actor <cli|user>
+research-kb maintenance list --workspace <workspace.yaml> [--page-size <n>] [--cursor <opaque-cursor>]
 research-kb guardian check --workspace <workspace.yaml> [--write-report]
 research-kb transaction recover --workspace <workspace.yaml> [--dry-run]
 ```
@@ -205,6 +213,20 @@ Question Mapping requests use `record promote`. The request selects Paper Card U
 `question render` validates the complete workspace bundle and emits one raw Markdown reading view to stdout. It expands only records reachable from the selected mapping, labels review queue records as non-evidence, computes freshness without rewriting the mapping, and creates no file, event, journal, report, or cache.
 
 Research Synthesis requests also use `record promote`, but require `paper_id: null` and `question_origin: existing_question`. The Agent submits semantic fields and selected mapped Card Unit IDs; Core owns candidate IDs, candidate type, exact canonical Evidence and Unit-boundary closure, snapshot fields, timestamps and the fixed `not_fact: true`, `review_status: ai_draft`, `automation_status: pending` boundary. Records live in four internal JSONL stores under `step7/`. `step7 context` returns candidates and deterministic freshness for one question. `step7 render` emits a non-canonical Markdown reading view to stdout only. Neither command generates or scientifically judges candidates.
+
+`backup preview/create` binds one writer-barrier inventory to an absent archive and writes a
+durable local receipt. Source bytes are inventory-only by default; source-inclusive backup
+requires explicit user authority and revalidates every current asset. `backup inspect` is a
+safe-reader operation. `backup restore` publishes only into an absent target after confined
+staging, transaction/reference validation, Guardian and projection-rebuild checks succeed.
+It never overwrites an existing workspace.
+
+`maintenance archive-preview/archive` seals only eligible settled transaction journals into
+immutable digest-bound segments before removing matching active copies. `maintenance
+enqueue` is explicit and coalesces open work by
+`(dependent_id, upstream_revision, reason)` while retaining trigger provenance; ordinary
+freshness reads do not enqueue work. These P11 operations do not rewrite canonical
+scientific revisions or imply a layout migration.
 
 `compatibility inspect` is an integration seam for an adapter injected by a private caller in the same Python process. It emits one schema-valid report to stdout, snapshots every declared protected input before and after inspection, and writes no report, event, journal, or canonical record. A clean report exits `0`, blocking differences exit `1`, adapter/output errors exit `2`, and protected-input changes exit `4`.
 
