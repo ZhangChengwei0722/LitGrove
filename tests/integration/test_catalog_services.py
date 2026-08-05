@@ -136,6 +136,37 @@ def test_catalog_projects_only_current_pipeline_job_heads_with_stable_pagination
     assert query.detail(items[0]["item_id"])["detail"]["revision"] in {1, 2}
 
 
+def test_operational_projection_treats_absent_optional_store_as_empty(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    mutation = PipelineJobService(layout).create(
+        requested_route="local_source",
+        requested_depth="registry_only",
+        current_node="intake_preflight",
+        input_refs=[],
+        authority_snapshot={
+            "actor": "user",
+            "granted_operations": ["register_by_reference"],
+            "captured_at": "2026-08-05T00:00:00Z",
+        },
+        idempotency_key="synthetic-empty-agent-store",
+        actor="user",
+        fixture_origin="synthetic_from_scratch",
+    )
+    assert not layout.agent_tasks_path.exists()
+    session = WorkspaceSessionService({"alpha": layout.config.path}).open("alpha")
+    projection = CatalogProjectionService(session, tmp_path / "app-state")
+    result = projection.rebuild()
+    query = CatalogQueryService(projection)
+
+    query.bind_projection_result(result)
+    page = query.operational_page(item_kind="pipeline_job", page_size=10)
+
+    assert page["projection_state"] == "current"
+    assert [record["job_id"] for record in page["records"]] == [
+        mutation.state["job_id"]
+    ]
+
+
 def test_catalog_projects_and_resolves_active_direction_detail(tmp_path: Path) -> None:
     layout = make_runtime_workspace(tmp_path)
     bundle, _ = ResearchOrganizationService(layout).promote_direction(
