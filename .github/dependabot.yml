@@ -8,6 +8,16 @@ updates:
       time: "09:00"
       timezone: Asia/Shanghai
     open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - python
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      python-minor-and-patch:
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: github-actions
     directory: /
@@ -17,3 +27,8 @@ updates:
       time: "09:30"
       timezone: Asia/Shanghai
     open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - "area: ci"
+    commit-message:
+      prefix: "chore(actions)"

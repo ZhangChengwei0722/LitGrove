@@ -7,7 +7,18 @@ name = "research-kb-core"
 version = "0.1.0"
 description = "Cross-platform contracts and deterministic CLI primitives for local-first research knowledge bases"
 readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.11"
+keywords = ["research", "knowledge-base", "provenance", "local-first", "cli"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering",
+]
 dependencies = [
   "filelock>=3.16,<4",
   "jsonschema>=4.23,<5",
@@ -26,6 +37,13 @@ test = [
 
 [project.scripts]
 research-kb = "research_kb.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base"
+Repository = "https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base"
+Issues = "https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/issues"
+Security = "https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/security/policy"
+Changelog = "https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/research_kb"]

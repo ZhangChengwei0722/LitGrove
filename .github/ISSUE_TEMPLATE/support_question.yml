@@ -1,0 +1,29 @@
+name: Support question
+description: Ask about documented public Core behavior or synthetic examples.
+title: "[Question]: "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: Support is best-effort. Read SUPPORT.md and do not include private or security-sensitive material.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Public synthetic context
+      description: Include versions, commands, and synthetic examples needed to understand the question.
+    validations:
+      required: true
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: This question contains no private research data, credentials, real source documents, or local absolute paths.
+          required: true

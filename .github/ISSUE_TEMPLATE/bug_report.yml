@@ -1,0 +1,53 @@
+name: Bug report
+description: Report a reproducible defect in the public Core package or CLI.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Do not include real PDFs, research records, credentials, private paths, or security-sensitive details.
+  - type: input
+    id: version
+    attributes:
+      label: Package version or commit
+      placeholder: 0.1.0 or full commit SHA
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system and Python version.
+      placeholder: Windows 11, Python 3.12
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Synthetic reproduction
+      description: Provide the smallest synthetic-from-scratch steps or code that reproduces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and diagnostics
+      description: Redact local paths and private content.
+    validations:
+      required: true
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Privacy and security confirmation
+      options:
+        - label: This report contains no private research data, credentials, real source documents, or local absolute paths.
+          required: true
+        - label: This is not a vulnerability or exposed credential; those are reported privately through SECURITY.md.
+          required: true

@@ -2,7 +2,7 @@
 
 ## Change Process
 
-1. Start from an issue or approved implementation plan.
+1. Read the root `CONTRIBUTING.md`, then start from an issue or approved implementation plan.
 2. Keep one bounded behavior or contract change per branch.
 3. Add or update deterministic tests.
 4. Run the full local suite and privacy scan.
@@ -35,6 +35,14 @@ Every pull request and push to `main` runs two required checks:
 
 GitHub Actions are pinned to immutable commit SHAs. Dependabot proposes weekly Python and
 Actions updates; review and merge those updates through the same validation gates.
+
+Dependency changes must also pass `Dependency review` and `Python dependency audit`.
+The audit uploads a CycloneDX JSON SBOM for inspection. A dependency alert must be fixed,
+explicitly dismissed with a repository-visible rationale, or kept blocked; do not weaken
+the audit command or hide a vulnerable dependency to make a check pass.
+
+Package versions follow `docs/release-policy.md`. Record user-visible changes, deprecations,
+security fixes, and compatibility changes in `CHANGELOG.md` under `Unreleased`.
 
 Schema, state, ID, path, and directory-protocol changes require explicit user approval, focused self-review, targeted tests, and the full Windows validation gate. External collaborator review is optional.
 
