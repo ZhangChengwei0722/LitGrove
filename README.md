@@ -23,6 +23,9 @@ Private Workspace
 ```
 
 Core 本身不调用 LLM、不作科研判断，也不包含任何真实论文或私有知识库内容。
+这是已经公开的 Core 基础设施仓库，不是完整的 GUI 产品。面向普通用户的产品入口由
+`research-kb-app` 承担；在经过脱敏审计的 App 公共仓库实际建立前，此处不提供未经验证的
+App 下载或仓库链接。
 
 ## 当前状态
 
@@ -275,5 +278,5 @@ docs/                  architecture、workflow、ADR、plans、receipts 和 clos
 - external Exchange record 自动提升为本地 canonical record；
 - 私有工作区 migration、legacy write freeze 或 cutover。
 
-下一道产品门是单独设计并验收 private workspace pilot；P0-P11 关闭不自动授权访问或
-迁移任何私有科研数据。
+下一道产品门是 source-free `private_workspace_pilot_design`；只有随后获批的精确执行
+manifest 才能授权具体私有路径和案例。P0-P11 关闭不自动授权访问或迁移任何私有科研数据。
