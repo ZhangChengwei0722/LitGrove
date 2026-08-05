@@ -1,11 +1,14 @@
 # Test Performance Implementation Plan
 
-- status: `t1_t3_implementation_complete_pending_ci`
+- status: `accepted`
 - audit: `docs/test-performance-audit.md`
 - baseline: `1faac4f4ce01d31c3828d1768b3954c86089eec0`
 - implementation_authorized: `true`
 - authorization: `user_approved_2026-08-05`
-- next_gate: `ci_shard_timing_acceptance`
+- accepted_at: `2026-08-05`
+- acceptance_revision: `779850335ef39262b1013c4a746c4e5ce56198f5`
+- acceptance_run: `31000446069`
+- next_gate: `repeated_ci_p95_observation`
 
 ## Objective
 
@@ -24,7 +27,10 @@ parallel execution only for tests proven safe.
   their original configured path before each test. No mutated tree is reused.
 - T4 `pytest-xdist` remains deferred. Independent GitHub-hosted matrix jobs
   provide CI concurrency without introducing in-process worker sharing.
-- Final acceptance remains gated on fresh hosted receipts for every shard.
+- Hosted acceptance passed for every shard. PR run `30997393273` recorded a
+  maximum ordinary-L3 receipt of `129.319 s`, and final `main` run
+  `31000446069` passed at revision
+  `779850335ef39262b1013c4a746c4e5ce56198f5`.
 
 ## Non-Goals
 
@@ -192,8 +198,8 @@ Final validation:
 
 ## Provisional Budgets
 
-These are implementation targets, not frozen acceptance thresholds. T2 freezes
-the first measured Windows profile before optimization.
+These are the accepted provisional Windows targets. T2 froze the profile; any
+later threshold change requires a new receipt and explicit rationale.
 
 | Level | Provisional target |
 |---|---:|
