@@ -234,14 +234,15 @@ docs/                  architecture、workflow、ADR、plans、receipts 和 clos
 提交前运行：
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe tools/run_validation.py --level L2 --receipt .validation/l2.json
 .\.venv\Scripts\python.exe -m build
 .\.venv\Scripts\python.exe -m research_kb --version
 .\.venv\Scripts\python.exe -m research_kb privacy scan --root .
 ```
 
 修改 schema、状态、路径、ID、workspace layout 或 write authority 时，必须先有明确的
-设计/计划，再执行 targeted tests、完整测试、build、privacy scan 和 diff review。
+设计/计划，再执行 targeted tests、完整 L3 shards、L4 scale、build、privacy scan 和
+diff review。验证层级、分片和 receipt 规则见 [Test Validation](docs/test-validation.md)。
 
 ## 文档索引
 

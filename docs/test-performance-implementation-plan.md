@@ -1,10 +1,11 @@
 # Test Performance Implementation Plan
 
-- status: `planned`
+- status: `t1_t2_implementation_in_progress`
 - audit: `docs/test-performance-audit.md`
 - baseline: `1faac4f4ce01d31c3828d1768b3954c86089eec0`
-- implementation_authorized: `false`
-- next_gate: `bounded_implementation_authorization`
+- implementation_authorized: `true`
+- authorization: `user_approved_2026-08-05`
+- next_gate: `ci_shard_timing_acceptance`
 
 ## Objective
 

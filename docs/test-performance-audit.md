@@ -4,7 +4,7 @@
 - baseline: `1faac4f4ce01d31c3828d1768b3954c86089eec0`
 - platform: `Windows`
 - measured_at: `2026-08-05`
-- implementation_status: `not_started`
+- implementation_status: `t1_t2_implementation_in_progress`
 - next_gate: `test_performance_implementation_review`
 
 ## Scope And Boundaries

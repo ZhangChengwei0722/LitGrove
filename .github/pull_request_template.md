@@ -17,7 +17,7 @@ Describe the bounded change and why it is needed.
 ## Validation
 
 - [ ] Targeted tests passed, or no targeted test was needed for this change.
-- [ ] `python -m pytest -q`
+- [ ] Risk-appropriate L0-L4 validation passed; high-risk changes include complete L3 and L4.
 - [ ] `python -m build`
 - [ ] `python tests/wheel_smoke.py`
 - [ ] `python tests/wheel_pdf_smoke.py`

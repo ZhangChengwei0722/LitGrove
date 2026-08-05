@@ -12,7 +12,7 @@ Use the repository virtual environment so the editable package and bounded depen
 
 ```powershell
 .\.venv\Scripts\python -m pip install -e ".[test,pdf]"
-.\.venv\Scripts\python -m pytest -q
+.\.venv\Scripts\python tools/run_validation.py --level L2 --receipt .validation/l2.json
 .\.venv\Scripts\python -m research_kb privacy scan --root .
 ```
 
@@ -25,11 +25,12 @@ Release-resource smoke after `python -m build`:
 
 ## Continuous Integration
 
-Every pull request and push to `main` runs two required checks:
+Every pull request and push to `main` runs two platform gates plus dependency security:
 
-- `Windows validation` uses Python 3.12 for the full test suite, source compilation,
-  distribution build, installed-wheel smoke tests, CLI smoke and privacy scan. This is the
-  required live acceptance platform.
+- `Windows validation` aggregates exhaustive L3 shards, separate L4 scale validation,
+  collection reconciliation, source compilation, distribution build, installed-wheel
+  smoke tests, CLI smoke and privacy scan on Python 3.12. This is the required live
+  acceptance platform.
 - `Linux validation` uses Python 3.11 for the full test suite, CLI smoke and privacy scan so
   host-independent POSIX behavior is exercised.
 
@@ -43,6 +44,31 @@ the audit command or hide a vulnerable dependency to make a check pass.
 
 Package versions follow `docs/release-policy.md`. Record user-visible changes, deprecations,
 security fixes, and compatibility changes in `CHANGELOG.md` under `Unreleased`.
+
+## Validation Levels
+
+Use the repository-owned runner and retain its JSON receipt:
+
+```powershell
+# Documentation-only change
+.\.venv\Scripts\python tools/run_validation.py --level L0 --receipt .validation/l0.json
+
+# One bounded behavior
+.\.venv\Scripts\python tools/run_validation.py --level L1 --selector tests/unit/test_example.py --receipt .validation/l1.json
+
+# Normal feature feedback
+.\.venv\Scripts\python tools/run_validation.py --level L2 --receipt .validation/l2.json
+
+# Complete high-risk acceptance and scale
+.\.venv\Scripts\python tools/run_validation.py --verify --collect-nodeids --receipt .validation/manifest.json
+.\.venv\Scripts\python tools/run_validation.py --level L3 --shard all --receipt .validation/l3.json
+.\.venv\Scripts\python tools/run_validation.py --level L4 --shard scale --receipt .validation/l4.json
+```
+
+See `docs/test-validation.md` for marker ownership, shard coverage, serial/slow inventory,
+receipts, and performance budgets. Targeted or L2 validation does not replace L3/L4 for a
+schema, authority, storage, transaction, recovery, merge, release, privacy-boundary, or
+source-write change.
 
 Schema, state, ID, path, and directory-protocol changes require explicit user approval, focused self-review, targeted tests, and the full Windows validation gate. External collaborator review is optional.
 
