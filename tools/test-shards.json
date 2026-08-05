@@ -1,0 +1,181 @@
+{
+  "schema_version": "test-shard-manifest@1.0",
+  "l3_shards": [
+    "contract",
+    "storage-recovery-a",
+    "storage-recovery-b1",
+    "storage-recovery-b2",
+    "application-semantic-a1",
+    "application-semantic-a2",
+    "application-semantic-a3a-source",
+    "application-semantic-a3a-projection",
+    "application-semantic-a3b",
+    "application-semantic-a4",
+    "application-semantic-b1a-route",
+    "application-semantic-b1a-primary",
+    "application-semantic-b1a-review",
+    "application-semantic-b1b-knowledge",
+    "application-semantic-b1b-organization",
+    "application-semantic-b1b-screening",
+    "application-semantic-b1c",
+    "application-semantic-b2",
+    "discovery-views-exchange-a",
+    "discovery-views-exchange-b",
+    "discovery-views-exchange-c",
+    "privacy-platform",
+    "integration",
+    "serial"
+  ],
+  "scale_shard": "scale",
+  "shard_markers": {
+    "application-semantic-a3a-source": "reading_source",
+    "application-semantic-a3a-projection": "reading_projection",
+    "application-semantic-b1a-route": "agent_route",
+    "application-semantic-b1a-primary": "agent_primary",
+    "application-semantic-b1a-review": "agent_review"
+  },
+  "shards": {
+    "contract": [
+      "tests/contract"
+    ],
+    "storage-recovery-a": [
+      "tests/unit/test_backup_service.py",
+      "tests/unit/test_catalog_storage.py",
+      "tests/unit/test_config_loader.py",
+      "tests/unit/test_identifiers.py",
+      "tests/unit/test_json_io.py",
+      "tests/unit/test_mutation.py",
+      "tests/unit/test_paths.py",
+      "tests/unit/test_record_service.py",
+      "tests/unit/test_registry_service.py",
+      "tests/unit/test_versions.py",
+      "tests/unit/test_workspace.py"
+    ],
+    "storage-recovery-b1": [
+      "tests/unit/test_guardian_finding_disposition_service.py",
+      "tests/unit/test_guardian.py",
+      "tests/unit/test_local_source_intake_service.py",
+      "tests/unit/test_operational_maintenance_service.py"
+    ],
+    "storage-recovery-b2": [
+      "tests/unit/test_pipeline_job_service.py",
+      "tests/unit/test_process_events.py",
+      "tests/unit/test_registry_identity_correction_service.py",
+      "tests/unit/test_source_asset_service.py"
+    ],
+    "application-semantic-a1": [
+      "tests/unit/test_acquired_candidate_intake_service.py",
+      "tests/unit/test_application_services.py",
+      "tests/unit/test_deterministic_intake_application_service.py"
+    ],
+    "application-semantic-a2": [
+      "tests/unit/test_deterministic_trunk_service.py",
+      "tests/unit/test_intake_inspect_service.py",
+      "tests/unit/test_paper_status_service.py",
+      "tests/unit/test_parse_read_service.py",
+      "tests/unit/test_parse_service.py",
+      "tests/unit/test_source_adequacy_service.py"
+    ],
+    "application-semantic-a3a-source": [
+      "tests/unit/test_reading_application_service.py"
+    ],
+    "application-semantic-a3a-projection": [
+      "tests/unit/test_reading_application_service.py"
+    ],
+    "application-semantic-a3b": [
+      "tests/unit/test_evidence_provenance.py",
+      "tests/unit/test_paper_context_service.py",
+      "tests/unit/test_primary_semantic_bundle.py"
+    ],
+    "application-semantic-a4": [
+      "tests/unit/test_review_context_service.py",
+      "tests/unit/test_review_memory_provenance.py",
+      "tests/unit/test_review_memory_service.py",
+      "tests/unit/test_review_semantic_bundle.py"
+    ],
+    "application-semantic-b1a-route": [
+      "tests/unit/test_agent_task_application_service.py"
+    ],
+    "application-semantic-b1a-primary": [
+      "tests/unit/test_agent_task_application_service.py"
+    ],
+    "application-semantic-b1a-review": [
+      "tests/unit/test_agent_task_application_service.py"
+    ],
+    "application-semantic-b1b-knowledge": [
+      "tests/unit/test_knowledge_query_agent_task.py"
+    ],
+    "application-semantic-b1b-organization": [
+      "tests/unit/test_organization_proposal_agent_task.py"
+    ],
+    "application-semantic-b1b-screening": [
+      "tests/unit/test_screening_proposal_agent_task.py"
+    ],
+    "application-semantic-b1c": [
+      "tests/unit/test_agent_task_registry.py",
+      "tests/unit/test_organization_bundles.py",
+      "tests/unit/test_p7a_contracts.py",
+      "tests/unit/test_research_organization_application_service.py",
+      "tests/unit/test_research_organization_service.py"
+    ],
+    "application-semantic-b2": [
+      "tests/unit/test_question_mapping_service.py",
+      "tests/unit/test_question_screening_application_service.py",
+      "tests/unit/test_question_screening_service.py",
+      "tests/unit/test_research_synthesis_agent_task.py",
+      "tests/unit/test_research_synthesis_application_service.py",
+      "tests/unit/test_step7_candidate_service.py",
+      "tests/unit/test_step7_context_service.py",
+      "tests/unit/test_step7_support.py",
+      "tests/unit/test_step7_view.py",
+      "tests/unit/test_tag_application_service.py"
+    ],
+    "discovery-views-exchange-a": [
+      "tests/unit/test_acquisition_paths.py",
+      "tests/unit/test_catalog_adapters.py",
+      "tests/unit/test_catalog_screening_projection.py",
+      "tests/unit/test_catalog_tag_facets.py",
+      "tests/unit/test_discovery_application_service.py",
+      "tests/unit/test_discovery_candidate_service.py",
+      "tests/unit/test_discovery_resolution_service.py",
+      "tests/unit/test_discovery_service.py",
+      "tests/unit/test_europe_pmc_connector.py",
+      "tests/unit/test_europe_pmc_pdf_transport.py",
+      "tests/unit/test_europe_pmc_resolution.py"
+    ],
+    "discovery-views-exchange-b": [
+      "tests/unit/test_compatibility.py",
+      "tests/unit/test_exchange_application_service.py",
+      "tests/unit/test_exchange_export.py",
+      "tests/unit/test_exchange_import.py",
+      "tests/unit/test_manuscript_projection_service.py",
+      "tests/unit/test_obsidian_generated_views_application_service.py",
+      "tests/unit/test_question_view.py"
+    ],
+    "discovery-views-exchange-c": [
+      "tests/unit/test_cli_input.py",
+      "tests/unit/test_cli.py",
+      "tests/unit/test_source_identity_cli.py"
+    ],
+    "privacy-platform": [
+      "tests/privacy",
+      "tests/unit/test_capability_service.py",
+      "tests/unit/test_p11_cli.py",
+      "tests/unit/test_pdfplumber_adapter.py",
+      "tests/unit/test_portable_skill_contract.py"
+    ],
+    "integration": [
+      "tests/integration"
+    ],
+    "serial": [
+      "tests/unit/test_discovery_acquisition_service.py",
+      "tests/unit/test_portable_skill_sync.py",
+      "tests/unit/test_tag_service.py",
+      "tests/unit/test_transactions.py",
+      "tests/unit/test_workspace_bootstrap.py"
+    ],
+    "scale": [
+      "tests/benchmark"
+    ]
+  }
+}

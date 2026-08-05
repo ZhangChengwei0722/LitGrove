@@ -24,12 +24,16 @@ This repository contains cross-platform Core/CLI code, public contracts, synthet
 - Schema, state, path, ID, and directory-contract changes require explicit user approval, a focused review, and targeted plus full validation. External collaborator review is optional and is not an acceptance gate.
 - Windows is the required live acceptance platform. Keep host-independent POSIX path tests and `pathlib` portability; live macOS validation is best-effort unless a future milestone explicitly requires it.
 - Do not add a remote, commit, push, publish, or create CI configuration without explicit user approval.
-- Run targeted tests, then the full suite, before reporting completion.
+- Run targeted tests, then the risk-appropriate L2-L4 validation. Schema, authority,
+  storage, transaction, recovery, merge, and release changes require complete L3 plus L4.
 
 ## Validation Commands
 
 ```powershell
-python -m pytest -q
+python tools/run_validation.py --level L2 --receipt .validation/l2.json
+python tools/run_validation.py --verify --collect-nodeids --receipt .validation/manifest.json
+python tools/run_validation.py --level L3 --shard all --receipt .validation/l3.json
+python tools/run_validation.py --level L4 --shard scale --receipt .validation/l4.json
 python -m build
 python -m research_kb --version
 python -m research_kb privacy scan --root .
