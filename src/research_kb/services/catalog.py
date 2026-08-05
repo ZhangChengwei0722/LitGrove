@@ -361,8 +361,12 @@ class CatalogQueryService:
     def bind_operational_projection(self) -> dict[str, Any]:
         inspection = CatalogDatabase.inspect(self.projection.paths.database_path)
         expected = {
-            "pipeline_jobs": file_sha256(self.projection.session._layout.pipeline_jobs_path),
-            "agent_tasks": file_sha256(self.projection.session._layout.agent_tasks_path),
+            "pipeline_jobs": _optional_jsonl_store_digest(
+                self.projection.session._layout.pipeline_jobs_path
+            ),
+            "agent_tasks": _optional_jsonl_store_digest(
+                self.projection.session._layout.agent_tasks_path
+            ),
         }
         stored = inspection.metadata.get("source_store_digests", {})
         current = (
@@ -370,7 +374,7 @@ class CatalogQueryService:
             and inspection.metadata.get("workspace_id") == self.projection.session.workspace_id
             and inspection.metadata.get("adapter_registry_version")
             == self.projection.registry.registry_version
-            and all(expected[key] is not None and stored.get(key) == expected[key] for key in expected)
+            and all(stored.get(key) == expected[key] for key in expected)
         )
         self._operational_status = {
             "status": "success",
@@ -830,6 +834,15 @@ def _load_jsonl_projection_locators(
     if {item.source_key for item in locators} != selected_source_keys:
         raise _jsonl_error(path, "projected source locator set is incomplete", record_kind=record_kind)
     return tuple(locators), sha256_bytes(content)
+
+
+def _optional_jsonl_store_digest(path: Path) -> str:
+    if not path.exists():
+        return sha256_bytes(b"")
+    digest = file_sha256(path)
+    if digest is None:
+        raise _projection_error("operational projection store is not a regular file")
+    return digest
 
 
 def _read_jsonl_record_at_locator(
