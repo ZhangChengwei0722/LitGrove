@@ -565,6 +565,10 @@ def test_same_config_concurrent_apply_is_initialized_then_no_change(tmp_path: Pa
     assert all(item.exit_code == 0 for item in results)
 
 
+@pytest.mark.skipif(
+    os.name == "posix",
+    reason="filelock creates the persistent lock before bootstrap preservation on POSIX",
+)
 def test_lock_file_persistence_retries_transient_concurrent_write(tmp_path: Path, monkeypatch) -> None:
     config_path = _write_workspace(tmp_path / "workspace")
     real_atomic_write = bootstrap_module.atomic_write_bytes

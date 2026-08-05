@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONUTF8: "1"
+
+jobs:
+  windows-validation:
+    name: Windows validation
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[test,pdf]"
+      - name: Run full test suite
+        run: python -m pytest -q
+      - name: Compile source tree
+        run: python -m compileall -q src
+      - name: Build distributions
+        run: python -m build
+      - name: Run installed-wheel smoke tests
+        run: |
+          python tests/wheel_smoke.py
+          python tests/wheel_pdf_smoke.py
+      - name: Verify CLI and privacy boundary
+        run: |
+          python -m research_kb --version
+          python -m research_kb privacy scan --root .
+
+  linux-validation:
+    name: Linux validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[test,pdf]"
+      - name: Harden POSIX fixture permissions
+        run: chmod -R go-rwx tests/fixtures
+      - name: Run full test suite
+        run: |
+          umask 077
+          python -m pytest -q
+      - name: Verify CLI and privacy boundary
+        run: |
+          python -m research_kb --version
+          python -m research_kb privacy scan --root .

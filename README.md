@@ -1,5 +1,7 @@
 # Research KB Core：可追溯科研知识库核心
 
+[![CI](https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/actions/workflows/ci.yml/badge.svg)](https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/actions/workflows/ci.yml)
+
 Research KB Core 是一个跨平台、local-first 的科研知识库确定性执行层。它提供公共
 contracts、稳定 ID、结构化存储、provenance、事务、CLI 和 Application Services，
 让上层 App、Codex 或 Claude Code 在不破坏证据链和数据边界的前提下处理科研文献。
