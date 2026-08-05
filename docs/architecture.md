@@ -8,7 +8,14 @@ Shared Core + CLI
 -> Separate private workspaces
 ```
 
-Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, Guardian checks, real-PDF page extraction, Research Synthesis/discovery candidate persistence, and bounded stdout read surfaces including manuscript projection. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records. Persisted Markdown and additional derived views remain deferred.
+Core owns deterministic contracts, validation, path and ID handling, structured I/O, status gates, logs, Guardian checks, real-PDF page extraction, Research Synthesis/discovery candidate persistence, generated-view rendering, Exchange and bounded stdout read surfaces including manuscript projection. The Agent layer owns scientific reading, interpretation, candidate generation, and workflow decisions. Private workspaces own papers and research records.
+
+This is a cumulative architecture record. Historical M2/M3/Px section names identify the
+slice that introduced a contract; they are not the current project gate. P0-P11 is
+delivered at Application Service interface `1.18` and layout `p7d-1`. Core now owns
+source-watermarked generated Markdown, one-way Obsidian projection, conflict-safe Exchange
+and P11 operational recovery. Arbitrary Markdown import, reverse vault sync and
+unregistered custom views remain outside the delivered boundary.
 
 ## P2-A Read-Only Artifact Catalog Boundary
 

@@ -2,9 +2,11 @@
 
 - phase: `P2-B`
 - date: `2026-07-29`
-- status: `implementation_validated_pending_delivery`
+- status: `closed_merged_and_consumed_by_p2e`
 - baseline: `main@3e2b6cefcd69bab824faaa949ad670e205fe3176`
 - branch: `feature/p2-catalog-scale-generator`
+- merge_commit: `50e4c7ada3882418ce89c409ad81fc5ae8473294`
+- lifecycle_reconciliation: `P2-E closed at Core main@b46277e41fd55b47a2a4a6d669f95be64cb93fce`
 - generator: `p2-catalog-generator@1.0`
 - measurement: `p2-core-catalog-measurement@1.0`
 

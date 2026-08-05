@@ -12,7 +12,11 @@ candidate input
 -> Guardian
 ```
 
-Milestone 1B implements this deterministic storage lifecycle. M3A-0A adds explicit real-PDF page extraction and strict Evidence provenance validation without generating scientific content.
+Milestone 1B established this deterministic storage lifecycle, and later M3/P0-P11 slices
+extended it through the current R3 product contract. Historical milestone labels below
+identify where a behavior entered the cumulative workflow; they are not active gates.
+P0-P11 is delivered at Application Service interface `1.18` while semantic judgment
+remains outside Core.
 
 ## Runtime Sequence
 
@@ -102,13 +106,13 @@ Stdin accepts JSON only for discovery search/selection requests, Registry metada
 
 ## Portable Skill Workflow
 
-The repo-owned `research-kb` Skill routes workspace-independent on-demand discovery, optional explicit candidate handoff, separately requested OA acquisition, local or already-acquired PDF intake, exact-path manuscript projection/audit, or an existing-workspace knowledge query. Discovery resolves explicit dates and field-bound keywords and reports 0-15 metadata results with zero writes. Candidate selection and acquisition each require separate exact user authority. Acquisition stops after reporting its portable source reference. A later explicit acquired-candidate intake resolves Registry state and, unless `registry_only` was requested, resumes the same explicit-`pdfplumber`, mutually exclusive primary/review route as local-path intake.
+The repo-owned `research-kb` Skill routes workspace-independent on-demand discovery, optional explicit candidate handoff, separately requested OA acquisition, local or already-acquired PDF intake, exact-path manuscript projection/audit, or an existing-workspace knowledge query. Discovery resolves explicit dates and field-bound keywords and reports 0-15 metadata results with zero writes. Candidate selection and acquisition each require separate exact user authority. Acquisition stops after reporting its portable source reference. A later explicit acquired-candidate intake resolves Registry state and, unless `registry_only` was requested, resumes the same preferred `pdfplumber-text-flow`, mutually exclusive primary/review route as local-path intake; legacy `pdfplumber` identity remains available only for compatibility.
 
 `manuscript_projection` returns stable units only and stops. `manuscript_audit` separately requires one or more criteria and exact current-task knowledge selectors before inspection. It preserves criterion wording, resolves no adjacent corpus, expands exact factual support to canonical Evidence and returns a scope-limited private report with `persistent_writes: 0`. No Core semantic service, claim-map store or rewrite is involved.
 
 The Skill maintains no checkpoint. Reruns recover state through `intake inspect` or `intake inspect-acquired`, then `paper status` and `paper context`; exact existing records are reused, while stale state, ambiguous sources and uncertain near-duplicates stop. Paper-local unsupported-PDF or document-type failures may be isolated, but workspace/transaction integrity failures stop the batch.
 
-Document classification and the final report remain local to the active task. Supported high-confidence reviews use the common Review Memory route; ambiguous, mixed and unsupported types stop before mutation. Knowledge queries start from grounded/revised Paper Card Units and expand to canonical Evidence for trace-back. Discovery search and ordinary queries write nothing; explicit selection writes metadata candidates and explicit OA acquisition may add a source receipt. Explicit Research Synthesis maintenance and an explicitly complete intake workflow may use the deterministic Core runtime. Subtype-specific review schemas, Field Map integration, Review Unit Question Mapping, institutional/browser acquisition, OCR, migration and workspace-config generation are not implemented.
+Document classification and the final report remain local to the active task. Supported high-confidence reviews use the common Review Memory route; ambiguous documents stop before mutation, while genuine mixed documents use the Review route. Knowledge queries start from grounded/revised Paper Card Units and expand to canonical Evidence for trace-back. Discovery search and ordinary queries write nothing; explicit selection writes metadata candidates and explicit OA acquisition may add a source receipt. Explicit Research Synthesis maintenance and an explicitly complete intake workflow may use the deterministic Core runtime. Approved organization proposals may link Review background into Field Map entries, but subtype-specific review schemas, Review Unit factual Question Mapping, automatic organization expansion, institutional/browser acquisition, OCR, migration and workspace-config generation remain outside the delivered runtime.
 
 ## Research Synthesis Candidate Flow
 

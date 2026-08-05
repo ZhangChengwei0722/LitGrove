@@ -1,6 +1,7 @@
 # P7-D2 Screening Agent And App Implementation Plan
 
-- status: `p7d2a_validation_passed_pending_remote_closure`
+- status_at_plan_time: `p7d2a_validation_passed_pending_remote_closure`
+- lifecycle_reconciliation: `closed_core_and_app_delivered`
 - prepared_at: `2026-08-03`
 - core_baseline: `main@7bf01ea4e4b64a891590035df1c9940c7e669ab2`
 - app_baseline: `feature/p7c-tags-work-surface@ad60a79794d83026f7424e36042607c4391036a9`
@@ -9,7 +10,11 @@
 - schema_change: `additive Agent Task/result contracts plus screening approval provenance variant`
 - migration: false
 - private_scientific_workspace_access: false
-- next_gate: `core_commit_push_pr_merge_then_p7d2b_app`
+- core_pull_request: `#53`
+- core_merge_commit: `16013d5c58cf4f592129bb93f07425adf522b32d`
+- app_implementation_commit: `54d5a362bdb0192a308204432196344b93cba70f`
+- app_closure_commit: `6efdbd54189609c75734e0c063164641c5fc77ec`
+- next_gate: `closed_superseded_by_p8_research_synthesis`
 
 ## 1. Goal
 
