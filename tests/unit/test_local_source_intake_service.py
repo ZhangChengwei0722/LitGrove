@@ -434,6 +434,248 @@ def test_copy_detects_published_file_change_before_reporting_success(
     assert len(read_jsonl(layout.source_assets_path, record_kind="source-asset-state")) == 1
 
 
+def test_windows_unsupported_hardlink_falls_back_to_create_only_rename(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout = make_runtime_workspace(
+        tmp_path,
+        local_inbox="./sources/inbox",
+        create_local_inbox=True,
+    )
+    job = _job(layout, "copy_into_local_inbox")
+    source = tmp_path / "exfat-source.pdf"
+    source.write_bytes(PDF)
+
+    def unsupported_hardlink(*_args) -> None:
+        error = OSError(22, "Incorrect function")
+        error.winerror = 1
+        raise error
+
+    monkeypatch.setattr(local_source_intake_module, "_IS_WINDOWS", True, raising=False)
+    monkeypatch.setattr(local_source_intake_module.os, "link", unsupported_hardlink)
+
+    result = LocalSourceIntakeService(layout, clock=lambda: NOW).copy(
+        source=source,
+        job_id=job["job_id"],
+        paper_id=None,
+        asset_role="main_pdf",
+        actor="user",
+    )
+
+    final = layout.local_inbox / f"{job['job_id']}.pdf"
+    assert result["result"] == "copied"
+    assert final.read_bytes() == PDF
+    assert not list(layout.local_inbox.glob(".research-kb-copy-*.part.pdf"))
+
+
+def test_windows_rename_fallback_fails_closed_on_destination_race(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout = make_runtime_workspace(
+        tmp_path,
+        local_inbox="./sources/inbox",
+        create_local_inbox=True,
+    )
+    job = _job(layout, "copy_into_local_inbox")
+    source = tmp_path / "rename-race.pdf"
+    source.write_bytes(PDF)
+    replacement = b"destination race"
+
+    def unsupported_hardlink(*_args) -> None:
+        error = OSError(22, "Incorrect function")
+        error.winerror = 50
+        raise error
+
+    def destination_race(_temporary, final) -> None:
+        Path(final).write_bytes(replacement)
+        raise FileExistsError("destination appeared")
+
+    monkeypatch.setattr(local_source_intake_module, "_IS_WINDOWS", True, raising=False)
+    monkeypatch.setattr(local_source_intake_module.os, "link", unsupported_hardlink)
+    monkeypatch.setattr(local_source_intake_module.os, "rename", destination_race)
+
+    with pytest.raises(ResearchKBError) as conflict:
+        LocalSourceIntakeService(layout, clock=lambda: NOW).copy(
+            source=source,
+            job_id=job["job_id"],
+            paper_id=None,
+            asset_role="main_pdf",
+            actor="user",
+        )
+
+    final = layout.local_inbox / f"{job['job_id']}.pdf"
+    assert conflict.value.diagnostic.code == "RKBC-017"
+    assert final.read_bytes() == replacement
+    assert list(layout.local_inbox.glob(".research-kb-copy-*.part.pdf"))
+
+
+def test_windows_rename_fallback_failure_keeps_recoverable_partial(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout = make_runtime_workspace(
+        tmp_path,
+        local_inbox="./sources/inbox",
+        create_local_inbox=True,
+    )
+    job = _job(layout, "copy_into_local_inbox")
+    source = tmp_path / "rename-failure.pdf"
+    source.write_bytes(PDF)
+
+    def unsupported_hardlink(*_args) -> None:
+        error = OSError(22, "Incorrect function")
+        error.winerror = 1
+        raise error
+
+    def failed_rename(*_args) -> None:
+        raise OSError(5, "Synthetic rename failure")
+
+    monkeypatch.setattr(local_source_intake_module, "_IS_WINDOWS", True, raising=False)
+    monkeypatch.setattr(local_source_intake_module.os, "link", unsupported_hardlink)
+    monkeypatch.setattr(local_source_intake_module.os, "rename", failed_rename)
+
+    with pytest.raises(ResearchKBError) as conflict:
+        LocalSourceIntakeService(layout, clock=lambda: NOW).copy(
+            source=source,
+            job_id=job["job_id"],
+            paper_id=None,
+            asset_role="main_pdf",
+            actor="user",
+        )
+
+    final = layout.local_inbox / f"{job['job_id']}.pdf"
+    assert conflict.value.diagnostic.code == "RKBC-017"
+    assert not final.exists()
+    partials = list(layout.local_inbox.glob(".research-kb-copy-*.part.pdf"))
+    assert len(partials) == 1
+    assert partials[0].read_bytes() == PDF
+
+
+def test_unexpected_hardlink_error_never_uses_rename_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout = make_runtime_workspace(
+        tmp_path,
+        local_inbox="./sources/inbox",
+        create_local_inbox=True,
+    )
+    job = _job(layout, "copy_into_local_inbox")
+    source = tmp_path / "unexpected-link-error.pdf"
+    source.write_bytes(PDF)
+    rename_called = False
+
+    def denied_hardlink(*_args) -> None:
+        error = OSError(13, "Permission denied")
+        error.winerror = 5
+        raise error
+
+    def forbidden_rename(*_args) -> None:
+        nonlocal rename_called
+        rename_called = True
+
+    monkeypatch.setattr(local_source_intake_module, "_IS_WINDOWS", True, raising=False)
+    monkeypatch.setattr(local_source_intake_module.os, "link", denied_hardlink)
+    monkeypatch.setattr(local_source_intake_module.os, "rename", forbidden_rename)
+
+    with pytest.raises(ResearchKBError) as conflict:
+        LocalSourceIntakeService(layout, clock=lambda: NOW).copy(
+            source=source,
+            job_id=job["job_id"],
+            paper_id=None,
+            asset_role="main_pdf",
+            actor="user",
+        )
+
+    assert conflict.value.diagnostic.code == "RKBC-017"
+    assert rename_called is False
+
+
+def test_non_windows_never_uses_rename_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout = make_runtime_workspace(
+        tmp_path,
+        local_inbox="./sources/inbox",
+        create_local_inbox=True,
+    )
+    job = _job(layout, "copy_into_local_inbox")
+    source = tmp_path / "non-windows-fallback.pdf"
+    source.write_bytes(PDF)
+    rename_called = False
+
+    def unsupported_hardlink(*_args) -> None:
+        error = OSError(22, "Incorrect function")
+        error.winerror = 1
+        raise error
+
+    def forbidden_rename(*_args) -> None:
+        nonlocal rename_called
+        rename_called = True
+
+    monkeypatch.setattr(local_source_intake_module, "_IS_WINDOWS", False)
+    monkeypatch.setattr(local_source_intake_module.os, "link", unsupported_hardlink)
+    monkeypatch.setattr(local_source_intake_module.os, "rename", forbidden_rename)
+
+    with pytest.raises(ResearchKBError) as conflict:
+        LocalSourceIntakeService(layout, clock=lambda: NOW).copy(
+            source=source,
+            job_id=job["job_id"],
+            paper_id=None,
+            asset_role="main_pdf",
+            actor="user",
+        )
+
+    assert conflict.value.diagnostic.code == "RKBC-017"
+    assert rename_called is False
+
+
+def test_receipted_partial_recovery_rejects_digest_mismatch(tmp_path: Path) -> None:
+    class Crash(BaseException):
+        pass
+
+    layout = make_runtime_workspace(
+        tmp_path,
+        local_inbox="./sources/inbox",
+        create_local_inbox=True,
+    )
+    job = _job(layout, "copy_into_local_inbox")
+    source = tmp_path / "receipt-mismatch.pdf"
+    source.write_bytes(PDF)
+
+    def crash_after_receipt(current: str) -> None:
+        if current == "receipted":
+            raise Crash()
+
+    with pytest.raises(Crash):
+        LocalSourceIntakeService(
+            layout,
+            clock=lambda: NOW,
+            operation_hook=crash_after_receipt,
+        ).copy(
+            source=source,
+            job_id=job["job_id"],
+            paper_id=None,
+            asset_role="main_pdf",
+            actor="user",
+        )
+
+    partial = next(layout.local_inbox.glob(".research-kb-copy-*.part.pdf"))
+    partial.write_bytes(PDF + b"changed")
+    with pytest.raises(ResearchKBError) as conflict:
+        LocalSourceIntakeService(layout, clock=lambda: NOW).recover_copy(
+            job_id=job["job_id"],
+            actor="user",
+        )
+
+    assert conflict.value.diagnostic.code == "RKBC-017"
+    assert partial.read_bytes() == PDF + b"changed"
+    assert not (layout.local_inbox / f"{job['job_id']}.pdf").exists()
+
+
 def test_scan_is_bounded_and_selection_revalidates_token(tmp_path: Path) -> None:
     layout = make_runtime_workspace(
         tmp_path,

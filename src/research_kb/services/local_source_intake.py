@@ -34,6 +34,8 @@ OperationHook = Callable[[str], None]
 MAX_PDF_BYTES = 64 * 1024 * 1024
 MAX_SCAN_ENTRIES = 1000
 PDF_SIGNATURE = bytes((37, 80, 68, 70, 45))
+_IS_WINDOWS = os.name == "nt"
+_WINDOWS_UNSUPPORTED_HARDLINK_ERRORS = frozenset({1, 50})
 
 
 class LocalSourceIntakeService:
@@ -153,6 +155,45 @@ class LocalSourceIntakeService:
             result="copied" if mutation.transaction is not None else "recovered",
             persistent_writes=1 + (1 if mutation.transaction is not None else 0),
             event_id=None if mutation.transaction is None else mutation.transaction.event_id,
+        )
+
+    def recover_copy(self, *, job_id: str, actor: str) -> dict[str, Any]:
+        require_job_authority(self.layout, job_id, "copy_into_local_inbox")
+        if actor != "user":
+            raise ResearchKBError(
+                Diagnostic(
+                    INVALID_AUTHORITY,
+                    "local-source-intake",
+                    job_id,
+                    "/actor",
+                    "inbox copy recovery requires exact user authority",
+                )
+            )
+        destination = local_inbox_destination(self.layout, f"{job_id}.pdf")
+        source_state = self._copy_state_for_job(job_id)
+        if source_state["source_ref"] != destination.source_ref.to_dict():
+            raise _write_conflict(job_id, "copy receipt does not match its owned inbox destination")
+        receipt_hash = source_state["source_fingerprint"]["value"]
+        if os.path.lexists(destination.final_path):
+            if _safe_pdf_digest(destination.final_path) == receipt_hash:
+                return _result(
+                    source_state,
+                    result="no_change",
+                    persistent_writes=0,
+                    event_id=None,
+                )
+            raise _write_conflict(job_id, "inbox copy target exists without the matching receipt")
+
+        temporary = destination.inbox / f".research-kb-copy-{job_id}.part.pdf"
+        staged = _inspect_staged_source(temporary)
+        if staged.sha256 != receipt_hash:
+            raise _write_conflict(job_id, "operation-owned inbox copy partial differs from its receipt")
+        _publish_owned(temporary, destination.final_path, staged, job_id)
+        return _result(
+            source_state,
+            result="recovered",
+            persistent_writes=0,
+            event_id=None,
         )
 
     def scan(
@@ -278,6 +319,25 @@ class LocalSourceIntakeService:
             source_ref=source_ref,
             reason="copied_into_local_inbox",
         )
+
+    def _copy_state_for_job(self, job_id: str) -> dict[str, Any]:
+        entries = load_workspace_entries(self.layout)
+        validate_workspace_entries(entries)
+        states = records_of_kind(entries, "source-asset-state")
+        roots = [
+            item
+            for item in states
+            if item["revision"] == 1
+            and item["job_id"] == job_id
+            and item["asset_role"] == "main_pdf"
+            and item["reason"] == "copied_into_local_inbox"
+        ]
+        if len(roots) != 1:
+            raise _write_conflict(job_id, "copy recovery requires exactly one owned source receipt")
+        heads = {
+            item["source_asset_id"]: item for item in current_source_asset_heads(states)
+        }
+        return heads[roots[0]["source_asset_id"]]
 
     def _matching_reference_state(
         self,
@@ -508,12 +568,26 @@ def _safe_pdf_digest(path: Path) -> str | None:
 
 
 def _publish_owned(temporary: Path, final: Path, identity: FileIdentity, job_id: str) -> FileIdentity:
+    _verify_staged_source(temporary, identity)
+    if temporary.parent != final.parent:
+        raise _write_conflict(job_id, "inbox copy publication paths are not in the same directory")
     if os.path.lexists(final):
         raise _write_conflict(job_id, "inbox copy target appeared before publication")
     try:
         os.link(temporary, final)
     except OSError as error:
-        raise _write_conflict(job_id, "inbox copy could not be published create-only") from error
+        if not (
+            _IS_WINDOWS
+            and getattr(error, "winerror", None) in _WINDOWS_UNSUPPORTED_HARDLINK_ERRORS
+        ):
+            raise _write_conflict(job_id, "inbox copy could not be published create-only") from error
+        if os.path.lexists(final):
+            raise _write_conflict(job_id, "inbox copy target appeared before fallback publication")
+        try:
+            os.rename(temporary, final)
+        except OSError as rename_error:
+            raise _write_conflict(job_id, "inbox copy fallback could not be published create-only") from rename_error
+        return _verify_renamed_publication(temporary, final, identity, job_id)
     published = os.lstat(final)
     result = FileIdentity(published.st_dev, published.st_ino, published.st_size, identity.sha256)
     if (result.device, result.inode, result.size) != (identity.device, identity.inode, identity.size):
@@ -523,6 +597,26 @@ def _publish_owned(temporary: Path, final: Path, identity: FileIdentity, job_id:
         raise _write_conflict(job_id, "operation-owned inbox copy partial could not be removed")
     if not _identity_matches_path(identity, final) or file_sha256(final) != identity.sha256:
         raise _write_conflict(job_id, "published inbox copy changed before publication completed")
+    return result
+
+
+def _verify_renamed_publication(
+    temporary: Path,
+    final: Path,
+    identity: FileIdentity,
+    job_id: str,
+) -> FileIdentity:
+    if os.path.lexists(temporary):
+        raise _write_conflict(job_id, "operation-owned inbox copy partial remains after fallback publication")
+    try:
+        published = os.lstat(final)
+    except OSError as error:
+        raise _write_conflict(job_id, "fallback-published inbox copy is inaccessible") from error
+    result = FileIdentity(published.st_dev, published.st_ino, published.st_size, identity.sha256)
+    if (result.device, result.inode, result.size) != (identity.device, identity.inode, identity.size):
+        raise _write_conflict(job_id, "fallback-published inbox copy does not match operation-owned partial")
+    if not _identity_matches_path(identity, final) or file_sha256(final) != identity.sha256:
+        raise _write_conflict(job_id, "fallback-published inbox copy changed before publication completed")
     return result
 
 

@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from research_kb.errors import ResearchKBError
+from research_kb.catalog.models import canonical_digest
+from research_kb.errors import WRITE_CONFLICT, Diagnostic, ResearchKBError
 from research_kb.services import DeterministicIntakeApplicationService, WorkspaceSessionService
 from research_kb.services.pipeline_job import PipelineJobService
 from research_kb.source_assets import current_source_asset_heads
@@ -264,6 +265,52 @@ def test_fault_injection_recovers_one_job_paper_and_source_asset(
     assert len(current_source_asset_heads(sources)) == 1
     assert len([item for item in events if item["operation"] == "registry_add"]) == 1
     assert len([item for item in events if item["operation"] == "source_asset_associate"]) == 1
+
+
+def test_resume_publishes_receipted_upload_partial_without_original_stream(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout, session = _session(tmp_path)
+    payload = _pdf_bytes(tmp_path)
+    request = _upload_request(payload, idempotency_key="streamless-partial-recovery")
+    service = DeterministicIntakeApplicationService(clock=lambda: NOW)
+
+    def interrupted_publish(*_args, **_kwargs) -> None:
+        raise ResearchKBError(
+            Diagnostic(
+                WRITE_CONFLICT,
+                "local-source-intake",
+                None,
+                "",
+                "synthetic legacy publication failure",
+            )
+        )
+
+    monkeypatch.setattr(
+        "research_kb.services.local_source_intake._publish_owned",
+        interrupted_publish,
+    )
+    with pytest.raises(ResearchKBError):
+        service.start_upload(session, io.BytesIO(payload), request)
+    monkeypatch.undo()
+
+    current = PipelineJobService(layout).list(page_size=10, cursor=None)["jobs"][0]
+    state = PipelineJobService(layout).show(current["job_id"])["current_state"]
+    resumed = service.resume(
+        session,
+        state["job_id"],
+        {
+            "state_id": state["state_id"],
+            "state_digest": canonical_digest(state),
+        },
+        _resume_request(document_route="primary"),
+    )
+
+    assert resumed["pipeline"]["current_node"] == "primary_semantic_gate"
+    assert resumed["pipeline"]["status"] == "completed"
+    assert (layout.local_inbox / f"{state['job_id']}.pdf").read_bytes() == payload
+    assert not list(layout.local_inbox.glob(".research-kb-copy-*.part.pdf"))
 
 
 @pytest.mark.parametrize("mutation", ["missing", "mismatched_outputs", "duplicate"])

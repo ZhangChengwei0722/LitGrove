@@ -217,6 +217,16 @@ class DeterministicIntakeApplicationService:
                 return _job_result(layout, mutation.state, None, normalized, 1)
             return _job_result(layout, state, None, normalized, 0)
         _validate_resume_against_receipts(layout, state, normalized)
+        if mode == "upload":
+            _, source_path = layout.resolve_source(
+                source_state["source_ref"]["root_id"],
+                source_state["source_ref"]["relative_path"],
+            )
+            if not source_path.exists():
+                LocalSourceIntakeService(layout, clock=self.clock).recover_copy(
+                    job_id=job_id,
+                    actor="user",
+                )
         return self._continue(layout, state, source_state, normalized, 0)
 
     def cancel(
