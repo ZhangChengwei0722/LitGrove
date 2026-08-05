@@ -66,8 +66,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install ".[test,pdf]"
+      - name: Harden POSIX fixture permissions
+        run: chmod -R go-rwx tests/fixtures
       - name: Run full test suite
-        run: python -m pytest -q
+        run: |
+          umask 077
+          python -m pytest -q
       - name: Verify CLI and privacy boundary
         run: |
           python -m research_kb --version
