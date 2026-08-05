@@ -242,4 +242,3 @@ graph, new Discovery providers, Exchange, Obsidian runtime, migration, legacy cu
 private scientific workspace access, legacy-question access, real PDFs or cleanup deletion.
 
 Research Synthesis remains P8. Citation/reference graph remains post-R2.
-

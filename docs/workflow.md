@@ -571,4 +571,3 @@ Explicit maintenance triggers coalesce by
 `(dependent_id, upstream_revision, reason)` and preserve all trigger refs. Freshness remains
 lazy by default. P11 acceptance selected `retain_current_layout`; migration and private
 legacy-workspace cutover remain separate decisions.
-

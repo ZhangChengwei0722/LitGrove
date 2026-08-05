@@ -30,4 +30,3 @@ is byte-identical to the candidate artifact recorded in the validation receipt. 
 then pinned that merged identity, passed its App validation matrix and closed at the App
 commit recorded above. The earlier GitHub connection reset is historical and no longer an
 open delivery condition.
-

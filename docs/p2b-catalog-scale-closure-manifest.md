@@ -79,4 +79,3 @@ P2-E still needs the R0 scale target to diagnose and remeasure the incremental p
 ## Closure Gate
 
 P2-B closes only after full tests, package build, installed-wheel smoke, version, privacy and diff checks pass; the branch is merged; post-merge validation passes; and the parent plans plus durable project record are reconciled through `neat-freak`. This manifest records implementation and measurement scope. The final merged revision and P2-C next gate are recorded in the project plans and durable project page during milestone reconciliation.
-

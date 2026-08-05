@@ -237,4 +237,3 @@ scientific revisions or imply a layout migration.
 ## Contracts
 
 JSON Schema Draft 2020-12 files live under `schemas/`. YAML canonical inputs are parsed into mappings and validated against the same schemas. The closed discovery search request and report remain transient interface `1.0` documents; only explicitly selected metadata is normalized into the public `discovery-candidate` schema. Markdown is documentation or a future rendered view, never a structured source of truth.
-
