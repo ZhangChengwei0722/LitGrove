@@ -1,10 +1,14 @@
 # Test Performance Implementation Plan
 
-- status: `planned`
+- status: `accepted`
 - audit: `docs/test-performance-audit.md`
 - baseline: `1faac4f4ce01d31c3828d1768b3954c86089eec0`
-- implementation_authorized: `false`
-- next_gate: `bounded_implementation_authorization`
+- implementation_authorized: `true`
+- authorization: `user_approved_2026-08-05`
+- accepted_at: `2026-08-05`
+- acceptance_revision: `779850335ef39262b1013c4a746c4e5ce56198f5`
+- acceptance_run: `31000446069`
+- next_gate: `repeated_ci_p95_observation`
 
 ## Objective
 
@@ -12,6 +16,21 @@ Make normal validation complete within the five-minute executor window while
 preserving every high-risk acceptance test. Separate fast feedback from full
 and scale validation, produce reproducible timing receipts and introduce
 parallel execution only for tests proven safe.
+
+## Current Implementation
+
+- T1/T2 define a reconciled manifest with 24 exhaustive L3 shards and one
+  separate L4 scale shard.
+- Each ordinary L3 shard enforces the `240 s` subprocess budget and records a
+  distinct `timed_out` receipt with exit code `124`.
+- The bounded T3 optimization restores module-scoped synthetic snapshots at
+  their original configured path before each test. No mutated tree is reused.
+- T4 `pytest-xdist` remains deferred. Independent GitHub-hosted matrix jobs
+  provide CI concurrency without introducing in-process worker sharing.
+- Hosted acceptance passed for every shard. PR run `30997393273` recorded a
+  maximum ordinary-L3 receipt of `129.319 s`, and final `main` run
+  `31000446069` passed at revision
+  `779850335ef39262b1013c4a746c4e5ce56198f5`.
 
 ## Non-Goals
 
@@ -179,8 +198,8 @@ Final validation:
 
 ## Provisional Budgets
 
-These are implementation targets, not frozen acceptance thresholds. T2 freezes
-the first measured Windows profile before optimization.
+These are the accepted provisional Windows targets. T2 froze the profile; any
+later threshold change requires a new receipt and explicit rationale.
 
 | Level | Provisional target |
 |---|---:|

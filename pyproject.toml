@@ -32,7 +32,7 @@ pdf = [
 test = [
   "build>=1.2,<2",
   "pytest>=8.3,<10",
-  "reportlab>=4.2,<5",
+  "reportlab>=4.2,<6",
 ]
 
 [project.scripts]
@@ -58,5 +58,21 @@ exclude = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-ra"
+addopts = "-ra --strict-markers"
 testpaths = ["tests"]
+markers = [
+  "unit: structural unit-test class",
+  "contract: structural public-contract test class",
+  "integration: structural cross-service integration test class",
+  "privacy: structural repository privacy test class",
+  "benchmark: structural benchmark test class",
+  "slow: measured long-running test or file",
+  "scale: scale or benchmark validation outside normal feature feedback",
+  "serial: test that must remain in a single-process shard",
+  "windows: required Windows-specific behavior",
+  "agent_route: document-route agent application scenarios",
+  "agent_primary: primary-semantic agent application scenarios",
+  "agent_review: review-semantic agent application scenarios",
+  "reading_source: evidence source preparation and handle scenarios",
+  "reading_projection: paper, evidence, review, and comparison projection scenarios",
+]

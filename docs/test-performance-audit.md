@@ -4,8 +4,9 @@
 - baseline: `1faac4f4ce01d31c3828d1768b3954c86089eec0`
 - platform: `Windows`
 - measured_at: `2026-08-05`
-- implementation_status: `not_started`
-- next_gate: `test_performance_implementation_review`
+- implementation_status: `accepted`
+- acceptance_revision: `779850335ef39262b1013c4a746c4e5ce56198f5`
+- next_gate: `repeated_ci_p95_observation`
 
 ## Scope And Boundaries
 

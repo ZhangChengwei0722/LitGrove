@@ -11,6 +11,8 @@ defined in `docs/release-policy.md`.
 - Public repository governance, required cross-platform CI, security reporting, dependency
   update automation, and contribution templates.
 - Apache License 2.0 project licensing and public support, contribution, and release policy.
+- Risk-based L0-L4 validation, exhaustive test-shard reconciliation, machine-readable
+  receipts, and a stable aggregated Windows CI gate.
 
 There is no tagged public release yet. The current package version remains `0.1.0` until a
 separate release decision completes all release gates.
