@@ -485,3 +485,85 @@ Evidence ID
 The browser never supplies or receives a source path. Each open revalidates the Core handle
 and returns the already-open descriptor so a later path reopen cannot bypass the checked
 fingerprint, regular-file, size or PDF-signature boundary.
+
+## P6-P8 Discovery, Organization And Research Synthesis
+
+```text
+explicit Europe PMC query
+-> transient metadata results
+-> explicit user selection
+-> metadata-only candidate
+-> optional explicit OA acquisition into an absent local_inbox target
+-> stop before Registry and intake
+```
+
+Organization and Research Synthesis are separate later actions. Direction, Field Map,
+Question, Tag and Question-screening proposals use bounded external-Agent Tasks, App preview
+and dedicated user approval. Factual organization links admit only current grounded/revised
+Primary Units and derive Evidence closure in Core; Review Memory remains labeled background.
+
+```text
+current Question + admissible mapped Primary Units
+-> explicit Research Synthesis Task
+-> external Agent candidate
+-> App preview
+-> user revision/reject/approve
+-> append or replace one candidate
+```
+
+Ordinary query, navigation and intake do not create or refresh Research Synthesis. Internal
+`step7-*` names remain compatibility-only.
+
+## P9-P10 Generated Views And Exchange
+
+```text
+canonical records + source watermark
+-> Core render preview
+-> managed-file conflict check
+-> explicit one-way Obsidian sync
+```
+
+Edited managed output stops overwrite. Continue only by explicit discard or create-only
+personal-note export. Reverse Markdown import is not supported.
+
+```text
+explicit export scope
+-> Core closure and dry run
+-> optional rights-asserted source inclusion
+-> deterministic archive
+-> safe import preflight
+-> App preview and user approval
+-> immutable external-origin package
+```
+
+Imported records remain external and unreviewed. They do not become local factual query or
+Research Synthesis support without a separate future review route.
+
+## P11 Backup And Operational Maintenance
+
+```text
+backup preview under writer barrier
+-> explicit create to absent archive
+-> safe inspect
+-> restore into confined staging
+-> reference/journal/Guardian/source-inventory validation
+-> projection rebuild check
+-> publish absent restored root
+```
+
+Source-free backup records external-source inventory without copying source bytes.
+Source-inclusive backup requires explicit user authority and exact digest revalidation.
+Neither mode overwrites a workspace, source or archive.
+
+```text
+eligible settled journals
+-> archive preview
+-> explicit user archive
+-> immutable segment + durable receipt
+-> digest-checked active-journal cleanup
+```
+
+Explicit maintenance triggers coalesce by
+`(dependent_id, upstream_revision, reason)` and preserve all trigger refs. Freshness remains
+lazy by default. P11 acceptance selected `retain_current_layout`; migration and private
+legacy-workspace cutover remain separate decisions.

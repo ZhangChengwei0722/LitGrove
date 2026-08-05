@@ -718,8 +718,9 @@ new active revision.
 User acceptance appends only the terminal Agent Task receipt with
 `retention_class=current_task_report`, `persistence_status=report_only` and
 `canonical_scientific_write=false`. It has no applied Job state and does not write Paper
-Card, Evidence, Review Memory, Question Mapping or Research Synthesis. Archive, compaction
-and closed-task payload cleanup remain P11 lifecycle work.
+Card, Evidence, Review Memory, Question Mapping or Research Synthesis. P11 supplies
+immutable settled-journal archival and explicit lazy-maintenance work; it does not perform
+a lossy rewrite of historical Task payloads.
 
 ## P6 Discovery Application Service
 
@@ -844,3 +845,59 @@ basis. Any successor makes lease, submission or approval stale. Canonical screen
 reuse the P7-D1 writer, preserve Core-owned IDs, recover a write-before-Task-receipt crash by
 Task/result digest, and retain a no-change approval receipt without inventing a new canonical
 revision. Guardian checks both Task-to-revision and revision-to-Task closure.
+
+## P8 Research Synthesis
+
+Application Service interface `1.16` adds the dedicated Research Synthesis read, Task and
+approval boundary. One Task binds one current Question, one of Synthesis, Review Angle,
+Insight or Cross-View, exact admissible Primary Card Units and derived canonical Evidence.
+Current Review Units may appear only in a separate labeled background closure.
+
+The external Agent proposes semantic content and append/replace intent. Core owns IDs,
+support closure, snapshots, duplicate dispositions and the fixed `not_fact: true`,
+`review_status: ai_draft`, `automation_status: pending` boundary. Stale, replayed or
+uncertain-near-duplicate output cannot be approved. `Research Synthesis` is the product
+term; internal `step7-*` stores, schemas and CLI commands remain compatibility identifiers.
+
+## P9 Generated Obsidian Views
+
+Application Service interface `1.17` adds Core-owned, source-watermarked Markdown rendering
+for selected Papers, Reviews, Directions, Questions and Research Synthesis records. A render
+manifest binds each generated file to exact upstream revisions and content digests. Upstream
+changes stale only affected views; rerender restores current state.
+
+The App may synchronize only into one configured managed vault subtree through an opaque,
+single-use lease. Edited generated files block overwrite until the user discards the managed
+edit or exports it to an absent personal-note copy. Markdown remains a rebuildable reading
+view and never becomes canonical input.
+
+## P10 Exchange
+
+Application Service interface `1.18` adds four allowlisted export scopes, deterministic
+portable serialization, safe archive inspection and immutable external-origin import.
+Source-free export is the default. Source-inclusive export requires an explicit rights
+assertion and current source digest revalidation.
+
+Imports preserve `origin_workspace_id + origin_record_id`, declared external review state
+and conflicts without creating local active facts. Unsigned origin and review claims remain
+unverified. Browser custody uses bounded opaque upload/download leases; archive traversal,
+links, unsupported compatibility, path collisions and partial publication fail closed.
+
+## P11 Backup, Operational Lifecycle And Acceptance
+
+P11 adds no Application Service version bump or scientific schema. `BackupService` takes a
+writer-barrier inventory, excludes disposable projections and publishes one fsynced absent
+archive with per-entry digests, process-event watermark and transaction range. Restore uses
+confined staging and keeps the target unavailable until reference, journal, Guardian, source
+inventory and projection-rebuild checks pass.
+
+`OperationalMaintenanceService` seals eligible settled journals into immutable archive
+segments, removes an active journal only after segment and receipt durability, and recovers
+interrupted settlement idempotently. Explicit stale triggers coalesce by
+`(dependent_id, upstream_revision, reason)`; ordinary reads project freshness lazily and do
+not create maintenance work.
+
+The independent operational-density and retained R0 profiles passed their frozen Windows
+budgets. Current layout remains adequate, so P11 opens no layout-v2 migration. See
+`p11-operational-acceptance-validation-receipt.md`, `p11-layout-v2-decision.md` and
+`p11-operational-acceptance-closure-manifest.md`.
