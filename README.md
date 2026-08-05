@@ -1,6 +1,8 @@
 # Research KB Core：可追溯科研知识库核心
 
 [![CI](https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/actions/workflows/ci.yml/badge.svg)](https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/actions/workflows/ci.yml)
+[![Dependency security](https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/actions/workflows/dependency-security.yml/badge.svg)](https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/actions/workflows/dependency-security.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
 Research KB Core 是一个跨平台、local-first 的科研知识库确定性执行层。它提供公共
 contracts、稳定 ID、结构化存储、provenance、事务、CLI 和 Application Services，
@@ -249,6 +251,19 @@ docs/                  architecture、workflow、ADR、plans、receipts 和 clos
 - [隐私边界](docs/privacy-boundary.md)
 - [架构决策记录](docs/decisions/)
 - [P11 operational acceptance](docs/p11-operational-acceptance-closure-manifest.md)
+
+## 贡献、支持与发布
+
+- 提交 issue 或 pull request 前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 和
+  [Contributor Guide](docs/contributor-guide.md)。
+- 使用问题与维护边界见 [SUPPORT.md](SUPPORT.md)；疑似漏洞或凭证泄露必须按
+  [SECURITY.md](SECURITY.md) 私密报告，不要创建公开 issue。
+- 版本、兼容性、弃用和制品要求见 [Release Policy](docs/release-policy.md) 与
+  [CHANGELOG.md](CHANGELOG.md)。当前没有已发布的稳定版本或自动 PyPI 发布。
+
+## 许可证
+
+本项目使用 [Apache License 2.0](LICENSE)。提交贡献即表示同意按相同许可证提供该贡献。
 
 ## 当前未包含
 

@@ -23,6 +23,8 @@ Describe the bounded change and why it is needed.
 - [ ] `python tests/wheel_pdf_smoke.py`
 - [ ] `python -m research_kb --version`
 - [ ] `python -m research_kb privacy scan --root .`
+- [ ] `Dependency review` and `Python dependency audit`
+- [ ] User-visible, compatibility, deprecation, or security changes are recorded in `CHANGELOG.md`, or not applicable.
 
 ## Known Limits
 

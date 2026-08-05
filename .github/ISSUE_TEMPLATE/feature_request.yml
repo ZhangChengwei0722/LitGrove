@@ -1,0 +1,43 @@
+name: Feature request
+description: Propose a bounded addition to the shared public Core.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user-visible problem without private workspace details.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: State observable behavior and acceptance criteria, not only an implementation.
+    validations:
+      required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Contract impact
+      options:
+        - No public contract change expected
+        - Public API or CLI behavior
+        - Schema, ID, path, state, or workspace layout
+        - Source-write, privacy, or user-authority boundary
+        - Unsure
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Repository boundary
+      options:
+        - label: The proposal can be discussed using only public contracts and synthetic examples.
+          required: true
