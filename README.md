@@ -1,239 +1,262 @@
-# Research KB Core
+# Research KB Core：可追溯科研知识库核心
 
-Cross-platform, local-first contracts and deterministic CLI primitives for evidence-traceable research knowledge bases.
+Research KB Core 是一个跨平台、local-first 的科研知识库确定性执行层。它提供公共
+contracts、稳定 ID、结构化存储、provenance、事务、CLI 和 Application Services，
+让上层 App、Codex 或 Claude Code 在不破坏证据链和数据边界的前提下处理科研文献。
 
-## Current Scope
+```text
+Research KB App
+-> 本地交互界面、任务状态、预览审批、PDF 阅读和运行维护
 
-The P0-P11 roadmap is delivered. The cumulative Core surface provides:
+Research KB Core
+-> schema、ID、事务、provenance、确定性流程、Guardian 和可重建投影
 
-- versioned workspace, domain, record, and candidate schemas;
-- portable source references and stable IDs;
-- schema, reference, status, and privacy validation;
-- locked atomic JSON/JSONL promotion with recovery journals and process events;
-- read-only source registration with SHA-256 duplicate linking;
-- a synthetic text parse adapter for invented test sources;
-- deterministic Paper Card, Evidence, and review queue record promotion;
-- check-only or explicitly persisted Guardian reports;
-- two fully synthetic cross-domain runtime fixtures;
-- config-first workspace bootstrap with shared semantic validation;
-- a deterministic, non-canonical workspace identity marker;
-- initialized-workspace enforcement for every runtime command.
-- generic read-only compatibility inspection through explicitly injected legacy adapters;
-- deterministic compatibility differences, protected-input snapshots, and blocking policy without migration or persistence.
-- historical layout upgrades through the current `p7d-1` contract with no canonical-record rewrite;
-- persistent, domain-neutral Question Mapping from selected Paper Card Units;
-- CLI-owned question/link IDs and exact evidence/boundary projection;
-- read-only `question list/show` commands and Guardian mapping freshness warnings.
-- one deterministic, stdout-only Question Reading View with selected Card Units, canonical evidence trace, non-evidence boundaries, and current freshness diagnostics.
-- explicit optional legacy-spatial `pdfplumber` and preferred `pdfplumber-text-flow` adapters with exact package-version provenance and one row per PDF page;
-- strict same-paper page/locator/quote validation for canonical Evidence, including bounded synthetic block compatibility.
-- a versioned transient capability report, bounded one-paper status projection, and validated parsed-page read surface;
-- bounded stdin JSON handoff into the existing Registry and mutation authority paths without temporary request files.
-- one source-stable, paper-scoped canonical context read for Card Unit, Evidence, and review queue recovery.
-- one read-only intake preflight that maps an absolute source path to its portable source reference, exact Registry state, and active Paper Card section contract.
-- one repo-owned Portable Agent Skill for existing-config primary-research and common review PDF intake through mutually exclusive routes;
-- one common, background-only Review Memory contract for five review subtypes, with CLI-owned Memory/Unit IDs and exact page/section provenance;
-- atomic Review Memory append/replace, primary/review route exclusion, stale-parse Guardian warnings, and a separate `review context` recovery read;
-- a review-specific intake route in the same Portable Skill, without subtype-specific schemas or automatic downstream mutation; later organization and Research Synthesis tasks may consume explicitly selected Review background.
-- four deterministic Research Synthesis candidate stores with CLI-owned IDs, evidence/boundary closure and atomic append/replace;
-- Question Mapping admission, stale-upstream projection, `step7 context`, stdout-only `step7 render`, and Guardian `RKBC-014` warnings.
-- Portable Skill routes for read-only paper/question queries, canonical claim trace-back and explicitly gated Research Synthesis maintenance.
-- one workspace-independent Europe PMC metadata connector that reports only in the active task, with bounded local filtering and DOI deduplication.
-- explicit user-only handoff of selected discovery results into an idempotent `metadata_only` candidate store, plus separate zero-write OA resolution and create-only Europe PMC acquisition contracts.
-- a read-only acquired-candidate intake projection and Portable Skill continuation into the existing primary/review workflow through Guardian.
-- a bounded, stdout-only DOCX/PDF manuscript projection with source fingerprints, stable paragraph/page locators and explicit coverage limits.
-- a Portable Skill-only explicit-criteria manuscript audit route over transient projection and existing knowledge reads, with scope-limited findings and zero persistence.
-- append-only Pipeline Jobs with captured authority, bounded current-state listing, cooperative cancellation, recovery transitions, correlated events and Guardian checks;
-- append-only Source Asset manifestations for reference, create-only local-inbox copy, bounded inbox selection, observation and same-digest relink;
-- user-authorized Registry identity corrections for duplicate merge, mistaken-merge split, alias, archive and tombstone without rewriting paper IDs or historical records;
-- use-specific Source Adequacy profiles bound to exact source and parse snapshots, with independent capability gates, stale projection and hard-failure precedence;
-- a resumable deterministic trunk from current source through Parse and Source Adequacy to an explicit user-selected primary/review semantic boundary, without creating scientific records.
-- a session-bound deterministic intake application facade for bounded upload and watched-inbox starts, receipt-based crash recovery, redacted Job controls and exact replay without App-owned workflow state.
-- a versioned external-Agent task registry and session-bound semantic handoff facade for document-route resolution, with exact privacy-class intersection, CAS leases, stale-input rejection, non-canonical staging, escaped preview, revision lineage and explicit user approval.
-- one atomic, per-paper Primary Semantic Bundle with an append-only correction chain, active Paper Card/Evidence/review-queue projection, operation-specific Source Adequacy gates, task-local aliases and Core-owned canonical IDs.
-- an independent Primary semantic Pipeline Job, external-Agent handoff, non-canonical preview and explicit user-approved commit flow with source/parse/profile revalidation and crash-safe receipt recovery.
-- one atomic, per-paper Review Semantic Bundle with immutable correction revisions, active-only Review Memory projection, same-review provenance bindings and Core-owned Memory/Unit IDs.
-- an independent Review semantic Pipeline Job and `p4c-v1` external-Agent route that accepts zero-Unit low-value memories, blocks only consumed inadequate uses and preserves the background-only/non-evidence boundary.
-- a zero-write Reading Application Service for full seven-section Paper Card or Review Memory reads, bounded multi-paper reading inputs, source/parse/adequacy badges and revision-bound Evidence trace descriptors without filesystem paths.
-- a backend-only Evidence source handle that revalidates exact revision/source lineage and the opened PDF descriptor without exposing paths, source refs or fingerprints to a browser.
-- one `p5c-v1` report-only Knowledge Query Task for six bounded operations, with active-library and source-currentness filtering, exact Card Unit/Evidence or Review-background allowlists, stale-basis rejection and user acceptance that writes no canonical scientific record.
-- append-only Direction, Field Map Entry and Question revision bundles with Core-owned IDs, sparse current Unit links, derived factual Evidence closure, background-only Review links, freshness projection and session-bound read services.
-- direct `organization_proposal` plus Question-screening criteria/decision proposal Tasks under additive registry `p7d-v1`, with bounded context, task-local aliases, stale-basis rejection, explicit user approval and exact no-change/recovery semantics.
-- a deterministic local Tag vocabulary with stable identities, append-only rename/archive revisions, independent Paper/Direction/Field Map/Question assignment history, disposable Catalog facets and session-bound App writes without Agent involvement.
-- optional Question-specific screening with Core-owned criteria and decision identities, append-only user-approved revisions, exact criteria-revision binding, stale-decision projection and strict factual-mapping admission only when active criteria exist.
-- explicit Research Synthesis Tasks and dedicated application services under interface `1.16`, with labeled Review background, duplicate/stale protection and user-approved promotion;
-- Core-owned, source-watermarked generated Markdown plus one-way Obsidian synchronization services under interface `1.17`;
-- four-scope, rights-aware Exchange export and immutable external-origin import under interface `1.18`, without local trust escalation;
-- writer-barrier backup/restore, operational journal archival, stable operational pagination and lazy stale-maintenance coalescing accepted at P11 scale.
+Portable Agent Skill + Codex / Claude Code
+-> 论文理解、候选生成、跨论文分析和科研综合等语义判断
 
-The installed CLI contains no private adapter and performs no adapter or connector discovery. The CLI never calls an LLM or makes scientific judgments. M3D-1 audit semantics remain Agent-owned in the Portable Skill; Core still only projects manuscripts and exposes existing reads. OCR, manuscript rewriting, subtype-specific review runtime, arbitrary Markdown import or reverse Obsidian sync, unregistered custom views, Review Unit factual Question Mapping, automatic organization expansion, institutional/browser acquisition and migration remain outside the delivered roadmap.
+Private Workspace
+-> 用户自己的 PDF、Paper Card、Evidence、Review Memory 和研究记录
+```
 
-Application Service interface `1.18` exposes deterministic intake, Agent Task, reading, discovery, research-organization, Tag, Question-screening, Research Synthesis, generated-view, Exchange and operational services to a localhost App backend through opaque `WorkspaceSession` values. The discovery facade reuses the fixed Europe PMC search, explicit selection, zero-write resolution, create-only acquisition and acquired-candidate inspection services; selection remains metadata-only and acquisition stops before Registry. Research-organization and Research Synthesis mutation remain behind staged external-Agent proposals and explicit user approval, while user-authored Tag and screening changes are deterministic App operations. The App must not read workspace paths, invoke the CLI, parse CLI output or reproduce intake, privacy, staging, scientific commit or recovery rules. Core only prepares portable handoff manifests for external Codex CLI or Claude Code CLI use; it does not launch an Agent, manage credentials or call a model API. Each handoff carries the fully resolved authoritative result JSON Schema needed by an external Agent, so the Portable Skill does not duplicate scientific contracts.
+Core 本身不调用 LLM、不作科研判断，也不包含任何真实论文或私有知识库内容。
 
-`AgentTaskApplicationService` enables `document_route_resolution`, `primary_semantic_processing`, `review_semantic_processing`, `knowledge_query_report`, `organization_proposal`, `research_synthesis_drafting` and the two Question-screening proposal Tasks. Pipeline-bound semantic work uses `create_from_pipeline`; Knowledge Query, organization, screening and Research Synthesis proposals are direct Tasks without Pipeline Job ownership. Its common flow remains `registry -> inspect_handoff -> prepare_handoff -> submit_result -> preview_result -> revise/reject/approve`, with dedicated terminal methods for query acceptance, organization promotion, screening promotion and Research Synthesis promotion. Screening candidates use task-local criterion aliases, `uncertain` cannot be promoted, and approved Agent content retains `user_approved_agent_proposal` provenance. Inspection exposes the exact bounded payload with zero writes but no prompt or lease. A current leased Task can replay the identical handoff after an App restart. Workspace `agent_policy` is optional and absent means deny by default. All staged output is untrusted, non-canonical data.
+## 当前状态
 
-`ReadingApplicationService` provides `show_paper`, `compare_papers`, `trace_evidence`, `prepare_evidence_source` and `open_evidence_source`. Committed semantic records remain readable when source bytes are missing or changed, but the returned trace state then becomes unavailable and cannot support a current factual operation. Evidence is resolved through the exact Primary revision that owns its ID; a later active Parse is reported separately and never replaces a historical parse binding. The source-access methods return an in-memory backend handle and an already-open, fully revalidated PDF descriptor; browser-facing data still contains no source reference, path, source fingerprint or parsed page body.
+P0-P11 路线图已经交付，当前 package version 为 `0.1.0`，公共 Application Service
+interface 为 `1.18`，workspace layout 为 `p7d-1`。已验证能力覆盖论文导入、解析、Source Adequacy、Primary/Review
+语义提交、阅读与 Evidence 回源、发现、研究组织、Research Synthesis、Obsidian
+generated views、Exchange、备份恢复和 operational maintenance。
 
-## Privacy Boundary
+Windows 是当前必需的 live acceptance 平台；路径和数据 contracts 使用 `pathlib`、
+UTF-8/LF 与 POSIX relative paths，并保留 host-independent POSIX tests。macOS live
+validation 目前是 best-effort，除非后续 milestone 单独要求。
 
-This repository contains no real paper data or private workspace content. See [docs/privacy-boundary.md](docs/privacy-boundary.md).
+## Core 负责什么
 
-## Development
+| 能力域 | Core 的职责 |
+|---|---|
+| Workspace | 配置校验、初始化 marker、layout、domain profile 和 workspace session |
+| Source | portable source reference、SHA-256 identity、Source Asset manifestation 和显式 relink |
+| Registry | Paper identity、duplicate link、merge/split/alias/archive/tombstone correction |
+| Parse | synthetic test adapter、`pdfplumber` 和 `pdfplumber-text-flow` 明确适配器 |
+| Source Adequacy | 按具体用途判断解析结果是否支持阅读、引用、图表、公式或补充材料任务 |
+| Scientific records | Paper Card、canonical Evidence、review queue、background-only Review Memory 和 revision lineage |
+| Agent Task | privacy payload、CAS lease、staging、escaped preview、revision/reject/approve contract |
+| Research organization | Direction、Field Map Entry、Question Mapping、Question Screening 和 Tag |
+| Knowledge use | Paper/Review reading、Evidence trace、report-only Knowledge Query 和 Research Synthesis |
+| Discovery | Europe PMC metadata search、explicit selection、OA resolution 和 create-only acquisition |
+| Views and exchange | source-watermarked Markdown、单向 Obsidian sync、rights-aware Exchange |
+| Operations | Pipeline Job、process event、Guardian、transaction recovery、backup/restore 和 journal archive |
+| Projection | 可删除、可重建的 SQLite/FTS Catalog；永远不是 canonical authority |
+
+## 权责边界
+
+Core 与 Agent 的边界是这个项目最重要的 contract：
+
+- CLI/Application Service 负责确定性 I/O、校验、ID、状态、事务、日志、rendering 和 Guardian。
+- Agent 只产生语义候选，不能分配 canonical ID，也不能标记 `human_checked` 或 `verified`。
+- Agent 结果必须经过 staging、App preview 和用户批准，才能调用对应 canonical writer。
+- Primary 事实性 Card Unit 必须闭合到 canonical Evidence。
+- Review Memory 永远是明确标注的 background，不能进入 canonical Evidence。
+- Knowledge Query 是 report-only，不自动改写科学记录或 Research Synthesis。
+- Research Synthesis 是候选层；内部 `step7-*` 名称仅作为兼容标识保留。
+- Markdown、SQLite/FTS 和 Obsidian 页面都是 derived view，不能反向覆盖 structured records。
+
+详细边界见 [docs/architecture.md](docs/architecture.md) 和
+[docs/workflow.md](docs/workflow.md)。
+
+## 主流程
+
+### 本地论文
+
+```text
+用户选择本地 PDF
+-> Workspace / Source confinement
+-> Source Asset + Registry
+-> Parse
+-> use-specific Source Adequacy
+-> 用户或 Agent 确认 Primary / Review route
+-> 外部 Agent 返回 schema-bound candidate
+-> staging + preview + 用户审批
+-> canonical bundle commit
+-> Guardian
+```
+
+Primary bundle 保留 Card Unit、Evidence 和 review boundary 的同一 revision 闭包。
+Review bundle 保留同一综述中的 page/section provenance，但始终为 background-only。
+
+### 文献发现与获取
+
+```text
+Europe PMC transient search
+-> 用户显式选择 metadata candidate
+-> zero-write OA resolution
+-> 用户显式授权 create-only acquisition
+-> local_inbox receipt
+-> 停止，不自动 Registry 或 Parse
+```
+
+无法自动取得的论文由上层工作流报告题目、DOI 和失败原因，交给用户合法下载。
+
+### 外部 Agent 交接
+
+```text
+Core 创建 Agent Task
+-> 解析 allowed content classes 与 privacy scope
+-> 输出完整 handoff manifest 和 result JSON Schema
+-> Codex CLI 或 Claude Code CLI 返回一个 JSON object
+-> Core 检查 task/input basis、schema 和 stale state
+-> App 转义预览
+-> 用户批准、修订或拒绝
+```
+
+Core 不启动 Agent、不管理模型凭证，也不允许 Agent payload 中的文本扩大任务权限。
+
+## 快速开始
+
+要求 Python 3.11+。
+
+### Windows
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python -m pip install -e ".[test]"
-.\.venv\Scripts\python -m pytest -q
-.\.venv\Scripts\python -m research_kb --version
-.\.venv\Scripts\python -m research_kb privacy scan --root .
+.\.venv\Scripts\python.exe -m pip install -e ".[test,pdf]"
+.\.venv\Scripts\python.exe -m research_kb --version
 ```
 
-For real local PDF parsing, install the bounded optional extra in the repository environment:
+### macOS / Linux
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[test,pdf]'
+.venv/bin/python -m research_kb --version
+```
+
+`pdf` extra 安装真实 PDF 解析所需的受限 `pdfplumber` 版本。没有该 extra 时，
+PDF adapter 会明确报告 unavailable，不会静默回退到 synthetic parser。
+
+## 初始化 Workspace
+
+仓库提供两个配置样例：
+
+- [templates/workspace.example.yaml](templates/workspace.example.yaml)
+- [templates/domain-profile.example.yaml](templates/domain-profile.example.yaml)
+
+根据自己的私有目录创建配置后，先执行 dry run：
 
 ```powershell
-.\.venv\Scripts\python -m pip install -e ".[test,pdf]"
+research-kb workspace init --workspace <workspace.yaml> --dry-run
+research-kb workspace init --workspace <workspace.yaml>
 ```
 
-On macOS, use `.venv/bin/python` instead.
+初始化只创建批准的 managed scaffold 和 `.research-kb/workspace.json`。它不会扫描或
+创建 `local_inbox`，不会修改 source asset，也不会创建 scientific record。
 
-## Portable Skill
+## CLI 导航
 
-The reviewed Skill snapshot lives at `skills/research-kb/`. It orchestrates bounded on-demand metadata discovery, explicit user-selected candidate handoff, exact-user-authority Europe PMC OA acquisition, separately requested acquired-candidate intake through the existing primary/review workflow, exact-path manuscript projection, explicit-criteria manuscript audit, read-only knowledge queries, explicitly gated Research Synthesis maintenance and exact App Agent Task responses. The App route consumes only the complete handoff manifest, emits one schema-conforming candidate JSON object and stops before persistence. The Skill adds no schema, ID or workflow store of its own.
+使用 `research-kb --help` 查看顶层命令，使用 `research-kb <group> --help` 查看精确
+参数和状态。主要命令组如下：
 
-The Python wheel does not install the Skill. Local CC Switch installation is a separate, explicitly authorized post-merge operation. Discovery search is workspace-independent; candidate handoff, resolution, acquisition, manuscript projection/audit and all intake/query/Research Synthesis modes require an existing workspace config. The Skill does not generate workspace/domain configuration or integrate Review Units downstream. It acquires a source only through the exact-user-authority `explicit_oa_acquisition` route. Discovery search, manuscript projection/audit and ordinary queries remain non-persistent; only candidate handoff, explicit OA acquisition, explicit Research Synthesis maintenance or an explicitly complete intake workflow may write through Core.
+| 命令组 | 用途 |
+|---|---|
+| `capability` | 查看已实现和当前可用的 adapters/connectors |
+| `workspace` / `compatibility` | 初始化 workspace、执行显式 read-only legacy inspection |
+| `intake` / `registry` / `identity` | intake preflight、Paper 登记和 identity correction |
+| `job` / `source` | Pipeline Job、Source Asset、inbox selection 和 relink |
+| `parse` / `adequacy` / `trunk` | 解析、用途级充分性和 deterministic trunk |
+| `paper` / `review` | 读取当前 Paper Card、Evidence、queue 或 Review Memory context |
+| `record` / `question` | 受校验的 record promotion、Question Mapping 和 reading view |
+| `discovery` | Europe PMC search、selection、resolution 和 acquisition |
+| `manuscript` | transient DOCX/PDF projection；科研审查逻辑仍由 Skill/Agent 负责 |
+| `step7` | Research Synthesis 的内部兼容命令名，仅用于 context/render |
+| `backup` / `maintenance` | 备份恢复、journal archive 和 stale maintenance |
+| `guardian` / `transaction` | 健康检查和事务恢复 |
 
-## Runtime Commands
+常用只读起点：
 
-Initialize an existing workspace config before running workspace services:
-
-```text
-research-kb workspace init --workspace <workspace.yaml> [--dry-run]
-```
-
-Bootstrap validates source/config relationships, creates only the approved managed scaffold, and writes `.research-kb/workspace.json`. It never creates or scans `local_inbox`, changes source assets, creates canonical records, or emits a process event.
-
-Capability probing is workspace-independent; all commands with `--workspace` resolve paths through the initialized workspace:
-
-```text
+```powershell
 research-kb capability show
-research-kb discovery search --provider europe-pmc --request <request.json>
-research-kb discovery search --provider europe-pmc --request -
-research-kb discovery select --workspace <workspace.yaml> --request <selection.json> --actor user
-research-kb discovery select --workspace <workspace.yaml> --request - --actor user
-research-kb discovery list --workspace <workspace.yaml>
-research-kb discovery show --workspace <workspace.yaml> --candidate-id <discovery_id>
-research-kb discovery resolve --workspace <workspace.yaml> --candidate-id <discovery_id> --provider europe-pmc
-research-kb discovery acquire --workspace <workspace.yaml> --candidate-id <discovery_id> --provider europe-pmc --actor user
-research-kb intake inspect --workspace <workspace.yaml> --source <absolute-source-path>
-research-kb intake inspect-acquired --workspace <workspace.yaml> --candidate-id <discovery_id>
-research-kb manuscript inspect --workspace <workspace.yaml> --source <absolute.docx|absolute.pdf>
-research-kb compatibility inspect --workspace <workspace.yaml> --adapter <adapter_id>
-research-kb registry add --workspace <workspace.yaml> --root-id <root> --relative-path <path> --metadata <metadata.json>
-research-kb registry add --workspace <workspace.yaml> --root-id <root> --relative-path <path> --metadata -
-research-kb job create --workspace <workspace.yaml> --request <request.json> --actor <agent|cli|user>
-research-kb job list --workspace <workspace.yaml> [--page-size <n>] [--cursor <opaque-cursor>]
-research-kb job show --workspace <workspace.yaml> --job-id <job_id>
-research-kb job transition --workspace <workspace.yaml> --job-id <job_id> --request <request.json> --actor <agent|cli|user>
-research-kb job cancel --workspace <workspace.yaml> --job-id <job_id> --request <request.json> --actor <agent|cli|user>
-research-kb job recover --workspace <workspace.yaml> --job-id <job_id> --request <request.json> --actor <agent|cli|user>
-research-kb source list --workspace <workspace.yaml>
-research-kb source scan --workspace <workspace.yaml> [--max-entries <n>] [--min-stable-age-seconds <n>]
-research-kb source reference --workspace <workspace.yaml> --request <request.json> --actor <cli|user>
-research-kb source copy --workspace <workspace.yaml> --request <request.json> --actor user
-research-kb source select --workspace <workspace.yaml> --request <request.json> --actor <cli|user>
-research-kb source associate --workspace <workspace.yaml> --request <request.json> --actor <cli|user>
-research-kb source observe --workspace <workspace.yaml> --request <request.json> --actor <cli|user>
-research-kb source relink --workspace <workspace.yaml> --request <request.json> --actor <cli|user>
-research-kb identity list --workspace <workspace.yaml>
-research-kb identity correct --workspace <workspace.yaml> --request <request.json> --actor user
-research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapter synthetic-text
-research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapter pdfplumber
-research-kb parse run --workspace <workspace.yaml> --paper-id <paper_id> --adapter pdfplumber-text-flow
-research-kb parse show --workspace <workspace.yaml> --paper-id <paper_id> [--page <positive_integer>]
-research-kb adequacy assess --workspace <workspace.yaml> --request <request.json> --actor <cli|user>
-research-kb adequacy show --workspace <workspace.yaml> --paper-id <paper_id> [--operation <operation>]
-research-kb adequacy gate --workspace <workspace.yaml> --paper-id <paper_id> --operation <operation>
-research-kb trunk advance --workspace <workspace.yaml> --request <request.json> --actor <cli|user>
+research-kb intake inspect --workspace <workspace.yaml> --source <absolute-pdf-path>
 research-kb paper status --workspace <workspace.yaml> --paper-id <paper_id>
-research-kb paper context --workspace <workspace.yaml> --paper-id <paper_id>
-research-kb review context --workspace <workspace.yaml> --paper-id <paper_id>
-research-kb record promote --workspace <workspace.yaml> --request <request.json> --actor <agent|cli|user>
-research-kb record promote --workspace <workspace.yaml> --request - --actor <agent|cli|user>
-research-kb question list --workspace <workspace.yaml>
-research-kb question show --workspace <workspace.yaml> --question-id <question_id>
-research-kb question render --workspace <workspace.yaml> --question-id <question_id>
-research-kb step7 context --workspace <workspace.yaml> --question-id <question_id>
-research-kb step7 render --workspace <workspace.yaml> --question-id <question_id>
-research-kb backup preview --workspace <workspace.yaml> --request <request.json>
-research-kb backup create --workspace <workspace.yaml> --request <request.json> --output <absent-backup.zip> --actor user
-research-kb backup inspect --archive <backup.zip>
-research-kb backup restore --archive <backup.zip> --request <request.json> --target-root <absent-root> --actor user
-research-kb maintenance archive-preview --workspace <workspace.yaml>
-research-kb maintenance archive --workspace <workspace.yaml> --request <request.json> --actor user
-research-kb maintenance enqueue --workspace <workspace.yaml> --request <request.json> --actor <cli|user>
-research-kb maintenance list --workspace <workspace.yaml> [--page-size <n>] [--cursor <opaque-cursor>]
-research-kb guardian check --workspace <workspace.yaml> [--write-report]
-research-kb transaction recover --workspace <workspace.yaml> [--dry-run]
+research-kb guardian check --workspace <workspace.yaml>
 ```
 
-Existing source assets remain immutable. The source-write exceptions are exact-user-authority `discovery acquire` and `source copy`; each may create only one previously absent PDF under the configured, uniquely addressable `local_inbox`. Neither may overwrite, move, rename or delete a user source. Canonical writes stay under `knowledge_root` and emit a process event only after a validated atomic replacement.
+精确 mutation authority、request schema 和 exit code 以 CLI `--help`、JSON Schema 和
+ADR 为准，不以 README 示例替代。
 
-`capability show`, `discovery search`, `discovery list`, `discovery show`, `discovery resolve`, `intake inspect`, `intake inspect-acquired`, `manuscript inspect`, `parse show`, `adequacy show`, `adequacy gate`, `paper status`, `paper context`, `review context`, and `step7 context` emit bounded JSON and write no workspace state. Capability output distinguishes installed adapters and built-in connectors without calling the network. Paper status reports deterministic stage and safety facts only; it does not claim scientific completion or choose a next action. Parsed-page text appears only through the explicit local `parse show` read.
+## Portable Agent Skill
 
-`discovery search` accepts an explicit date range, field-bound keywords, preprint choice and maximum of 1-15 results. It calls only the built-in fixed Europe PMC HTTPS endpoint, reapplies filters locally, merges exact DOI identity and marks possible title duplicates without merging them. It creates no workspace, candidate, event, report file or downloaded source. Public provider state is mutable; identical requests and provider page payloads produce identical normalized bytes.
+仓库内的 [skills/research-kb/](skills/research-kb/) 是受审查的 Skill authoring source，
+支持以下任务：
 
-`discovery select` accepts the complete validated transient report plus 1-15 result keys chosen explicitly by the user. It persists only those results to `discovery/candidates.jsonl`, allocates `discovery_<uuid4>` IDs, records deterministic selection contexts and optionally links existing Question Mapping IDs for organization. Exact intent reruns write nothing; new contexts update the same candidate; changed metadata for the same result key fails the complete batch with `RKBC-034`. Selection assigns only `user_selected`, `metadata_only`, `not_started` and `not_evidence: true`; it does not register, include, verify, acquire or download a paper. `discovery list/show` validate the complete workspace and expose no paths or paper content.
+- 本地 Primary/Review PDF intake；
+- Europe PMC 检索、用户选择和显式 OA acquisition；
+- 单篇/跨论文 Knowledge Query 与 Evidence trace-back；
+- Research Synthesis maintenance；
+- DOCX/PDF manuscript projection 和按用户标准执行的 transient audit；
+- App 创建的 Agent Task 响应。
 
-`discovery resolve` rechecks one selected candidate against the fixed Europe PMC search endpoint. Exact DOI or stored source identity is used; the report returns an opaque OA asset reference and `persistent_writes: 0`, never a provider URL. `auto_acquisition_eligible` is a routing fact only and does not authorize download, Registry intake or screening.
+Python wheel 不安装 Skill。Skill 不复制 schema、ID 或 workflow store，只编排公共 Core
+reads/mutations 和外部 Agent 判断。
 
-`discovery acquire` requires exact `actor: user`, re-runs resolution, accepts only one repository-OA PDF, and creates `<local_inbox>/<candidate_id>.pdf` without overwrite. The candidate gains a portable receipt but remains `metadata_only` and `not_evidence: true`. Exact reruns are zero-write. Missing/changed receipts, existing unreceipted targets, partials and crash states stop or become Guardian findings; acquisition never chains into Registry or Parse.
+## Source 与隐私安全
 
-`intake inspect` accepts one absolute source path, confines it to exactly one declared source root, and returns only portable `root_id + relative_path`, exact-path registration state, and ordered Paper Card section IDs/labels. It hashes the source before and after projection, never returns the hash or absolute path, and performs no registration. The Portable Skill uses it for sequential reruns; concurrent inspect-and-register deduplication is not guaranteed.
+- 仓库禁止真实 PDF、parsed paper text、Evidence quote、Paper Card、研究笔记和凭证。
+- Fixture 必须从零编写并标记 `synthetic_from_scratch`。
+- 已存在 source asset 默认不可移动、改名、覆盖、编辑或删除。
+- 唯一 source-write 例外是用户显式授权的 `discovery acquire` 和
+  `copy_into_local_inbox`；二者只能 create one previously absent inbox file。
+- Canonical source location 使用 `root_id + POSIX relative_path`，不保存本地绝对路径。
+- PDF text、Agent output、Exchange record 和 imported Markdown 均按不可信数据处理。
+- External Agent payload 取 Task kind、workspace policy、executor 和当次用户授权的交集。
 
-`intake inspect-acquired` accepts one acquired discovery candidate ID, verifies its receipt against the exact current inbox PDF, and emits the same intake projection plus deterministic Registry bibliography input. It writes nothing and performs no provider request. A separately requested Skill route may pass that projection to the existing `registry add`; acquisition alone still stops before Registry. Unless that later task explicitly requests `registry_only`, the returned paper ID resumes the same status, Parse and mutually exclusive primary/review workflow used by local-path intake.
+完整规则见 [docs/privacy-boundary.md](docs/privacy-boundary.md) 和 [AGENTS.md](AGENTS.md)。
 
-`manuscript inspect` accepts one exact absolute `.docx` or `.pdf` path under exactly one declared source root. It fingerprints the source before and after bounded extraction, returns stable paragraph or page units plus parser identity and coverage limits, and writes nothing. DOCX uses a standard-library OOXML reader; PDF uses the installed `pdfplumber` policy. The output is private task context, not Registry, Evidence, a claim map or an audit result.
+## 仓库结构
 
-The Portable Skill's separate `manuscript_audit` mode requires criteria and exact current-task question/paper selectors before inspection. It preserves the requested dimensions, limits every finding to the reported local corpus, expands exact factual support from Card Units to canonical Evidence and returns only a private report with `persistent_writes: 0`. It creates no Core audit command, stored claim map, finding record or rewritten manuscript.
+```text
+src/research_kb/       Core services、CLI、contracts 和 adapters
+schemas/               JSON Schema Draft 2020-12 公共 contracts
+templates/             workspace 与 domain profile 配置样例
+agent_protocol/        Agent handoff 公共协议
+skills/research-kb/    Portable Skill authoring source
+benchmarks/            synthetic scale generators、profiles 和 measurements
+tests/                 unit、integration、contract、privacy 和 cross-platform tests
+docs/                  architecture、workflow、ADR、plans、receipts 和 closure manifests
+```
 
-`paper context` returns the selected paper's complete stored Paper Card or `null`, canonical Evidence records, and review queue records after complete-bundle and source-stability checks. It excludes source references, paths, parsed pages, Question Mappings, and unrelated papers. It is the public recovery surface for CLI-owned Unit, Evidence, and queue IDs, not a generic workspace export or semantic resume decision.
+## 开发与验证
 
-`review context` returns one complete Review Memory or `null`, `absent/current/stale_parse` freshness, and transient exact local DOI matches for primary-paper leads. Review Memory remains `background_only`, `can_enter_canonical_evidence: false`, and `not_fact: true`; stale notes are never rebound to a newer parse automatically.
+提交前运行：
 
-Stdin accepts one UTF-8 JSON object only. Discovery requests and Registry metadata are capped at 64 KiB; mutation requests are capped at 4 MiB. YAML remains file-only. Invalid input never reaches its service, and no temporary request file is created.
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m build
+.\.venv\Scripts\python.exe -m research_kb --version
+.\.venv\Scripts\python.exe -m research_kb privacy scan --root .
+```
 
-Pipeline Job mutation requests are capped at 64 KiB and bind each state transition to a captured authority snapshot. Source mutations require a current Job with the exact operation authority. `source scan` is bounded, transient and non-daemon; selection revalidates the opaque candidate against current bytes. Reference, copy or selection may first create an unassociated Source Asset; after `registry add`, `source associate` binds that exact current asset state to the new paper through CAS. A Job cannot end as `completed` or `completed_with_findings` while a Source Asset it created remains unassociated. Failed or cancelled work retains the source receipt and exposes the incomplete association through Guardian. Source and identity list responses expose only current projections, never absolute paths or source fingerprints.
+修改 schema、状态、路径、ID、workspace layout 或 write authority 时，必须先有明确的
+设计/计划，再执行 targeted tests、完整测试、build、privacy scan 和 diff review。
 
-The Core copy handoff is `LocalSourceIntakeService.copy_stream`, which consumes a bounded binary stream and never requires a browser to submit a server path. `source copy` is the local CLI adapter: it opens one exact absolute PDF, binds its size/digest/file identity, and delegates to the same stream service. The operation stages bytes, commits the Source Asset receipt, then publishes one absent inbox target create-only. The same Job can resume a matching staged partial, a receipted-but-missing target, or an already published target without duplicating the file or asset. Partial recovery requires the original expected digest. A bounded inbox scan rejects a directory with more than 1,000 entries rather than traversing an unbounded listing.
+## 文档索引
 
-Source Asset revisions preserve every manifestation. Same-digest relink changes only the portable location and keeps Parse reusable. Changed, missing, inaccessible, hard-linked or reparse-point sources become explicit non-current states; historical Parse remains present but cannot be reused as current. Registry identity correction is user-only and append-only: aliases and merges affect projections, split supersedes an earlier merge, and archive/tombstone affects active-library visibility without deleting Registry rows or source files.
+- [架构](docs/architecture.md)
+- [工作流](docs/workflow.md)
+- [贡献指南](docs/contributor-guide.md)
+- [隐私边界](docs/privacy-boundary.md)
+- [架构决策记录](docs/decisions/)
+- [P11 operational acceptance](docs/p11-operational-acceptance-closure-manifest.md)
 
-An explicit `main_pdf` may bind a known Registry paper only when its SHA-256 equals that paper's registered fingerprint; a Source Asset cannot silently replace Registry source identity. Public inbox scan excludes every Registry or Source Asset ref. The only registered-file replay is an exact `source select` retry for the same Job, revision-one intent, paper argument and role. Source state reasons are a closed vocabulary: only `paper_associated` adds a paper ID, only `same_digest_relink` changes the portable ref, and observation transitions cannot rewrite either identity.
+## 当前未包含
 
-Both PDF adapters record exact `pdfplumber` package version identity and emit `page:<n>:text` page locators. Their distinct adapter names preserve extraction-profile identity: `pdfplumber` is the legacy spatial profile, while `pdfplumber-text-flow` uses `x_tolerance=1` and content-stream order for new scientific intake. Text-flow is not layout verification; unresolved columns, spacing, tables or OCR remain stop conditions. Real-PDF Evidence must use `page:<n>:char:<start>-<end>` with an exact zero-based, end-exclusive slice of stored page text. Missing PDF dependencies and unsupported PDF sources fail explicitly; there is no OCR or synthetic fallback.
+- Core 内置 LLM 或 embedded Agent runtime；
+- OCR、自动版面修复或把 parser 输出当作 layout verification；
+- 第二个 discovery provider、机构账号或浏览器会话 acquisition；
+- subtype-specific Review schema 和 Review Unit factual Question Mapping；
+- arbitrary Markdown import、Obsidian reverse sync 或 unregistered custom views；
+- external Exchange record 自动提升为本地 canonical record；
+- 私有工作区 migration、legacy write freeze 或 cutover。
 
-Question Mapping requests use `record promote`. The request selects Paper Card Unit IDs and may add question-specific review queue boundaries; Core derives `evidence_ids`, preserves required unit boundaries, allocates IDs, and stores the result in `questions/mappings.jsonl`. Unapproved Agent-generated questions remain task report candidates and cannot use a persistable `question_origin`.
-
-`question render` validates the complete workspace bundle and emits one raw Markdown reading view to stdout. It expands only records reachable from the selected mapping, labels review queue records as non-evidence, computes freshness without rewriting the mapping, and creates no file, event, journal, report, or cache.
-
-Research Synthesis requests also use `record promote`, but require `paper_id: null` and `question_origin: existing_question`. The Agent submits semantic fields and selected mapped Card Unit IDs; Core owns candidate IDs, candidate type, exact canonical Evidence and Unit-boundary closure, snapshot fields, timestamps and the fixed `not_fact: true`, `review_status: ai_draft`, `automation_status: pending` boundary. Records live in four internal JSONL stores under `step7/`. `step7 context` returns candidates and deterministic freshness for one question. `step7 render` emits a non-canonical Markdown reading view to stdout only. Neither command generates or scientifically judges candidates.
-
-`backup preview/create` binds one writer-barrier inventory to an absent archive and writes a
-durable local receipt. Source bytes are inventory-only by default; source-inclusive backup
-requires explicit user authority and revalidates every current asset. `backup inspect` is a
-safe-reader operation. `backup restore` publishes only into an absent target after confined
-staging, transaction/reference validation, Guardian and projection-rebuild checks succeed.
-It never overwrites an existing workspace.
-
-`maintenance archive-preview/archive` seals only eligible settled transaction journals into
-immutable digest-bound segments before removing matching active copies. `maintenance
-enqueue` is explicit and coalesces open work by
-`(dependent_id, upstream_revision, reason)` while retaining trigger provenance; ordinary
-freshness reads do not enqueue work. These P11 operations do not rewrite canonical
-scientific revisions or imply a layout migration.
-
-`compatibility inspect` is an integration seam for an adapter injected by a private caller in the same Python process. It emits one schema-valid report to stdout, snapshots every declared protected input before and after inspection, and writes no report, event, journal, or canonical record. A clean report exits `0`, blocking differences exit `1`, adapter/output errors exit `2`, and protected-input changes exit `4`.
-
-## Contracts
-
-JSON Schema Draft 2020-12 files live under `schemas/`. YAML canonical inputs are parsed into mappings and validated against the same schemas. The closed discovery search request and report remain transient interface `1.0` documents; only explicitly selected metadata is normalized into the public `discovery-candidate` schema. Markdown is documentation or a future rendered view, never a structured source of truth.
+下一道产品门是单独设计并验收 private workspace pilot；P0-P11 关闭不自动授权访问或
+迁移任何私有科研数据。
