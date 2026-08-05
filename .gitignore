@@ -3,6 +3,7 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.validation/
 .coverage
 htmlcov/
 build/

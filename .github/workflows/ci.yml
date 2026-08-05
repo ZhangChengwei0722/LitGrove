@@ -19,10 +19,64 @@ env:
   PYTHONUTF8: "1"
 
 jobs:
-  windows-validation:
-    name: Windows validation
+  windows-test-shards:
+    name: Windows tests (${{ matrix.shard }})
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: contract
+            level: L3
+          - shard: storage-recovery-a
+            level: L3
+          - shard: storage-recovery-b1
+            level: L3
+          - shard: storage-recovery-b2
+            level: L3
+          - shard: application-semantic-a1
+            level: L3
+          - shard: application-semantic-a2
+            level: L3
+          - shard: application-semantic-a3a-source
+            level: L3
+          - shard: application-semantic-a3a-projection
+            level: L3
+          - shard: application-semantic-a3b
+            level: L3
+          - shard: application-semantic-a4
+            level: L3
+          - shard: application-semantic-b1a-route
+            level: L3
+          - shard: application-semantic-b1a-primary
+            level: L3
+          - shard: application-semantic-b1a-review
+            level: L3
+          - shard: application-semantic-b1b-knowledge
+            level: L3
+          - shard: application-semantic-b1b-organization
+            level: L3
+          - shard: application-semantic-b1b-screening
+            level: L3
+          - shard: application-semantic-b1c
+            level: L3
+          - shard: application-semantic-b2
+            level: L3
+          - shard: discovery-views-exchange-a
+            level: L3
+          - shard: discovery-views-exchange-b
+            level: L3
+          - shard: discovery-views-exchange-c
+            level: L3
+          - shard: privacy-platform
+            level: L3
+          - shard: integration
+            level: L3
+          - shard: serial
+            level: L3
+          - shard: scale
+            level: L4
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,8 +89,52 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install ".[test,pdf]"
-      - name: Run full test suite
-        run: python -m pytest -q
+      - name: Run stable L3 test shard
+        if: matrix.level == 'L3'
+        run: >-
+          python tools/run_validation.py
+          --level ${{ matrix.level }}
+          --shard ${{ matrix.shard }}
+          --timeout-seconds 240
+          --receipt .validation/${{ matrix.shard }}.json
+      - name: Run stable L4 test shard
+        if: matrix.level == 'L4'
+        run: >-
+          python tools/run_validation.py
+          --level ${{ matrix.level }}
+          --shard ${{ matrix.shard }}
+          --receipt .validation/${{ matrix.shard }}.json
+      - name: Upload shard receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-test-receipt-${{ matrix.shard }}-${{ github.sha }}
+          path: .validation/${{ matrix.shard }}.json
+          if-no-files-found: error
+          retention-days: 30
+
+  windows-packaging:
+    name: Windows packaging
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[test,pdf]"
+      - name: Reconcile shard collection
+        run: >-
+          python tools/run_validation.py
+          --verify
+          --collect-nodeids
+          --receipt .validation/manifest.json
       - name: Compile source tree
         run: python -m compileall -q src
       - name: Build distributions
@@ -49,6 +147,31 @@ jobs:
         run: |
           python -m research_kb --version
           python -m research_kb privacy scan --root .
+      - name: Upload manifest receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-test-manifest-${{ github.sha }}
+          path: .validation/manifest.json
+          if-no-files-found: error
+          retention-days: 30
+
+  windows-validation:
+    name: Windows validation
+    if: always()
+    needs:
+      - windows-test-shards
+      - windows-packaging
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every Windows shard and packaging job
+        env:
+          SHARDS_RESULT: ${{ needs.windows-test-shards.result }}
+          PACKAGING_RESULT: ${{ needs.windows-packaging.result }}
+        run: |
+          test "$SHARDS_RESULT" = "success"
+          test "$PACKAGING_RESULT" = "success"
 
   linux-validation:
     name: Linux validation
