@@ -1,12 +1,15 @@
 # P11 Scale, Recovery And Operational Acceptance Closure Manifest
 
-- status: `core_closed`
+- status: `overall_closed_cross_project`
 - baseline: `9346e140c0f376f24814c9aa0accdbb30c0ce8fc`
 - implementation_commit: `17403a4dd3cecc98954f25934906bb28f31ceb4c`
 - final_merge_commit: `8a14666e8b2b3c168a6044719db04773f803eab0`
+- app_implementation_commit: `919dd4ce03ed4903718107765bab4a61e51df099`
+- app_package_source_commit: `a455115000bce3f09125fc0b023c8d71bcea39ab`
+- app_closure_head: `9ce6f6a570eff8242b6c09c9a2108ed37f99c419`
 - validation_receipt: `docs/p11-operational-acceptance-validation-receipt.md`
 - layout_decision: `docs/p11-layout-v2-decision.md`
-- next_gate: `app_p11_closure_then_overall_roadmap_closure_or_optional_private_pilot`
+- next_gate: `cleanup_review_or_separately_designed_private_pilot`
 
 ## Closed
 
@@ -27,12 +30,14 @@
 - no user-facing return to the legacy `Step 7` name. `Research Synthesis` is the product
   term; internal `step7-*` identifiers remain compatibility-only.
 
-## Remaining Closure
+## Cross-Project Closure
 
-The local App must pin the exact final Core commit and wheel digest, preserve all existing
-critical flows, publish its P11 validation/closure records and synchronize the overall
-design and execution-plan status. The App remains local-only and has no remote.
+The local App pins the exact runtime Core commit and wheel digest, preserves all existing
+critical flows and records its P11 acceptance at the App closure head above. Exact-wheel
+bootstrap and Discovery browser flows, installed smoke, package/privacy checks and the
+retained R0 shadow probe passed. The App remains local-only and has no remote.
 
-Retained benchmark assets remain governed by the project cleanup ledger. This Core closure
-does not itself authorize deletion before the overall roadmap closure and final dependency
-review.
+The final design and overall execution plan now record `p0_p11_delivered_r3_closed`. This
+does not authorize private-workspace migration or legacy cutover. Retained benchmark assets
+remain governed by the App cleanup ledger; its inventory is complete, but deletion is
+deferred by the user and no path was removed.
