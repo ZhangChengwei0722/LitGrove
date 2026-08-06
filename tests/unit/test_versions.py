@@ -1,7 +1,13 @@
 import pytest
 
+from research_kb import __version__
 from research_kb.contracts.versions import ContractVersion, parse_version, require_supported
 from research_kb.errors import ResearchKBError
+
+
+def test_development_package_identity_is_distinct_from_registered_release() -> None:
+    assert __version__ == "0.1.1.dev2026080601"
+    assert __version__ != "0.1.0"
 
 
 def test_parse_supported_version() -> None:

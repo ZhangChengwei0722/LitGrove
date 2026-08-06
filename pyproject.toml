@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "research-kb-core"
-version = "0.1.0"
+version = "0.1.1.dev2026080601"
 description = "Cross-platform contracts and deterministic CLI primitives for local-first research knowledge bases"
 readme = "README.md"
 license = "Apache-2.0"
@@ -27,7 +27,7 @@ dependencies = [
 
 [project.optional-dependencies]
 pdf = [
-  "pdfplumber>=0.11.9,<0.12",
+  "pdfplumber==0.11.10",
 ]
 test = [
   "build>=1.2,<2",
