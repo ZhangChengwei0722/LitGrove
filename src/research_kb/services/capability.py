@@ -172,6 +172,7 @@ class CapabilityService:
                 "source_asset_runtime": True,
                 "registry_identity_correction": True,
                 "source_adequacy": True,
+                "source_adequacy_resolution": True,
                 "deterministic_trunk": True,
                 "deterministic_intake_application": True,
                 "agent_task_staging": True,

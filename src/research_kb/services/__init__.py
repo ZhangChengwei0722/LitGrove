@@ -63,6 +63,11 @@ from research_kb.services.registry import RegistryService
 from research_kb.services.registry_identity import RegistryIdentityCorrectionService
 from research_kb.services.source_asset import SourceAssetService
 from research_kb.services.source_adequacy import SourceAdequacyMutationResult, SourceAdequacyService
+from research_kb.services.source_adequacy_resolution_application import (
+    PreparedSourceReview,
+    SourceAdequacyResolutionApplicationService,
+    SourceReviewHandle,
+)
 
 __all__ = [
     "AcquiredCandidateIntakeService",
@@ -129,7 +134,10 @@ __all__ = [
     "RegistryIdentityCorrectionService",
     "SourceAssetService",
     "SourceAdequacyMutationResult",
+    "SourceAdequacyResolutionApplicationService",
     "SourceAdequacyService",
+    "PreparedSourceReview",
+    "SourceReviewHandle",
     "WorkspaceBootstrapService",
     "WorkspaceSession",
     "WorkspaceSessionService",

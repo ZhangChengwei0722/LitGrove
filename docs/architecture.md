@@ -12,7 +12,8 @@ Core owns deterministic contracts, validation, path and ID handling, structured 
 
 This is a cumulative architecture record. Historical M2/M3/Px section names identify the
 slice that introduced a contract; they are not the current project gate. P0-P11 is
-delivered at Application Service interface `1.18` and layout `p7d-1`. Core now owns
+delivered, and the current bounded Source Adequacy resolution successor uses Application
+Service interface `1.19` with layout `p7d-1`. Core now owns
 source-watermarked generated Markdown, one-way Obsidian projection, conflict-safe Exchange
 and P11 operational recovery. Arbitrary Markdown import, reverse vault sync and
 unregistered custom views remain outside the delivered boundary.
@@ -908,3 +909,17 @@ The independent operational-density and retained R0 profiles passed their frozen
 budgets. Current layout remains adequate, so P11 opens no layout-v2 migration. See
 `p11-operational-acceptance-validation-receipt.md`, `p11-layout-v2-decision.md` and
 `p11-operational-acceptance-closure-manifest.md`.
+
+## W2 Source Adequacy Resolution Application Service
+
+Application Service interface `1.19` adds a closed, session-bound resolution path for one
+current non-hard `continuous_text_citation` uncertainty. Core derives the exact Task, Job,
+paper, Source Adequacy Profile, source fingerprint and parse identity; the browser receives
+only opaque IDs and closed states. A user may attest `reading_order_reviewed` after the App
+opens the exact revalidated PDF, or request remediation. The decision creates an immutable
+successor Source Adequacy Profile and requires a successor Agent Task before any new semantic
+candidate can be considered.
+
+Hard failures and `no` remain non-overridable. The resolution service cannot approve an
+Agent result, create Evidence or Review Units, expose local paths, or widen the operation to
+figures, tables, formulas or supplementary material.

@@ -15,7 +15,8 @@ candidate input
 Milestone 1B established this deterministic storage lifecycle, and later M3/P0-P11 slices
 extended it through the current R3 product contract. Historical milestone labels below
 identify where a behavior entered the cumulative workflow; they are not active gates.
-P0-P11 is delivered at Application Service interface `1.18` while semantic judgment
+P0-P11 is delivered, and the bounded Source Adequacy resolution successor advances the
+current Application Service interface to `1.19` while semantic judgment
 remains outside Core.
 
 ## Runtime Sequence

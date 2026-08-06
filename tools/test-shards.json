@@ -75,6 +75,7 @@
       "tests/unit/test_paper_status_service.py",
       "tests/unit/test_parse_read_service.py",
       "tests/unit/test_parse_service.py",
+      "tests/unit/test_source_adequacy_resolution_application_service.py",
       "tests/unit/test_source_adequacy_service.py"
     ],
     "application-semantic-a3a-source": [

@@ -1839,6 +1839,26 @@ class AgentTaskApplicationService:
             job,
             head["input_basis"]["paper_id"],
         )
+        remediation = self._explicit_adequacy_remediation(
+            layout,
+            job_id=job["job_id"],
+            paper_id=head["input_basis"]["paper_id"],
+            operations=PRIMARY_OPERATIONS,
+        )
+        if remediation is not None:
+            gate, remediation_profile_id = remediation
+            blocked_job, wait_writes = self._transition_to_adequacy_wait(
+                jobs,
+                job,
+                gate,
+                profile_ids=[*[item["profile_id"] for item in profiles], remediation_profile_id],
+            )
+            return self._blocked_result(
+                blocked_job,
+                gate,
+                persistent_writes=profile_writes + wait_writes,
+                task=head,
+            )
         gate = SourceAdequacyService(layout).gate(
             paper_id=head["input_basis"]["paper_id"],
             requested_operation="basic_paper_card",
@@ -1992,6 +2012,26 @@ class AgentTaskApplicationService:
             job,
             head["input_basis"]["paper_id"],
         )
+        remediation = self._explicit_adequacy_remediation(
+            layout,
+            job_id=job["job_id"],
+            paper_id=head["input_basis"]["paper_id"],
+            operations=REVIEW_OPERATIONS,
+        )
+        if remediation is not None:
+            gate, remediation_profile_id = remediation
+            blocked_job, wait_writes = self._transition_to_adequacy_wait(
+                jobs,
+                job,
+                gate,
+                profile_ids=[*[item["profile_id"] for item in profiles], remediation_profile_id],
+            )
+            return self._blocked_result(
+                blocked_job,
+                gate,
+                persistent_writes=profile_writes + wait_writes,
+                task=head,
+            )
         gate = SourceAdequacyService(layout).gate(
             paper_id=head["input_basis"]["paper_id"],
             requested_operation="basic_review_memory",
@@ -2388,6 +2428,40 @@ class AgentTaskApplicationService:
             profiles.append(result.profile)
             writes += int(result.transaction is not None)
         return profiles, writes
+
+    @staticmethod
+    def _explicit_adequacy_remediation(
+        layout: WorkspaceLayout,
+        *,
+        job_id: str,
+        paper_id: str,
+        operations: tuple[str, ...],
+    ) -> tuple[dict[str, Any], str] | None:
+        entries = load_workspace_entries(layout)
+        profiles = records_of_kind(entries, "source-adequacy-profile")
+        for operation in operations:
+            candidates = [
+                item
+                for item in profiles
+                if item["job_id"] == job_id
+                and item["paper_id"] == paper_id
+                and item["requested_operation"] == operation
+                and profile_freshness(layout, entries, item)["state"] == "current"
+            ]
+            if not candidates:
+                continue
+            latest = max(candidates, key=lambda item: (item["assessed_at"], item["profile_id"]))
+            decision = latest.get("user_decision")
+            if decision is None or decision.get("decision") != "remediation_required":
+                continue
+            return (
+                SourceAdequacyService(layout).gate(
+                    paper_id=paper_id,
+                    requested_operation=operation,
+                ),
+                latest["profile_id"],
+            )
+        return None
 
     def _ensure_primary_agent_wait(
         self,

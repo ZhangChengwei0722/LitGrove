@@ -29,8 +29,8 @@ App 下载或仓库链接。
 
 ## 当前状态
 
-P0-P11 路线图已经交付，当前 package version 为 `0.1.0`，公共 Application Service
-interface 为 `1.18`，workspace layout 为 `p7d-1`。已验证能力覆盖论文导入、解析、Source Adequacy、Primary/Review
+P0-P11 路线图已经交付，当前开发 package version 为 `0.1.1.dev2026080602`，公共
+Application Service interface 为 `1.19`，workspace layout 为 `p7d-1`。已验证能力覆盖论文导入、解析、Source Adequacy、Primary/Review
 语义提交、阅读与 Evidence 回源、发现、研究组织、Research Synthesis、Obsidian
 generated views、Exchange、备份恢复和 operational maintenance。
 
@@ -46,7 +46,7 @@ validation 目前是 best-effort，除非后续 milestone 单独要求。
 | Source | portable source reference、SHA-256 identity、Source Asset manifestation 和显式 relink |
 | Registry | Paper identity、duplicate link、merge/split/alias/archive/tombstone correction |
 | Parse | synthetic test adapter、`pdfplumber` 和 `pdfplumber-text-flow` 明确适配器 |
-| Source Adequacy | 按具体用途判断解析结果是否支持阅读、引用、图表、公式或补充材料任务 |
+| Source Adequacy | 按具体用途判断解析结果是否支持阅读、引用、图表、公式或补充材料任务，并提供受限的连续正文阅读顺序复核 contract |
 | Scientific records | Paper Card、canonical Evidence、review queue、background-only Review Memory 和 revision lineage |
 | Agent Task | privacy payload、CAS lease、staging、escaped preview、revision/reject/approve contract |
 | Research organization | Direction、Field Map Entry、Question Mapping、Question Screening 和 Tag |
