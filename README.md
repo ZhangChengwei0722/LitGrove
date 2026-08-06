@@ -1,4 +1,4 @@
-# Research KB Core：可追溯科研知识库核心
+# LitGrove：可自动生长的可溯源科研知识库
 
 [![CI](https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/actions/workflows/ci.yml/badge.svg)](https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/actions/workflows/ci.yml)
 [![Dependency security](https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/actions/workflows/dependency-security.yml/badge.svg)](https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/actions/workflows/dependency-security.yml)
