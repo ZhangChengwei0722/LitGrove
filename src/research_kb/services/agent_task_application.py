@@ -2392,7 +2392,6 @@ class AgentTaskApplicationService:
             transaction_manager=TransactionManager(layout, clock=self.clock),
             id_allocator=self.id_allocator,
         )
-        profiles: list[dict[str, Any]] = []
         writes = 0
         for operation in PRIMARY_OPERATIONS:
             result = service.assess(
@@ -2401,9 +2400,13 @@ class AgentTaskApplicationService:
                 requested_operation=operation,
                 actor="cli",
             )
-            profiles.append(result.profile)
             writes += int(result.transaction is not None)
-        return profiles, writes
+        return self._current_operation_profiles(
+            layout,
+            job_id=job["job_id"],
+            paper_id=paper_id,
+            operations=PRIMARY_OPERATIONS,
+        ), writes
 
     def _assess_review_operations(
         self,
@@ -2416,7 +2419,6 @@ class AgentTaskApplicationService:
             transaction_manager=TransactionManager(layout, clock=self.clock),
             id_allocator=self.id_allocator,
         )
-        profiles: list[dict[str, Any]] = []
         writes = 0
         for operation in REVIEW_OPERATIONS:
             result = service.assess(
@@ -2425,9 +2427,38 @@ class AgentTaskApplicationService:
                 requested_operation=operation,
                 actor="cli",
             )
-            profiles.append(result.profile)
             writes += int(result.transaction is not None)
-        return profiles, writes
+        return self._current_operation_profiles(
+            layout,
+            job_id=job["job_id"],
+            paper_id=paper_id,
+            operations=REVIEW_OPERATIONS,
+        ), writes
+
+    @staticmethod
+    def _current_operation_profiles(
+        layout: WorkspaceLayout,
+        *,
+        job_id: str,
+        paper_id: str,
+        operations: tuple[str, ...],
+    ) -> list[dict[str, Any]]:
+        entries = load_workspace_entries(layout)
+        profiles = records_of_kind(entries, "source-adequacy-profile")
+        selected: list[dict[str, Any]] = []
+        for operation in operations:
+            candidates = [
+                item
+                for item in profiles
+                if item["job_id"] == job_id
+                and item["paper_id"] == paper_id
+                and item["requested_operation"] == operation
+                and profile_freshness(layout, entries, item)["state"] == "current"
+            ]
+            if not candidates:
+                raise _conflict(job_id, "Source Adequacy assessment did not produce a current Profile")
+            selected.append(max(candidates, key=lambda item: (item["assessed_at"], item["profile_id"])))
+        return selected
 
     @staticmethod
     def _explicit_adequacy_remediation(

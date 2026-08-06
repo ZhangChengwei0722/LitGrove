@@ -29,7 +29,7 @@ App 下载或仓库链接。
 
 ## 当前状态
 
-P0-P11 路线图已经交付，当前开发 package version 为 `0.1.1.dev2026080602`，公共
+P0-P11 路线图已经交付，当前开发 package version 为 `0.1.1.dev2026080603`，公共
 Application Service interface 为 `1.19`，workspace layout 为 `p7d-1`。已验证能力覆盖论文导入、解析、Source Adequacy、Primary/Review
 语义提交、阅读与 Evidence 回源、发现、研究组织、Research Synthesis、Obsidian
 generated views、Exchange、备份恢复和 operational maintenance。

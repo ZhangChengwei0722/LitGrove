@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from research_kb.errors import ResearchKBError
+from research_kb.guardian import GuardianService
 from research_kb.services import (
     AgentTaskApplicationService,
     DeterministicIntakeApplicationService,
@@ -154,6 +155,37 @@ def test_accept_decision_requires_closed_attestation_and_refreshes_primary_task(
     assert lost_response_replay["persistent_writes"] == 0
     assert refresh_replay["persistent_writes"] == 0
     assert refresh_replay["successor_task"] == refreshed["successor_task"]
+
+
+@pytest.mark.parametrize("route", ["primary", "review"])
+def test_accept_decision_profile_is_consumed_by_refreshed_pipeline_job(
+    tmp_path: Path,
+    route: str,
+) -> None:
+    layout, session, agent, task = _build_uncertain_task(tmp_path, route=route)
+    service = SourceAdequacyResolutionApplicationService(clock=lambda: DECISION_TIME)
+    context = service.show_context(session, task["task_id"])
+    decided = service.decide(
+        session,
+        task["task_id"],
+        _expected(task),
+        context["basis_profile_id"],
+        "accept_uncertainty",
+        "reading_order_reviewed",
+    )
+
+    if route == "primary":
+        agent.refresh_primary_task(session, task["task_id"], _expected(task))
+    else:
+        agent.refresh_review_task(session, task["task_id"], _expected(task))
+
+    current_job = PipelineJobService(layout).show(task["job_id"])["current_state"]
+    assert decided["successor_profile_id"] in current_job["output_refs"]
+    assert not any(
+        item["code"] == "RKBC-018"
+        and item["record_ref"] == decided["successor_profile_id"]
+        for item in GuardianService(layout).check().report["findings"]
+    )
 
 
 def test_remediation_decision_routes_review_job_without_accept_attestation(tmp_path: Path) -> None:
