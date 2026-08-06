@@ -49,7 +49,8 @@
       "tests/unit/test_record_service.py",
       "tests/unit/test_registry_service.py",
       "tests/unit/test_versions.py",
-      "tests/unit/test_workspace.py"
+      "tests/unit/test_workspace.py",
+      "tests/unit/test_workspace_storage.py"
     ],
     "storage-recovery-b1": [
       "tests/unit/test_guardian_finding_disposition_service.py",
