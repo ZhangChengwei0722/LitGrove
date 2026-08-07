@@ -52,6 +52,10 @@ from research_kb.services.step7_render import WorkspaceStep7ReadingViewService
 from research_kb.services.step7_view import Step7ReadingViewService
 from research_kb.services.workspace_session import WorkspaceSession, WorkspaceSessionService
 from research_kb.services.workspace_storage import WorkspaceStorageInspectionService, WorkspaceStorageRoots
+from research_kb.services.workspace_adoption import (
+    WorkspaceAdoptionApplicationService,
+    WorkspaceAdoptionInspection,
+)
 from research_kb.services.question_mapping import QuestionMappingService
 from research_kb.services.question_screening import QuestionScreeningService
 from research_kb.services.question_screening_application import QuestionScreeningApplicationService
@@ -144,6 +148,8 @@ __all__ = [
     "PreparedSourceReview",
     "SourceReviewHandle",
     "WorkspaceBootstrapService",
+    "WorkspaceAdoptionApplicationService",
+    "WorkspaceAdoptionInspection",
     "WorkspaceMaterializationApplicationService",
     "WorkspaceSession",
     "WorkspaceSessionService",

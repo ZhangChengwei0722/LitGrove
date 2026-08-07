@@ -56,6 +56,7 @@ from research_kb.storage.transactions import (
     TransactionManager,
     TransactionResult,
     expected_journal_event,
+    transaction_integrity_diagnostics,
 )
 from research_kb.workspace import WorkspaceLayout
 
@@ -1234,54 +1235,15 @@ class GuardianService:
         diagnostics: list[Diagnostic] = []
         if not self.layout.transactions_root.exists():
             return diagnostics
-        events_by_id: dict[str, list[dict[str, Any]]] = {}
-        for event in process_events:
-            events_by_id.setdefault(event["event_id"], []).append(event)
         validation = RecordValidationSession("transaction-journal", actor="stored")
-        for path in sorted(self.layout.transactions_root.glob("*.json"), key=lambda item: item.name):
-            try:
-                journal = read_json_document(path, record_kind="transaction-journal")
-                journal_diagnostics = validation.validate(journal)
-            except ResearchKBError as error:
-                diagnostics.append(error.diagnostic)
-                continue
-            diagnostics.extend(journal_diagnostics)
-            if journal_diagnostics:
-                continue
-            if journal["phase"] != "complete":
-                diagnostics.append(
-                    Diagnostic(
-                        INCOMPLETE_TRANSACTION,
-                        "transaction-journal",
-                        journal["event_id"],
-                        "/phase",
-                        f"transaction journal is not complete: {journal['phase']}",
-                    )
-                )
-                continue
-            matching_events = events_by_id.get(journal["event_id"], [])
-            if len(matching_events) != 1:
-                diagnostics.append(
-                    Diagnostic(
-                        INCOMPLETE_TRANSACTION,
-                        "transaction-journal",
-                        journal["event_id"],
-                        "/event_id",
-                        f"completed transaction must have exactly one process event; found {len(matching_events)}",
-                    )
-                )
-                continue
-            expected_event = expected_journal_event(journal, journal["result"])
-            if matching_events[0] != expected_event:
-                diagnostics.append(
-                    Diagnostic(
-                        INCOMPLETE_TRANSACTION,
-                        "transaction-journal",
-                        journal["event_id"],
-                        "/event_id",
-                        "completed transaction process event does not match its journal",
-                    )
-                )
+        diagnostics.extend(
+            transaction_integrity_diagnostics(
+                self.layout,
+                sorted(self.layout.transactions_root.glob("*.json"), key=lambda item: item.name),
+                process_events,
+                validation=validation,
+            )
+        )
         return diagnostics
 
     def _operational_archive_diagnostics(

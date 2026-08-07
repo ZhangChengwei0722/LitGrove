@@ -1,12 +1,19 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from research_kb.contracts.validator import RecordValidationSession, validate_record
-from research_kb.errors import INCOMPLETE_TRANSACTION, WRITE_CONFLICT, Diagnostic, ResearchKBError
+from research_kb.errors import (
+    INCOMPLETE_TRANSACTION,
+    PATH_ESCAPE,
+    WORKSPACE_LAYOUT_CONFLICT,
+    WRITE_CONFLICT,
+    Diagnostic,
+    ResearchKBError,
+)
 from research_kb.identifiers import Namespace, allocate_id
 from research_kb.process_events import Clock, append_process_event, build_process_event, read_process_events, timestamp, utc_now
 from research_kb.storage.json_io import (
@@ -333,3 +340,230 @@ def expected_journal_event(journal: dict[str, Any], result: str) -> dict[str, An
     if journal.get("job_id") is not None:
         event["job_id"] = journal["job_id"]
     return event
+
+
+_TRANSACTION_EXACT_TARGETS = {
+    "registry": "registry/papers.jsonl",
+    "source_assets": "registry/source_assets.jsonl",
+    "identity_corrections": "registry/identity_corrections.jsonl",
+    "review_queue": "review_queue/items.jsonl",
+    "guardian_reports": "guardian/reports.jsonl",
+    "guardian_finding_dispositions": "guardian/finding_dispositions.jsonl",
+    "pipeline_jobs": "process/jobs.jsonl",
+    "source_adequacy": "process/source_adequacy.jsonl",
+    "question_mappings": "questions/mappings.jsonl",
+    "discovery_candidates": "discovery/candidates.jsonl",
+    "agent_tasks": "process/agent_tasks.jsonl",
+    "maintenance_work": "process/maintenance.jsonl",
+    "trusted_parse_authorities": "process/trusted_parse_authorities.jsonl",
+    "step7_synthesis": "step7/synthesis.jsonl",
+    "step7_review_angles": "step7/review_angles.jsonl",
+    "step7_insights": "step7/insights.jsonl",
+    "step7_cross_views": "step7/cross_views.jsonl",
+}
+
+_TRANSACTION_PATTERN_TARGETS = {
+    "parsed_pages": ("parse/by_paper/", ".pages.jsonl"),
+    "paper_cards": ("paper_cards/by_paper/", ".card.json"),
+    "evidence": ("evidence/by_paper/", ".evidence.jsonl"),
+    "review_memories": ("review_memories/by_paper/", ".review.json"),
+    "primary_bundles": ("primary_bundles/by_paper/", ".primary.json"),
+    "review_bundles": ("review_bundles/by_paper/", ".review-bundle.json"),
+    "organization_directions": ("organization/directions/by_id/", ".direction-bundle.json"),
+    "organization_field_map": ("organization/field_map/by_id/", ".field-map-bundle.json"),
+    "organization_questions": ("organization/questions/by_id/", ".question-revision-bundle.json"),
+    "organization_tags": ("organization/tags/by_id/", ".tag-bundle.json"),
+    "organization_tag_links": ("organization/tag_links/by_id/", ".tag-link-bundle.json"),
+    "organization_screening_criteria": (
+        "organization/screening_criteria/by_id/",
+        ".screening-criteria-bundle.json",
+    ),
+    "organization_screening_decisions": (
+        "organization/screening_decisions/by_id/",
+        ".screening-decision-bundle.json",
+    ),
+}
+
+
+def transaction_target_matches_store(target_store: str, relative_path: str) -> bool:
+    """Return whether a journal target is bound to its declared store."""
+    exact = _TRANSACTION_EXACT_TARGETS.get(target_store)
+    if exact is not None:
+        return relative_path == exact
+    pattern = _TRANSACTION_PATTERN_TARGETS.get(target_store)
+    if pattern is None:
+        return False
+    prefix, suffix = pattern
+    remainder = relative_path[len(prefix) :] if relative_path.startswith(prefix) else ""
+    return bool(remainder) and "/" not in remainder and remainder.endswith(suffix)
+
+
+def transaction_integrity_diagnostics(
+    layout: WorkspaceLayout,
+    journal_path: Path | Iterable[Path],
+    process_events: list[dict[str, Any]],
+    *,
+    validation: RecordValidationSession | None = None,
+) -> list[Diagnostic]:
+    """Validate completed transaction journals without changing workspace state.
+
+    A target may have several completed journals. Older journals describe an
+    intermediate target state, so their ``after_sha256`` must chain into the
+    next journal rather than equal the current file digest.
+    """
+    journal_paths = (
+        [journal_path]
+        if isinstance(journal_path, Path)
+        else sorted((Path(path) for path in journal_path), key=lambda path: path.name)
+    )
+    diagnostics: list[Diagnostic] = []
+    completed: list[tuple[Path, dict[str, Any], int | None, Path]] = []
+    for path in journal_paths:
+        try:
+            journal = read_json_document(path, record_kind="transaction-journal")
+            journal_diagnostics = (
+                validation.validate(journal)
+                if validation is not None
+                else validate_record("transaction-journal", journal, actor="stored")
+            )
+        except ResearchKBError as error:
+            diagnostics.append(error.diagnostic)
+            continue
+        if journal_diagnostics:
+            diagnostics.extend(journal_diagnostics)
+            continue
+
+        event_id = journal["event_id"]
+        if path.name != f"{event_id}.json":
+            diagnostics.append(
+                Diagnostic(
+                    WORKSPACE_LAYOUT_CONFLICT,
+                    "transaction-journal",
+                    event_id,
+                    "/event_id",
+                    "transaction journal filename does not match event_id",
+                )
+            )
+        if not transaction_target_matches_store(journal["target_store"], journal["target_relative_path"]):
+            diagnostics.append(
+                Diagnostic(
+                    INCOMPLETE_TRANSACTION,
+                    "transaction-journal",
+                    event_id,
+                    "/target_relative_path",
+                    "transaction target path does not match target_store",
+                )
+            )
+        if journal["phase"] != "complete" or journal["result"] not in {"success", "failure"}:
+            diagnostics.append(
+                Diagnostic(
+                    INCOMPLETE_TRANSACTION,
+                    "transaction-journal",
+                    event_id,
+                    "/phase",
+                    f"transaction journal is not complete: {journal['phase']}",
+                )
+            )
+            continue
+
+        matching_events = [
+            (index, item)
+            for index, item in enumerate(process_events)
+            if item.get("event_id") == event_id
+        ]
+        event_position = matching_events[0][0] if len(matching_events) == 1 else None
+        if len(matching_events) != 1:
+            diagnostics.append(
+                Diagnostic(
+                    INCOMPLETE_TRANSACTION,
+                    "transaction-journal",
+                    event_id,
+                    "/event_id",
+                    f"completed transaction must have exactly one process event; found {len(matching_events)}",
+                )
+            )
+        elif matching_events[0][1] != expected_journal_event(journal, journal["result"]):
+            diagnostics.append(
+                Diagnostic(
+                    INCOMPLETE_TRANSACTION,
+                    "transaction-journal",
+                    event_id,
+                    "/event_id",
+                    "completed transaction process event does not match its journal",
+                )
+            )
+
+        try:
+            target = layout.ensure_writable_target(
+                layout.knowledge_root.joinpath(*journal["target_relative_path"].split("/"))
+            )
+        except (OSError, ResearchKBError) as error:
+            diagnostic = (
+                error.diagnostic
+                if isinstance(error, ResearchKBError)
+                else Diagnostic(
+                    PATH_ESCAPE,
+                    "transaction-journal",
+                    event_id,
+                    "/target_relative_path",
+                    "transaction target could not be inspected safely",
+                )
+            )
+            diagnostics.append(diagnostic)
+            continue
+        completed.append((path, journal, event_position, target))
+
+    grouped: dict[tuple[str, str], list[tuple[Path, dict[str, Any], int | None, Path]]] = {}
+    for item in completed:
+        grouped.setdefault((item[1]["target_store"], item[1]["target_relative_path"]), []).append(item)
+    for items in grouped.values():
+        items.sort(
+            key=lambda item: (
+                item[2] is None,
+                item[2] if item[2] is not None else 0,
+                item[1]["created_at"],
+                item[0].name,
+            )
+        )
+        previous_digest: str | None | object = _EXPECTED_BEFORE_UNSET
+        for _path, journal, _event_position, _target in items:
+            if previous_digest is not _EXPECTED_BEFORE_UNSET and journal["before_sha256"] != previous_digest:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "transaction-journal",
+                        journal["event_id"],
+                        "/before_sha256",
+                        "completed transaction target digest chain does not match its predecessor",
+                    )
+                )
+            previous_digest = (
+                journal["after_sha256"]
+                if journal["result"] == "success"
+                else journal["before_sha256"]
+            )
+        latest_path, latest, _event_position, latest_target = items[-1]
+        try:
+            current_digest = file_sha256(latest_target)
+        except OSError:
+            diagnostics.append(
+                Diagnostic(
+                    INCOMPLETE_TRANSACTION,
+                    "transaction-journal",
+                    latest["event_id"],
+                    "/target_relative_path",
+                    "transaction target could not be inspected safely",
+                )
+            )
+            continue
+        if current_digest != previous_digest:
+            diagnostics.append(
+                Diagnostic(
+                    INCOMPLETE_TRANSACTION,
+                    "transaction-journal",
+                    latest["event_id"],
+                    "/target_relative_path",
+                    "transaction target does not match the completed journal",
+                )
+            )
+    return diagnostics

@@ -125,7 +125,7 @@ def main() -> int:
             raise SystemExit("base wheel capability report lacks the Europe PMC connector")
         if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["approved_discovery_candidate_handoff"] is not True or capability["features"]["legal_oa_resolution"] is not True or capability["features"]["explicit_oa_acquisition"] is not True or capability["features"]["manuscript_projection"] is not True or capability["features"]["pipeline_jobs"] is not True or capability["features"]["source_asset_runtime"] is not True or capability["features"]["registry_identity_correction"] is not True or capability["features"]["source_adequacy"] is not True or capability["features"]["deterministic_trunk"] is not True or capability["features"]["deterministic_intake_application"] is not True or capability["features"]["obsidian_generated_views"] is not True:
             raise SystemExit("base wheel capability report lacks Review Memory, Step 7 or discovery runtime")
-        if not all(capability["features"][name] for name in ("workspace_materialization", "trusted_parse_authority", "supervised_pdf_parse")):
+        if not all(capability["features"][name] for name in ("workspace_materialization", "workspace_adoption", "trusted_parse_authority", "supervised_pdf_parse")):
             raise SystemExit("base wheel capability report lacks B1 Core services")
         if "trusted-parse-authority" not in capability["operational_record_kinds"]:
             raise SystemExit("base wheel capability report lacks trusted Parse authority records")
@@ -267,6 +267,7 @@ def main() -> int:
         workspace_root = Path(temporary) / "synthetic-workspace"
         sources = workspace_root / "sources"
         sources.mkdir(parents=True)
+        (sources / "inbox").mkdir()
         profile = {
             "contract_version": "1.0",
             "domain_profile": {"id": "wheel-domain", "name": "Synthetic Wheel Domain", "version": "1.0"},
@@ -295,7 +296,7 @@ def main() -> int:
                 "source_roots": [
                     {"root_id": "wheel-sources", "path": "./sources", "read_only_assets": True}
                 ],
-                "local_inbox": "./inbox",
+                "local_inbox": "./sources/inbox",
                 "domain_profile": "./domain-profile.json",
             },
             "runtime": {
@@ -334,6 +335,25 @@ def main() -> int:
         marker = json.loads((workspace_root / "knowledge" / ".research-kb" / "workspace.json").read_text(encoding="utf-8"))
         if marker["layout_contract_version"] != "p7d-1":
             raise SystemExit("wheel workspace did not initialize at p7d-1")
+        adoption_before = _tree_snapshot(workspace_root)
+        subprocess.run(
+            [
+                str(python),
+                "-c",
+                (
+                    "from pathlib import Path; "
+                    "from research_kb.services import WorkspaceAdoptionApplicationService; "
+                    f"inspection = WorkspaceAdoptionApplicationService().inspect(Path({str(config_path)!r})); "
+                    "assert inspection.descriptor['admissible'] is True; "
+                    "assert inspection.descriptor['persistent_writes'] == 0; "
+                    "assert inspection.descriptor['canonical_scientific_write'] is False"
+                ),
+            ],
+            cwd=temporary,
+            check=True,
+        )
+        if _tree_snapshot(workspace_root) != adoption_before:
+            raise SystemExit("wheel workspace adoption changed managed workspace files")
         if not (workspace_root / "knowledge" / "questions").is_dir():
             raise SystemExit("wheel workspace lacks questions directory")
         if (workspace_root / "knowledge" / "questions" / "mappings.jsonl").exists():
@@ -990,10 +1010,10 @@ def main() -> int:
                     "WorkspaceSessionService, SourceAssetService, RegistryIdentityCorrectionService, "
                     "AgentTaskApplicationService, DeterministicIntakeApplicationService, ReadingApplicationService, "
                     "DeterministicTrunkService, ExchangeApplicationService, ObsidianGeneratedViewsApplicationService, PipelineJobService; "
-                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.20'; "
+                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.21'; "
                     f"session = WorkspaceSessionService({{'wheel': Path({str(config_path)!r})}}).open('wheel'); "
                     "limits = DeterministicIntakeApplicationService().limits(session); "
-                    "assert limits['interface_version'] == '1.20'; "
+                    "assert limits['interface_version'] == '1.21'; "
                     "assert limits['ingress_modes'] == ['upload', 'watched_inbox']; "
                     "obsidian = ObsidianGeneratedViewsApplicationService(); "
                     "assert obsidian.limits(session)['max_status_page_size'] == 100; "
@@ -1102,7 +1122,7 @@ def main() -> int:
                     "assignment = tags.set_assignment(session, {'tag_id':tag['tag']['tag_id'],'target_kind':'paper','target_id':paper['paper_id'],'state':'assigned','receipt_id':'installed-wheel-tag-link'}); "
                     "assert assignment['result'] == 'committed' and tags.show_tag(session, tag['tag']['tag_id'])['assignments'][0]['target_id'] == paper['paper_id'], 'tag assignment'; "
                     "source_access = ReadingApplicationService().prepare_evidence_source(session, evidence_id); "
-                    "assert source_access.descriptor['application_service_interface_version'] == '1.20', 'source interface'; "
+                    "assert source_access.descriptor['application_service_interface_version'] == '1.21', 'source interface'; "
                     "assert source_access.descriptor['media_type'] == 'application/pdf' and source_access.descriptor['persistent_writes'] == 0, 'source descriptor'; "
                     "assert 'source_ref' not in str(source_access.descriptor) and 'fingerprint' not in str(source_access.descriptor), 'source redaction'; "
                     "opened = ReadingApplicationService().open_evidence_source(session, source_access.handle); "

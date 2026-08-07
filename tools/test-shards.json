@@ -57,6 +57,7 @@
       "tests/unit/test_guardian.py",
       "tests/unit/test_local_source_intake_service.py",
       "tests/unit/test_operational_maintenance_service.py",
+      "tests/unit/test_workspace_adoption_application_service.py",
       "tests/unit/test_workspace_materialization_recovery.py",
       "tests/unit/test_workspace_materialization_service.py"
     ],

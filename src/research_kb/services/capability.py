@@ -175,6 +175,7 @@ class CapabilityService:
                 "source_adequacy": True,
                 "source_adequacy_resolution": True,
                 "workspace_materialization": True,
+                "workspace_adoption": True,
                 "trusted_parse_authority": True,
                 "supervised_pdf_parse": True,
                 "deterministic_trunk": True,

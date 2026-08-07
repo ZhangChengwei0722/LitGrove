@@ -698,9 +698,13 @@ def _iter_managed_descendants(
                     pending.append((path, relative_parts))
 
 
-def _path_identity(path: Path) -> str:
-    normalized = unicodedata.normalize("NFC", str(path.resolve())).replace("\\", "/")
+def canonical_path_identity(path: Path) -> str:
+    normalized = unicodedata.normalize("NFC", str(path.resolve(strict=False))).replace("\\", "/")
     return normalized.casefold() if os.name == "nt" else normalized
+
+
+def _path_identity(path: Path) -> str:
+    return canonical_path_identity(path)
 
 
 def _normalized_name(value: str) -> str:

@@ -243,6 +243,51 @@ def test_guardian_detects_tampered_event_for_completed_journal(tmp_path: Path) -
     assert "RKBC-018" in {item["code"] for item in result.report["findings"]}
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("target_store", "review_queue"),
+        ("target_relative_path", "review_queue/items.jsonl"),
+        ("after_sha256", "0" * 64),
+    ],
+)
+def test_guardian_detects_tampered_completed_journal_integrity_fields(
+    tmp_path: Path,
+    field: str,
+    value: str,
+) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    _register_source(layout)
+    journal_path = next(layout.transactions_root.glob("*.json"))
+    journal = read_json_document(journal_path, record_kind="transaction-journal")
+    journal[field] = value
+    journal_path.write_bytes(serialize_json(journal))
+    before = _tree_hashes(layout.knowledge_root)
+
+    result = GuardianService(layout).check()
+
+    assert result.report["status"] == "failure"
+    assert "RKBC-018" in {item["code"] for item in result.report["findings"]}
+    assert _tree_hashes(layout.knowledge_root) == before
+
+
+def test_guardian_detects_completed_journal_filename_tampering_without_write(
+    tmp_path: Path,
+) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    _register_source(layout)
+    journal_path = next(layout.transactions_root.glob("*.json"))
+    renamed = layout.transactions_root / "mismatched.json"
+    journal_path.rename(renamed)
+    before = _tree_hashes(layout.knowledge_root)
+
+    result = GuardianService(layout).check()
+
+    assert result.report["status"] == "failure"
+    assert "RKBC-021" in {item["code"] for item in result.report["findings"]}
+    assert _tree_hashes(layout.knowledge_root) == before
+
+
 def test_guardian_reports_stale_question_mapping_without_rewriting_it(tmp_path: Path) -> None:
     layout = make_runtime_workspace(tmp_path)
     prepared = _prepare_paper(layout, "mapping-staleness.txt")

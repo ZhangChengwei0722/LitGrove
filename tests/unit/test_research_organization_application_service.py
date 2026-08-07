@@ -47,7 +47,7 @@ def test_session_bound_application_lists_safe_direction_and_empty_questions(tmp_
     assert "links" not in listed["directions"][0]
     assert shown["direction"]["links_truncated"] is False
     assert questions["questions"] == []
-    assert listed["application_service_interface_version"] == "1.20"
+    assert listed["application_service_interface_version"] == "1.21"
     assert listed["persistent_writes"] == 0
     assert listed["canonical_scientific_write"] is False
     assert not _forbidden_keys(listed)

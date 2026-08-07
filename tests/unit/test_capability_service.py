@@ -10,7 +10,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
         "status": "success",
         "interface_version": "1.0",
         "core": {
-            "version": "0.1.1.dev2026080702",
+            "version": "0.1.1.dev2026080801",
             "contract_versions": ["1.0"],
                 "layout_versions": ["p7d-1"],
         },
@@ -150,6 +150,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "source_adequacy": True,
             "source_adequacy_resolution": True,
             "workspace_materialization": True,
+            "workspace_adoption": True,
             "trusted_parse_authority": True,
             "supervised_pdf_parse": True,
             "deterministic_trunk": True,

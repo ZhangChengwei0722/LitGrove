@@ -35,7 +35,7 @@ def test_tag_application_create_list_show_and_no_change(tmp_path: Path) -> None:
     })
 
     assert created["result"] == "committed"
-    assert created["application_service_interface_version"] == "1.20"
+    assert created["application_service_interface_version"] == "1.21"
     assert created["canonical_scientific_write"] is False
     assert listed["tags"] == [created["tag"]]
     assert shown["assignments"] == []
