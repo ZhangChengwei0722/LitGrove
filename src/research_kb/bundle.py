@@ -186,6 +186,11 @@ def load_workspace_entries(
         "profile_id",
     )
     add_jsonl(
+        layout.trusted_parse_authorities_path,
+        "trusted-parse-authority",
+        "state_id",
+    )
+    add_jsonl(
         layout.agent_tasks_path,
         "agent-task-state",
         "state_id",

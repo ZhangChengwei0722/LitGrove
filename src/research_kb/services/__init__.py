@@ -4,6 +4,7 @@ from research_kb.services.acquired_candidate_intake import AcquiredCandidateInta
 from research_kb.services.application_validation import ContractValidationService, JsonlValidationService
 from research_kb.services.agent_task_application import AgentTaskApplicationService
 from research_kb.services.bootstrap import WorkspaceBootstrapService
+from research_kb.services.workspace_materialization import WorkspaceMaterializationApplicationService
 from research_kb.services.catalog import CatalogCapabilityService, CatalogProjectionService, CatalogQueryService
 from research_kb.services.capability import CapabilityService
 from research_kb.services.compatibility import CompatibilityAdapterRegistry, CompatibilityInspectionService
@@ -29,6 +30,8 @@ from research_kb.services.obsidian_generated_views_application import (
 )
 from research_kb.services.parse import ParseService
 from research_kb.services.parse_application import ParseAdapterRegistry, ParseApplicationService
+from research_kb.services.supervised_parse_application import SupervisedParseApplicationService
+from research_kb.services.trusted_parse_authority import TrustedParseAuthorityService
 from research_kb.services.parse_read import ParseReadService
 from research_kb.services.paper_context import PaperContextService
 from research_kb.services.pipeline_job import PipelineJobService
@@ -105,6 +108,8 @@ __all__ = [
     "ParseService",
     "ParseAdapterRegistry",
     "ParseApplicationService",
+    "SupervisedParseApplicationService",
+    "TrustedParseAuthorityService",
     "ParseReadService",
     "PaperContextService",
     "PipelineJobService",
@@ -139,6 +144,7 @@ __all__ = [
     "PreparedSourceReview",
     "SourceReviewHandle",
     "WorkspaceBootstrapService",
+    "WorkspaceMaterializationApplicationService",
     "WorkspaceSession",
     "WorkspaceSessionService",
     "WorkspaceStorageInspectionService",

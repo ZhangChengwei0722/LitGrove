@@ -646,6 +646,7 @@ def _journal_target_matches_store(target_store: str, relative_path: str) -> bool
         "step7_cross_views": "step7/cross_views.jsonl",
         "agent_tasks": "process/agent_tasks.jsonl",
         "maintenance_work": "process/maintenance.jsonl",
+        "trusted_parse_authorities": "process/trusted_parse_authorities.jsonl",
     }
     if target_store in exact:
         return relative_path == exact[target_store]

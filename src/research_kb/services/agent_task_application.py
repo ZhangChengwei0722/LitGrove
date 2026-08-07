@@ -2457,7 +2457,7 @@ class AgentTaskApplicationService:
             ]
             if not candidates:
                 raise _conflict(job_id, "Source Adequacy assessment did not produce a current Profile")
-            selected.append(max(candidates, key=lambda item: (item["assessed_at"], item["profile_id"])))
+            selected.append(_effective_adequacy_profile(candidates, job_id))
         return selected
 
     @staticmethod
@@ -2481,7 +2481,7 @@ class AgentTaskApplicationService:
             ]
             if not candidates:
                 continue
-            latest = max(candidates, key=lambda item: (item["assessed_at"], item["profile_id"]))
+            latest = _effective_adequacy_profile(candidates, job_id)
             decision = latest.get("user_decision")
             if decision is None or decision.get("decision") != "remediation_required":
                 continue
@@ -3418,17 +3418,18 @@ class AgentTaskApplicationService:
         if origin_job_id is None:
             raise _request_error(job["state_id"], "/input_basis/origin_job_id", "Semantic Task origin Job is required")
         operations = PRIMARY_OPERATIONS if task_kind == "primary_semantic_processing" else REVIEW_OPERATIONS
-        latest: dict[str, dict[str, Any]] = {}
+        candidates_by_operation: dict[str, list[dict[str, Any]]] = {operation: [] for operation in operations}
         for profile in profiles:
             if profile["paper_id"] != paper_id or profile["job_id"] != job["job_id"]:
                 continue
             operation = profile["requested_operation"]
-            current = latest.get(operation)
-            if current is None or (profile["assessed_at"], profile["profile_id"]) > (
-                current["assessed_at"],
-                current["profile_id"],
-            ):
-                latest[operation] = profile
+            if operation in candidates_by_operation and profile_freshness(layout, entries, profile)["state"] == "current":
+                candidates_by_operation[operation].append(profile)
+        latest = {
+            operation: _effective_adequacy_profile(candidates, job["job_id"])
+            for operation, candidates in candidates_by_operation.items()
+            if candidates
+        }
         if set(latest) != set(operations):
             raise _conflict(job["state_id"], "Semantic Task input basis lacks complete Source Adequacy profiles")
         ordered_profiles = [latest[operation] for operation in operations]
@@ -3463,7 +3464,6 @@ class AgentTaskApplicationService:
                 else layout.review_bundle_path(paper_id)
             ),
         }
-
     def _derive_basis_for_task(self, layout: WorkspaceLayout, task: Mapping[str, Any]) -> dict[str, Any]:
         if task["task_kind"] == "knowledge_query_report":
             return self._derive_query_context(layout, task).basis
@@ -4157,6 +4157,32 @@ class AgentTaskApplicationService:
             "handoff": manifest,
             "lease": task["lease"],
         }
+
+
+def _effective_adequacy_profile(
+    candidates: list[dict[str, Any]],
+    record_id: str,
+) -> dict[str, Any]:
+    by_id = {item["profile_id"]: item for item in candidates}
+    valid_successors: list[dict[str, Any]] = []
+    for item in candidates:
+        basis = item.get("basis_profile")
+        if basis is None or item.get("user_decision") is None:
+            continue
+        parent = by_id.get(basis.get("profile_id"))
+        if parent is not None and canonical_digest(parent) == basis.get("profile_digest"):
+            valid_successors.append(item)
+    if valid_successors:
+        parent_ids = {
+            item["basis_profile"]["profile_id"]
+            for item in valid_successors
+            if item.get("basis_profile") is not None
+        }
+        terminal = [item for item in valid_successors if item["profile_id"] not in parent_ids]
+        if len(terminal) != 1:
+            raise _conflict(record_id, "Source Adequacy profiles have ambiguous user-decision successors")
+        return terminal[0]
+    return max(candidates, key=lambda item: (item["assessed_at"], item["profile_id"]))
 
 
 def _task_projection(state: Mapping[str, Any]) -> dict[str, Any]:

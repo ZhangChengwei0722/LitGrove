@@ -24,6 +24,7 @@ from tests.unit.test_agent_task_application_service import APPROVED_CLASSES, P4B
 
 
 DECISION_TIME = datetime(2026, 8, 6, 23, 0, tzinfo=timezone.utc)
+MACHINE_TIME = datetime(2026, 8, 7, 5, 0, tzinfo=timezone.utc)
 
 
 def _expected(task: dict[str, object]) -> dict[str, str]:
@@ -46,7 +47,7 @@ def _build_uncertain_task(tmp_path: Path, *, route: str):
         ["Synthetic continuous text is deliberately parsed with a conservative reading-order profile."],
     )
     payload = source.read_bytes()
-    intake = DeterministicIntakeApplicationService().start_upload(
+    intake = DeterministicIntakeApplicationService(clock=lambda: MACHINE_TIME).start_upload(
         session,
         io.BytesIO(payload),
         {
@@ -64,7 +65,7 @@ def _build_uncertain_task(tmp_path: Path, *, route: str):
             "expected_size_bytes": len(payload),
         },
     )
-    agent = AgentTaskApplicationService()
+    agent = AgentTaskApplicationService(clock=lambda: MACHINE_TIME)
     created = agent.create_from_pipeline(
         session,
         intake["pipeline"]["job_id"],

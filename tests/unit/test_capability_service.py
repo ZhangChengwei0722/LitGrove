@@ -10,7 +10,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
         "status": "success",
         "interface_version": "1.0",
         "core": {
-            "version": "0.1.1.dev2026080603",
+            "version": "0.1.1.dev2026080701",
             "contract_versions": ["1.0"],
                 "layout_versions": ["p7d-1"],
         },
@@ -131,6 +131,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "source-adequacy-profile",
             "source-asset-state",
             "transaction-journal",
+            "trusted-parse-authority",
         ],
             "features": {
                 "discovery_application_service": True,
@@ -148,6 +149,9 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "source_asset_runtime": True,
             "source_adequacy": True,
             "source_adequacy_resolution": True,
+            "workspace_materialization": True,
+            "trusted_parse_authority": True,
+            "supervised_pdf_parse": True,
             "deterministic_trunk": True,
             "deterministic_intake_application": True,
             "agent_task_staging": True,

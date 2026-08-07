@@ -57,6 +57,8 @@ class Namespace(StrEnum):
     RESTORE = "restore"
     OPERATIONAL_ARCHIVE = "oparchive"
     MAINTENANCE = "maintenance"
+    PARSE_AUTHORITY = "parseauth"
+    PARSE_AUTHORITY_STATE = "parseauthstate"
 
 
 UUID4_PATTERN = r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"

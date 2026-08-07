@@ -311,7 +311,7 @@ def test_evidence_source_handle_opens_exact_synthetic_pdf_without_writes(
     assert prepared.descriptor == {
         "status": "success",
         "interface_version": "1.0",
-        "application_service_interface_version": "1.19",
+        "application_service_interface_version": "1.20",
         "evidence_id": evidence["evidence_id"],
         "paper_id": evidence["paper_id"],
         "pdf_page": evidence["source_page"]["pdf_page"],

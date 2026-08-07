@@ -13,7 +13,7 @@ def test_browser_safe_candidate_reads_and_question_context(tmp_path: Path) -> No
     question_id = by_kind["step7-synthesis"][0]["question_id"]
 
     limits = service.limits(session)
-    assert limits["application_service_interface_version"] == "1.19"
+    assert limits["application_service_interface_version"] == "1.20"
     assert limits["ordinary_query_can_write"] is False
     listed = service.list_candidates(session, question_id=question_id, page_size=2)
     assert len(listed["candidates"]) == 2

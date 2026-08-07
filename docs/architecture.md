@@ -12,11 +12,27 @@ Core owns deterministic contracts, validation, path and ID handling, structured 
 
 This is a cumulative architecture record. Historical M2/M3/Px section names identify the
 slice that introduced a contract; they are not the current project gate. P0-P11 is
-delivered, and the current bounded Source Adequacy resolution successor uses Application
-Service interface `1.19` with layout `p7d-1`. Core now owns
+delivered, and the current B1 bootstrap/security successor uses Application Service
+interface `1.20` with layout `p7d-1`. Core now owns
 source-watermarked generated Markdown, one-way Obsidian projection, conflict-safe Exchange
-and P11 operational recovery. Arbitrary Markdown import, reverse vault sync and
+and P11 operational recovery, plus two-phase workspace materialization, trusted Parse
+authority and supervised PDF parsing. Arbitrary Markdown import, reverse vault sync and
 unregistered custom views remain outside the delivered boundary.
+
+## B1 Secure Bootstrap And Trusted Parse Boundary
+
+`WorkspaceMaterializationApplicationService` owns a read-only proposal followed by one
+preview-bound, user-authority commit. Parent, source-root and `local_inbox` security facts
+are bound into the proposal and revalidated under the writer mutex. Publication uses one
+operation-owned secure sibling generation and an atomic final rename; append-only journal
+and receipt identities support only the closed actions returned by recovery inspection.
+
+`TrustedParseAuthorityService` records an append-only user decision bound to the exact
+workspace, paper, source manifestation, parser version, parser budget profile and policy.
+`SupervisedParseApplicationService` accepts only a current authority, runs the PDF adapter
+in the bounded worker process, rehashes the source around worker execution and promotes
+pages through the existing Parse transaction. The worker limits timeout and output size;
+it is not a hostile-PDF security sandbox.
 
 ## P2-A Read-Only Artifact Catalog Boundary
 

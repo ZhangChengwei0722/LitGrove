@@ -29,7 +29,7 @@ def test_application_create_list_show_and_decide(tmp_path: Path) -> None:
     criterion = created["criteria"]["inclusion_criteria"][0]
     decision = service.promote_decision(session, {"question_id": question["question_id"], "paper_id": paper["paper_id"], "outcome": "included", "criteria_revision_id": created["criteria"]["revision_id"], "criteria_digest": created["criteria"]["criteria_digest"], "criterion_dispositions": [{"criterion_id": criterion["criterion_id"], "disposition": "met", "rationale": "Synthetic."}], "basis_scope": "metadata", "rationale": "Synthetic inclusion.", "known_limitations": [], "receipt_id": "decision-create"})
 
-    assert created["application_service_interface_version"] == "1.19"
+    assert created["application_service_interface_version"] == "1.20"
     assert decision["result"] == "committed"
     assert service.list_criteria(session)["criteria"] == [created["criteria"]]
     assert service.list_decisions(session, freshness="current")["decisions"][0]["decision_id"] == decision["decision"]["decision_id"]

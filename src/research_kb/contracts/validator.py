@@ -692,6 +692,11 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
             profile_id = record.get("profile_id", "")
             adequacy_profiles[profile_id] = record
             defined["adequacy"].append(profile_id)
+        elif kind == "trusted-parse-authority":
+            authority_id = record.get("authority_id", "")
+            if authority_id not in defined["parseauth"]:
+                defined["parseauth"].append(authority_id)
+            defined["parseauthstate"].append(record.get("state_id", ""))
         elif kind == "paper-card":
             paper_id = record.get("paper_id", "")
             paper_cards[paper_id] += 1
@@ -1361,6 +1366,25 @@ def _cross_record_diagnostics(entries: list[tuple[str, dict[str, Any]]]) -> list
                         "/basis_profile",
                         "a user decision requires a predecessor Source Adequacy profile",
                     )
+                )
+        elif kind == "trusted-parse-authority":
+            _require_ref(diagnostics, kind, record_id, "/workspace_id", record.get("workspace_id"), workspaces, "workspace")
+            _require_ref(diagnostics, kind, record_id, "/paper_id", record.get("paper_id"), papers, "paper")
+            root_id = record.get("source_ref", {}).get("root_id")
+            if isinstance(root_id, str) and root_id and root_id not in source_roots:
+                diagnostics.append(
+                    Diagnostic(PATH_ESCAPE, kind, record_id, "/source_ref/root_id", "source_ref root_id is not declared by the workspace")
+                )
+            predecessor = record.get("predecessor")
+            if isinstance(predecessor, dict):
+                _require_ref(
+                    diagnostics,
+                    kind,
+                    record_id,
+                    "/predecessor/state_id",
+                    predecessor.get("state_id"),
+                    defined_ids["parseauthstate"],
+                    "trusted Parse authority state",
                 )
         elif kind == "parsed-page":
             _require_ref(diagnostics, kind, record_id, "/parse_run_id", record.get("parse_run_id"), events, "process event")
@@ -2055,6 +2079,7 @@ def _record_id(kind: str, record: dict[str, Any]) -> str | None:
         "source-asset-state": "source_asset_state_id",
         "registry-identity-correction": "correction_id",
         "source-adequacy-profile": "profile_id",
+        "trusted-parse-authority": "state_id",
         "agent-task-state": "state_id",
         "primary-semantic-bundle": "paper_id",
         "review-semantic-bundle": "paper_id",

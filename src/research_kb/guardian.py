@@ -51,6 +51,7 @@ from research_kb.source_resolution import inspect_source_ref, observe_paper_sour
 from research_kb.source_adequacy import profile_freshness
 from research_kb.step7_support import STEP7_RECORD_KINDS, candidate_freshness
 from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl, serialize_jsonl
+from research_kb.trusted_parse_authority import trusted_parse_authority_chain_diagnostics
 from research_kb.storage.transactions import (
     TransactionManager,
     TransactionResult,
@@ -123,6 +124,11 @@ class GuardianService:
                 )
             )
             diagnostics.extend(self._acquisition_diagnostics(workspace_entries))
+            diagnostics.extend(
+                trusted_parse_authority_chain_diagnostics(
+                    [record for kind, record in workspace_entries if kind == "trusted-parse-authority"]
+                )
+            )
             diagnostics.extend(self._local_source_intake_diagnostics(workspace_entries))
             effective_entries = expand_active_organization_entries(
                 expand_active_review_entries(expand_active_primary_entries(workspace_entries))
@@ -1657,6 +1663,7 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
         "source-asset-state": "source_asset_state_id",
         "registry-identity-correction": "correction_id",
         "source-adequacy-profile": "profile_id",
+        "trusted-parse-authority": "state_id",
         "agent-task-state": "state_id",
         "primary-semantic-bundle": "active_revision_id",
         "direction": "direction_id",

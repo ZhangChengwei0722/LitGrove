@@ -225,6 +225,38 @@ def build_workspace_marker(config_path: Path) -> dict[str, Any]:
     return context.expected_marker
 
 
+def build_workspace_marker_for_documents(
+    config_path: Path,
+    workspace_data: dict[str, Any],
+    domain_profile_data: dict[str, Any],
+) -> dict[str, Any]:
+    """Build the marker for an intended final config path before publication."""
+    for kind, record in (("workspace", workspace_data), ("domain-profile", domain_profile_data)):
+        diagnostics = validate_record(kind, record, actor="cli")
+        if diagnostics:
+            raise ResearchKBError(diagnostics[0])
+    resolved_config = config_path.resolve(strict=False)
+    config = ConfigDocument(resolved_config, workspace_data)
+    profile_path = resolve_config_path(config, workspace_data["workspace"]["domain_profile"])
+    profile = ConfigDocument(profile_path, domain_profile_data)
+    workspace = workspace_data["workspace"]
+    source_items = tuple(
+        SourceRootBinding(
+            root_id=item["root_id"],
+            path=resolve_config_path(config, item["path"]),
+            read_only_assets=item["read_only_assets"],
+        )
+        for item in workspace["source_roots"]
+    )
+    return _marker_for(
+        config,
+        profile,
+        resolve_config_path(config, workspace["knowledge_root"]),
+        resolve_config_path(config, workspace["local_inbox"]),
+        source_items,
+    )
+
+
 def _load_context(config_path: Path) -> WorkspaceContext:
     config = _load_config_redacted(config_path, "workspace", "/workspace")
     workspace = config.data["workspace"]
@@ -557,6 +589,7 @@ def _recognized_descendant(
         "process/events.jsonl",
         "process/jobs.jsonl",
         "process/source_adequacy.jsonl",
+        "process/trusted_parse_authorities.jsonl",
         "process/agent_tasks.jsonl",
         "process/maintenance.jsonl",
         "guardian/reports.jsonl",

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:workspace-materialization-journal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "protocol", "operation_id", "proposal_id", "workspace_id", "proposal_digest", "preview_digest", "target_identity", "phase", "generation_digest", "receipt_digest", "recorded_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "protocol": {"const": "workspace-materialization@1.0"},
+    "operation_id": {"type": "string", "pattern": "^operation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "proposal_id": {"type": "string", "pattern": "^proposal_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "proposal_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "preview_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "target_identity": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "phase": {"enum": ["intent", "generated", "validated", "complete"]},
+    "generation_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "receipt_digest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "recorded_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"}
+  }
+}
