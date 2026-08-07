@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -111,8 +112,17 @@ class SchemaRegistry:
     def _read_text(self, filename: str) -> str:
         if self.schema_root is not None:
             return (self.schema_root / SUPPORTED_VERSION / filename).read_text(encoding="utf-8")
-        source_root = Path(__file__).resolve().parents[3] / "schemas" / SUPPORTED_VERSION
-        if source_root.is_dir():
-            return (source_root / filename).read_text(encoding="utf-8")
-        packaged = resources.files("research_kb").joinpath("_data", "schemas", SUPPORTED_VERSION, filename)
-        return packaged.read_text(encoding="utf-8")
+        return _read_default_schema_text(filename)
+
+
+@lru_cache(maxsize=len(SCHEMA_FILES))
+def _read_default_schema_text(filename: str) -> str:
+    return _read_default_schema_text_uncached(filename)
+
+
+def _read_default_schema_text_uncached(filename: str) -> str:
+    source_root = Path(__file__).resolve().parents[3] / "schemas" / SUPPORTED_VERSION
+    if source_root.is_dir():
+        return (source_root / filename).read_text(encoding="utf-8")
+    packaged = resources.files("research_kb").joinpath("_data", "schemas", SUPPORTED_VERSION, filename)
+    return packaged.read_text(encoding="utf-8")
