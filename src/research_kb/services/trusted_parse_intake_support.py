@@ -23,13 +23,18 @@ from research_kb.services.parse_application import ParseAdapterRegistry
 from research_kb.services.pipeline_job import PipelineJobService
 from research_kb.services.trusted_parse_authority import TrustedParseAuthorityService
 from research_kb.services.workspace_session import WorkspaceSession
+from research_kb.source_adequacy import profile_freshness
 from research_kb.source_assets import current_source_asset_heads
 from research_kb.source_resolution import observe_paper_source
 from research_kb.storage.json_io import read_jsonl
-from research_kb.trusted_parse_authority import TrustedParseAuthorityPreview
+from research_kb.trusted_parse_authority import (
+    TrustedParseAuthorityPreview,
+    current_authority_heads,
+)
 from research_kb.trusted_parse_intake import (
     ALLOWED_OPERATION,
     AUTHORITY_PREFIX,
+    RECONCILE_PREFIX,
     ROUTE_SUFFIXES,
     TRUSTED_PREFIXES,
     TrustedParseIntakePreparation,
@@ -243,6 +248,178 @@ def correlated_parse_event(
                 "trusted Parse source changed after its receipt",
             )
     return event
+
+
+def validate_trusted_profile_lineage(
+    layout: WorkspaceLayout,
+    *,
+    job_id: str,
+    paper_id: str,
+    profile: Mapping[str, Any],
+    require_current: bool = True,
+) -> dict[str, Any]:
+    """Return one current trusted Parse lineage or fail closed."""
+    job_id = validate_id(job_id, Namespace.JOB)
+    paper_id = validate_id(paper_id, Namespace.PAPER)
+    paper = paper_for_job(layout, job_id)
+    if paper["paper_id"] != paper_id:
+        raise service_error(
+            INCOMPLETE_TRANSACTION,
+            job_id,
+            "/registry",
+            "trusted Parse Registry receipt belongs to another paper",
+        )
+    require_source_association(layout, job_id, paper_id)
+    if (
+        profile.get("job_id") != job_id
+        or profile.get("paper_id") != paper_id
+        or not isinstance(profile.get("source_snapshots"), list)
+    ):
+        raise service_error(
+            INCOMPLETE_TRANSACTION,
+            job_id,
+            "/source_adequacy",
+            "Source Adequacy Profile does not belong to the trusted Parse Job",
+        )
+    main_sources = [
+        item
+        for item in profile["source_snapshots"]
+        if item.get("role") == "main_pdf"
+    ]
+    if len(main_sources) != 1:
+        raise service_error(
+            INCOMPLETE_TRANSACTION,
+            job_id,
+            "/source_adequacy/source_snapshots",
+            "trusted Parse Profile main source is missing or ambiguous",
+        )
+    manifestation = main_sources[0].get("manifestation_id")
+    if not isinstance(manifestation, str) or not manifestation.startswith("sha256:"):
+        raise service_error(
+            INCOMPLETE_TRANSACTION,
+            job_id,
+            "/source_adequacy/source_snapshots",
+            "trusted Parse Profile source fingerprint is invalid",
+        )
+    source_sha256 = manifestation.removeprefix("sha256:")
+
+    authority_events = [
+        item
+        for item in read_process_events(layout.process_events_path)
+        if item.get("job_id") == job_id
+        and item.get("operation") == "trusted_parse_authority_commit"
+        and item.get("result") == "success"
+    ]
+    if len(authority_events) != 1 or len(authority_events[0].get("output_refs", [])) != 2:
+        raise service_error(
+            INCOMPLETE_TRANSACTION,
+            job_id,
+            "/authority",
+            "trusted Parse authority receipt is missing or ambiguous",
+        )
+    authority_event = authority_events[0]
+    authority_refs = set(authority_event["output_refs"])
+    authority_records = read_jsonl(
+        layout.trusted_parse_authorities_path,
+        record_kind="trusted-parse-authority",
+        id_field="state_id",
+    )
+    authority_matches = [
+        item
+        for item in authority_records
+        if {item["authority_id"], item["state_id"]} == authority_refs
+        and item["paper_id"] == paper_id
+    ]
+    if len(authority_matches) != 1:
+        raise service_error(
+            INCOMPLETE_TRANSACTION,
+            job_id,
+            "/authority",
+            "trusted Parse authority record is missing or ambiguous",
+        )
+    authority = authority_matches[0]
+    heads = [
+        item
+        for item in current_authority_heads(authority_records)
+        if item["authority_id"] == authority["authority_id"]
+    ]
+    if (
+        len(heads) != 1
+        or heads[0]["state_id"] != authority["state_id"]
+        or authority.get("decision") != "active"
+    ):
+        raise service_error(
+            INCOMPLETE_TRANSACTION,
+            job_id,
+            "/authority",
+            "trusted Parse authority is not the exact active Job authority",
+        )
+    parse_event = correlated_parse_event(
+        layout,
+        job_id,
+        paper_id,
+        authority,
+        source_sha256,
+        require_current_source=require_current,
+    )
+    if parse_event is None:
+        raise service_error(
+            INCOMPLETE_TRANSACTION,
+            job_id,
+            "/parse",
+            "trusted Parse receipt is missing",
+        )
+    entries = load_workspace_entries(layout)
+    freshness = profile_freshness(layout, entries, profile)
+    if require_current and freshness["state"] != "current":
+        raise service_error(
+            GROUNDING_MISMATCH,
+            job_id,
+            "/source_adequacy",
+            "trusted Parse Source Adequacy Profile is stale",
+        )
+    snapshot = profile.get("parse_snapshot", {})
+    if snapshot.get("active_parse_ref") != parse_event["event_id"]:
+        raise service_error(
+            INCOMPLETE_TRANSACTION,
+            job_id,
+            "/parse",
+            "trusted Parse Profile does not bind the successful Parse receipt",
+        )
+
+    history = PipelineJobService(layout).show(job_id)["history"]
+    reconcile_states = [
+        item
+        for item in history
+        if isinstance(item.get("current_node"), str)
+        and item["current_node"].startswith(RECONCILE_PREFIX)
+        and item["current_node"].removeprefix(RECONCILE_PREFIX) in ROUTE_SUFFIXES
+    ]
+    if len(reconcile_states) != 1:
+        raise service_error(
+            INCOMPLETE_TRANSACTION,
+            job_id,
+            "/reconcile",
+            "trusted Parse reconcile state is missing or ambiguous",
+        )
+    reconcile = reconcile_states[0]
+    required_refs = authority_refs | {parse_event["event_id"]}
+    if not required_refs.issubset(set(reconcile["output_refs"])):
+        raise service_error(
+            INCOMPLETE_TRANSACTION,
+            job_id,
+            "/reconcile",
+            "trusted Parse reconcile state does not bind its receipts",
+        )
+    return {
+        "paper": paper,
+        "authority": authority,
+        "authority_event": authority_event,
+        "parse_event": parse_event,
+        "reconcile_state": reconcile,
+        "route_suffix": reconcile["current_node"].removeprefix(RECONCILE_PREFIX),
+        "freshness": freshness,
+    }
 
 
 def paper_for_job(layout: WorkspaceLayout, job_id: str) -> dict[str, Any]:

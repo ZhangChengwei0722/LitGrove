@@ -174,6 +174,7 @@ class CapabilityService:
                 "registry_identity_correction": True,
                 "source_adequacy": True,
                 "source_adequacy_resolution": True,
+                "intake_source_adequacy_resolution": True,
                 "workspace_materialization": True,
                 "workspace_adoption": True,
                 "trusted_parse_authority": True,

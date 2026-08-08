@@ -490,7 +490,11 @@ def main() -> int:
                 "-c",
                 (
                     "from pathlib import Path; "
-                    "from research_kb.services import DeterministicIntakeApplicationService, WorkspaceSessionService; "
+                    "from research_kb.application import APPLICATION_SERVICE_INTERFACE_VERSION; "
+                    "from research_kb.services import CapabilityService, DeterministicIntakeApplicationService, IntakeSourceAdequacyResolutionApplicationService, WorkspaceSessionService; "
+                    "assert APPLICATION_SERVICE_INTERFACE_VERSION == '1.23'; "
+                    "assert IntakeSourceAdequacyResolutionApplicationService.__name__ == 'IntakeSourceAdequacyResolutionApplicationService'; "
+                    "assert CapabilityService().show()['features']['intake_source_adequacy_resolution'] is True; "
                     f"session = WorkspaceSessionService({{'wheel': Path({str(config_path)!r})}}).open('wheel'); "
                     f"source = Path({str(facade_source)!r}); request = {facade_request!r}; "
                     "stream = source.open('rb'); "

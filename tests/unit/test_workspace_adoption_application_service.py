@@ -40,7 +40,7 @@ def test_workspace_adoption_inspection_is_stable_redacted_and_zero_write(tmp_pat
         "status": "current",
         "action_count": 0,
     }
-    assert first.descriptor["application_service_interface_version"] == "1.22"
+    assert first.descriptor["application_service_interface_version"] == "1.23"
     assert "path" not in str(first.descriptor).lower()
     assert first.writable_roots.knowledge_root == layout.knowledge_root.resolve()
     assert _tree_bytes(tmp_path) == before

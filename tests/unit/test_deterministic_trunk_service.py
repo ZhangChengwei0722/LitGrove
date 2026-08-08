@@ -5,7 +5,13 @@ from typing import Any
 
 import pytest
 
-from research_kb.errors import WRITE_CONFLICT, Diagnostic, ResearchKBError
+from research_kb.errors import (
+    INCOMPLETE_TRANSACTION,
+    UNRESOLVED_REFERENCE,
+    WRITE_CONFLICT,
+    Diagnostic,
+    ResearchKBError,
+)
 from research_kb.guardian import GuardianService
 from research_kb.parse.synthetic_text import SyntheticTextAdapter
 from research_kb.services.deterministic_trunk import DeterministicTrunkService
@@ -17,6 +23,11 @@ from research_kb.services.registry import RegistryService
 from research_kb.services.source_adequacy import SourceAdequacyService
 from research_kb.storage.json_io import read_jsonl, serialize_jsonl
 from tests.runtime_helpers import make_runtime_workspace
+from tests.unit.test_intake_source_adequacy_resolution_application_service import (
+    NOW,
+    _build_uncertain_intake,
+    _expected,
+)
 
 
 def _registered_job(tmp_path):
@@ -396,3 +407,151 @@ def test_guardian_does_not_crash_when_job_chain_is_already_invalid(tmp_path) -> 
         item["record_ref"] == states[-1]["state_id"]
         for item in report["findings"]
     )
+
+
+def test_explicit_profile_continuation_is_exact_idempotent_and_parse_free(tmp_path) -> None:
+    layout, _, started, origin = _build_uncertain_intake(tmp_path)
+    profiles = read_jsonl(
+        layout.source_adequacy_path,
+        record_kind="source-adequacy-profile",
+    )
+    basis = next(item for item in profiles if item["profile_id"] in origin["output_refs"])
+    successor = SourceAdequacyService(layout).assess(
+        paper_id=started["paper_id"],
+        job_id=started["pipeline"]["job_id"],
+        requested_operation="basic_paper_card",
+        actor="user",
+        basis_profile_id=basis["profile_id"],
+        user_decision={
+            "decision": "accept_uncertainty",
+            "capabilities": ["basic_paper_understanding"],
+            "reason": "Synthetic bounded basic-use review accepted.",
+        },
+    ).profile
+
+    class NoParseService:
+        def run(self, **kwargs):
+            raise AssertionError(f"ParseService.run must not be called: {kwargs}")
+
+    class NoParserRegistry:
+        def create(self, name):
+            raise AssertionError(f"parser factory must not be called: {name}")
+
+    service = DeterministicTrunkService(
+        layout,
+        parse_service=NoParseService(),
+        parse_registry=NoParserRegistry(),
+    )
+    parse_events_before = [
+        item
+        for item in read_jsonl(layout.process_events_path, record_kind="process-event")
+        if item["operation"] == "parse_run" and item["result"] == "success"
+    ]
+
+    continued = service.continue_with_profile(
+        job_id=started["pipeline"]["job_id"],
+        paper_id=started["paper_id"],
+        requested_operation="basic_paper_card",
+        expected_origin_state=_expected(origin),
+        profile=successor,
+        document_route="primary",
+    )
+    replay = service.continue_with_profile(
+        job_id=started["pipeline"]["job_id"],
+        paper_id=started["paper_id"],
+        requested_operation="basic_paper_card",
+        expected_origin_state=_expected(origin),
+        profile=successor,
+        document_route="primary",
+    )
+
+    assert continued.state["status"] == "completed"
+    assert continued.state["current_node"] == "primary_semantic_gate"
+    assert continued.persistent_writes == 2
+    assert replay.state == continued.state
+    assert replay.persistent_writes == 0
+    assert successor["profile_id"] in continued.state["output_refs"]
+    parse_events_after = [
+        item
+        for item in read_jsonl(layout.process_events_path, record_kind="process-event")
+        if item["operation"] == "parse_run" and item["result"] == "success"
+    ]
+    assert parse_events_after == parse_events_before
+
+
+def test_explicit_profile_continuation_rejects_nonstored_profile(tmp_path) -> None:
+    layout, _, started, origin = _build_uncertain_intake(tmp_path)
+    basis = next(
+        item
+        for item in read_jsonl(layout.source_adequacy_path, record_kind="source-adequacy-profile")
+        if item["profile_id"] in origin["output_refs"]
+    )
+    successor = SourceAdequacyService(layout).assess(
+        paper_id=started["paper_id"],
+        job_id=started["pipeline"]["job_id"],
+        requested_operation="basic_paper_card",
+        actor="user",
+        basis_profile_id=basis["profile_id"],
+        user_decision={
+            "decision": "accept_uncertainty",
+            "capabilities": ["basic_paper_understanding"],
+            "reason": "Synthetic bounded basic-use review accepted.",
+        },
+    ).profile
+    altered = dict(successor)
+    altered["known_limitations"] = ["Caller-supplied mutation"]
+
+    with pytest.raises(ResearchKBError) as caught:
+        DeterministicTrunkService(layout).continue_with_profile(
+            job_id=started["pipeline"]["job_id"],
+            paper_id=started["paper_id"],
+            requested_operation="basic_paper_card",
+            expected_origin_state=_expected(origin),
+            profile=altered,
+            document_route="primary",
+        )
+
+    assert caught.value.diagnostic.code == WRITE_CONFLICT
+
+
+def test_explicit_profile_continuation_requires_trusted_parse_receipts(tmp_path) -> None:
+    layout, _, started, origin = _build_uncertain_intake(tmp_path)
+    basis = next(
+        item
+        for item in read_jsonl(layout.source_adequacy_path, record_kind="source-adequacy-profile")
+        if item["profile_id"] in origin["output_refs"]
+    )
+    successor = SourceAdequacyService(layout).assess(
+        paper_id=started["paper_id"],
+        job_id=started["pipeline"]["job_id"],
+        requested_operation="basic_paper_card",
+        actor="user",
+        basis_profile_id=basis["profile_id"],
+        user_decision={
+            "decision": "accept_uncertainty",
+            "capabilities": ["basic_paper_understanding"],
+            "reason": "Synthetic bounded basic-use review accepted.",
+        },
+    ).profile
+    events = read_jsonl(layout.process_events_path, record_kind="process-event")
+    layout.process_events_path.write_bytes(
+        serialize_jsonl(
+            [item for item in events if item["operation"] != "trusted_parse_authority_commit"]
+        )
+    )
+
+    with pytest.raises(ResearchKBError) as caught:
+        DeterministicTrunkService(layout).continue_with_profile(
+            job_id=started["pipeline"]["job_id"],
+            paper_id=started["paper_id"],
+            requested_operation="basic_paper_card",
+            expected_origin_state=_expected(origin),
+            profile=successor,
+            document_route="primary",
+        )
+
+    assert caught.value.diagnostic.code in {
+        UNRESOLVED_REFERENCE,
+        INCOMPLETE_TRANSACTION,
+    }
+    assert PipelineJobService(layout).show(started["pipeline"]["job_id"])["current_state"] == origin

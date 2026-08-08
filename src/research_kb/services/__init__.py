@@ -21,6 +21,11 @@ from research_kb.services.deterministic_intake_application import DeterministicI
 from research_kb.services.exchange_application import ExchangeApplicationService
 from research_kb.exchange_import import ExchangeArchiveReader, ExchangeImportService, SafeReaderProfile
 from research_kb.services.intake_inspect import IntakeInspectService
+from research_kb.services.intake_source_adequacy_resolution_application import (
+    IntakeSourceAdequacyResolutionApplicationService,
+    IntakeSourceReviewHandle,
+    PreparedIntakeSourceReview,
+)
 from research_kb.services.guardian_disposition import GuardianFindingDispositionService
 from research_kb.services.local_source_intake import LocalSourceIntakeService
 from research_kb.services.manuscript_projection import ManuscriptProjectionService
@@ -105,6 +110,8 @@ __all__ = [
     "ExchangeImportService",
     "SafeReaderProfile",
     "IntakeInspectService",
+    "IntakeSourceAdequacyResolutionApplicationService",
+    "IntakeSourceReviewHandle",
     "GuardianFindingDispositionService",
     "JsonlValidationService",
     "LocalSourceIntakeService",
@@ -127,6 +134,7 @@ __all__ = [
     "EvidenceSourceHandle",
     "OpenedEvidenceSource",
     "PreparedEvidenceSource",
+    "PreparedIntakeSourceReview",
     "ReadingApplicationService",
     "ReviewContextService",
     "ReviewMemoryService",

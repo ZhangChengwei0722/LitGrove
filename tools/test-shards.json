@@ -74,6 +74,7 @@
     ],
     "application-semantic-a2": [
       "tests/unit/test_deterministic_trunk_service.py",
+      "tests/unit/test_intake_source_adequacy_resolution_application_service.py",
       "tests/unit/test_intake_inspect_service.py",
       "tests/unit/test_paper_status_service.py",
       "tests/unit/test_parse_read_service.py",
