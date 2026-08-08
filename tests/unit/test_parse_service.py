@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ from research_kb.errors import ResearchKBError
 from research_kb.services.parse import ParseService
 from research_kb.services.pipeline_job import PipelineJobService
 from research_kb.services.registry import RegistryService
+from research_kb.services.trusted_parse_authority import TrustedParseAuthorityService
 from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl
 from tests.runtime_helpers import make_runtime_workspace
 
@@ -76,6 +78,65 @@ def test_parse_job_correlation_requires_authority_and_marks_event(tmp_path: Path
         )
     assert caught.value.diagnostic.code == "RKBC-006"
     assert layout.parse_path(paper["paper_id"]).read_bytes() == before
+
+
+def test_parse_event_records_core_owned_trusted_provenance_refs(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    source = layout.source_roots["alpha-sources"] / "trusted-job-parse.txt"
+    source.write_text("Synthetic trusted Parse source.\n", encoding="utf-8", newline="\n")
+    paper, _ = RegistryService(layout).add(
+        root_id="alpha-sources",
+        relative_path=source.name,
+        metadata={"fixture_origin": "synthetic_from_scratch"},
+    )
+    job = _parse_job(
+        layout,
+        paper["paper_id"],
+        granted_operations=["parse_run"],
+        idempotency_key="trusted-parse-provenance",
+    )
+    now = datetime(2026, 8, 8, 8, 0, tzinfo=UTC)
+    trust = TrustedParseAuthorityService(
+        layout,
+        clock=lambda: now,
+        parser_version_resolver=lambda name: "1.0" if name == "synthetic-text" else "unknown",
+    )
+    preview = trust.preview(
+        paper_id=paper["paper_id"],
+        adapter_name="synthetic-text",
+        adapter_version="1.0",
+        parser_profile_id="trusted-local-pdf-standard@1.0",
+        policy_version="trusted-local-pdf@1.0",
+        allowed_operation="parse_run",
+        idempotency_key="trusted-parse-provenance",
+        actor="user",
+        expires_at=now + timedelta(minutes=10),
+    )
+    authority = trust.commit(
+        preview,
+        preview_digest=preview.preview_digest,
+        actor="user",
+        job_id=job["job_id"],
+    )
+
+    _pages, transaction = ParseService(layout).run(
+        paper_id=paper["paper_id"],
+        adapter=SyntheticTextAdapter(),
+        actor="user",
+        job_id=job["job_id"],
+        _trusted_provenance_refs=(authority.authority_id, authority.state_id),
+    )
+
+    event = next(
+        item
+        for item in read_process_events(layout.process_events_path)
+        if item["event_id"] == transaction.event_id
+    )
+    assert event["input_refs"] == [
+        paper["paper_id"],
+        authority.authority_id,
+        authority.state_id,
+    ]
 
 
 def test_parse_service_promotes_pages_and_preserves_source(tmp_path: Path) -> None:

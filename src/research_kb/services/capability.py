@@ -178,6 +178,7 @@ class CapabilityService:
                 "workspace_adoption": True,
                 "trusted_parse_authority": True,
                 "supervised_pdf_parse": True,
+                "trusted_parse_intake_application": True,
                 "deterministic_trunk": True,
                 "deterministic_intake_application": True,
                 "agent_task_staging": True,

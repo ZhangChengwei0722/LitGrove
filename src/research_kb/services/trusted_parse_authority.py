@@ -17,7 +17,7 @@ from research_kb.errors import (
     Diagnostic,
     ResearchKBError,
 )
-from research_kb.identifiers import Namespace, allocate_id
+from research_kb.identifiers import Namespace, allocate_id, validate_id
 from research_kb.process_events import Clock, timestamp, utc_now
 from research_kb.services.parse_application import ParseAdapterRegistry
 from research_kb.source_resolution import observe_paper_source
@@ -126,6 +126,7 @@ class TrustedParseAuthorityService:
         *,
         preview_digest: str | None = None,
         actor: str,
+        job_id: str | None = None,
     ) -> TrustedParseAuthorityMutation:
         if actor != "user":
             raise _error(INVALID_AUTHORITY, "/actor", "trusted Parse authority commit requires user authority")
@@ -133,16 +134,24 @@ class TrustedParseAuthorityService:
             raise _error(PROTECTED_INPUT_CHANGED, "/preview_digest", "trusted Parse authority preview changed")
         if canonical_digest(preview.candidate) != preview.preview_digest:
             raise _error(PROTECTED_INPUT_CHANGED, "/candidate", "trusted Parse authority candidate changed")
+        if job_id is not None:
+            job_id = validate_id(job_id, Namespace.JOB)
         records = self._records()
         same = [item for item in records if item["authority_id"] == preview.authority_id]
         if same:
-            if len(same) == 1 and same[0] == preview.candidate:
+            exact = [item for item in same if item == preview.candidate]
+            if len(exact) == 1:
                 return TrustedParseAuthorityMutation(preview.authority_id, preview.state_id, 1, "no_change", None)
             raise _error(WRITE_CONFLICT, "/authority_id", "trusted Parse authority ID is already in use")
         projection = self._project_record(preview.candidate)
         if projection.status != "current":
             raise _error(TRUST_AUTHORITY_INVALID, "/candidate", "trusted Parse authority candidate is no longer current")
-        return self._append(preview.candidate, records, operation="trusted_parse_authority_commit")
+        return self._append(
+            preview.candidate,
+            records,
+            operation="trusted_parse_authority_commit",
+            job_id=job_id,
+        )
 
     def revoke(self, authority_id: str, *, actor: str, reason: str) -> TrustedParseAuthorityMutation:
         if actor != "user":
@@ -211,6 +220,7 @@ class TrustedParseAuthorityService:
         existing: list[dict[str, Any]],
         *,
         operation: str,
+        job_id: str | None = None,
     ) -> TrustedParseAuthorityMutation:
         updated = [*existing, record]
         diagnostics = trusted_parse_authority_chain_diagnostics(updated)
@@ -237,9 +247,10 @@ class TrustedParseAuthorityService:
             operation=operation,
             actor="user",
             input_refs=[record["paper_id"]],
-            output_refs=[record["authority_id"]],
+            output_refs=[record["authority_id"], record["state_id"]],
             validator=validate_temp,
             expected_before_sha256=before,
+            job_id=job_id,
         )
         return TrustedParseAuthorityMutation(
             record["authority_id"], record["state_id"], record["revision"], "created", transaction.event_id

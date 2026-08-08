@@ -12,6 +12,7 @@ from research_kb.errors import (
     GROUNDING_MISMATCH,
     INPUT_TOO_LARGE,
     INVALID_AUTHORITY,
+    OPERATION_CANCELLED,
     PARSE_SOURCE_UNSUPPORTED,
     PROTECTED_INPUT_CHANGED,
     TRUST_AUTHORITY_INVALID,
@@ -31,10 +32,13 @@ from research_kb.services.parse_application import ParseAdapterRegistry, ParseAp
 from research_kb.services.trusted_parse_authority import TrustedParseAuthorityService
 from research_kb.source_resolution import observe_paper_source
 from research_kb.storage.json_io import file_sha256
+from research_kb.storage.transactions import TransactionManager
 from research_kb.workspace import WorkspaceLayout
 
 
-WorkerRunner = Callable[[WorkerParseRequest], WorkerParseResult]
+CancelCheck = Callable[[], bool]
+PhaseHook = Callable[[], None]
+WorkerRunner = Callable[..., WorkerParseResult]
 
 
 class SupervisedParseApplicationService:
@@ -56,7 +60,10 @@ class SupervisedParseApplicationService:
             clock=clock,
             parser_version_resolver=lambda name: self.registry.create(name).version,
         )
-        self.parse_service = parse_service or ParseService(layout)
+        self.parse_service = parse_service or ParseService(
+            layout,
+            transaction_manager=TransactionManager(layout, clock=clock),
+        )
         self.worker_runner = worker_runner
         self.budget = budget or ParserBudgetProfile()
 
@@ -67,6 +74,8 @@ class SupervisedParseApplicationService:
         authority_id: str,
         actor: str,
         job_id: str | None = None,
+        cancel_check: CancelCheck | None = None,
+        before_promotion: PhaseHook | None = None,
     ) -> ParseApplicationResult:
         if actor != "user":
             raise _error(INVALID_AUTHORITY, "/actor", "supervised Parse requires user authority")
@@ -121,7 +130,15 @@ class SupervisedParseApplicationService:
             budget=self.budget,
         )
         try:
-            worker_result = self.worker_runner(request)
+            if cancel_check is not None and cancel_check():
+                raise _error(OPERATION_CANCELLED, "/worker", "supervised Parse was cancelled before worker start")
+            worker_result = (
+                self.worker_runner(request, cancel_check=cancel_check)
+                if cancel_check is not None
+                else self.worker_runner(request)
+            )
+            if cancel_check is not None and cancel_check():
+                raise _error(OPERATION_CANCELLED, "/worker", "supervised Parse was cancelled before promotion")
             if file_sha256(source) != expected_sha256:
                 raise _error(GROUNDING_MISMATCH, "/source_fingerprint", "source manifestation changed after worker execution")
             latest = self.authority_service.current(authority_id)
@@ -131,12 +148,17 @@ class SupervisedParseApplicationService:
                 raise _error(PROTECTED_INPUT_CHANGED, "/worker/source_sha256", "worker result does not match the trusted source")
             if worker_result.parser != authority["parser"]:
                 raise _error(PROTECTED_INPUT_CHANGED, "/worker/parser", "worker result does not match the trusted parser")
+            if before_promotion is not None:
+                before_promotion()
             materialized = _MaterializedPagesAdapter(adapter.name, adapter.version, worker_result.pages)
             pages, transaction = self.parse_service.run(
                 paper_id=paper_id,
                 adapter=materialized,
                 actor=actor,
                 job_id=job_id,
+                _trusted_provenance_refs=(authority["authority_id"], authority["state_id"])
+                if job_id is not None
+                else None,
             )
         finally:
             if temp_root.is_dir() and not temp_root.is_symlink():

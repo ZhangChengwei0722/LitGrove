@@ -195,6 +195,24 @@ def test_parse_application_service_owns_exact_adapter_selection(tmp_path: Path) 
     assert error.value.diagnostic.code == PARSE_ADAPTER_UNAVAILABLE
 
 
+def test_parse_adapter_registry_identity_uses_static_identity_without_instantiation() -> None:
+    class StaticOnlyAdapter:
+        instances = 0
+
+        def __init__(self) -> None:
+            type(self).instances += 1
+            raise AssertionError("identity probing must not instantiate an adapter")
+
+        @classmethod
+        def static_identity(cls) -> dict[str, str]:
+            return {"adapter": "static-only", "version": "9.9"}
+
+    registry = ParseAdapterRegistry({"static-only": StaticOnlyAdapter})
+
+    assert registry.identity("static-only") == {"adapter": "static-only", "version": "9.9"}
+    assert StaticOnlyAdapter.instances == 0
+
+
 def test_transaction_recovery_service_owns_resolution_classification(tmp_path: Path) -> None:
     layout = make_runtime_workspace(tmp_path)
     event_id = "event_a1111111-1111-4111-8111-111111111111"

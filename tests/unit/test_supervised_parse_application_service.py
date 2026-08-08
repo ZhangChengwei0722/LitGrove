@@ -119,3 +119,41 @@ def test_source_size_budget_is_enforced_before_worker(tmp_path: Path) -> None:
         )
     assert caught.value.diagnostic.code == "RKBC-030"
     assert not layout.parse_path(paper["paper_id"]).exists()
+
+
+def test_supervised_parse_forwards_cancellation_and_closes_promotion_barrier(tmp_path: Path) -> None:
+    layout, paper, _source, authority = _trusted_case(tmp_path)
+    observed: list[str] = []
+
+    def runner(request, *, cancel_check):
+        observed.append("worker")
+        assert cancel_check is not None
+        assert cancel_check() is False
+        return WorkerParseResult(
+            pages=(
+                {
+                    "pdf_page": 1,
+                    "printed_page": None,
+                    "text": "Synthetic controlled output.",
+                    "locator": "page:1:text",
+                },
+            ),
+            source_sha256=request.source_sha256,
+            parser={"adapter": request.adapter_name, "version": request.adapter_version},
+            output_utf8_bytes=len("Synthetic controlled output."),
+        )
+
+    result = SupervisedParseApplicationService(
+        layout,
+        worker_runner=runner,
+        clock=lambda: NOW,
+    ).run(
+        paper_id=paper["paper_id"],
+        authority_id=authority.authority_id,
+        actor="user",
+        cancel_check=lambda: False,
+        before_promotion=lambda: observed.append("promotion_committing"),
+    )
+
+    assert result.page_count == 1
+    assert observed == ["worker", "promotion_committing"]

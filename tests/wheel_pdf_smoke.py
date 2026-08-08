@@ -96,7 +96,15 @@ def main() -> int:
             raise SystemExit("PDF wheel capability report lacks the Europe PMC connector")
         if capability["features"]["review_runtime"] is not True or capability["features"]["step7_runtime"] is not True or capability["features"]["on_demand_discovery"] is not True or capability["features"]["manuscript_projection"] is not True or capability["features"]["pipeline_jobs"] is not True or capability["features"]["source_asset_runtime"] is not True or capability["features"]["registry_identity_correction"] is not True or capability["features"]["source_adequacy"] is not True or capability["features"]["deterministic_trunk"] is not True or capability["features"]["deterministic_intake_application"] is not True:
             raise SystemExit("PDF wheel capability report lacks Review Memory, Step 7 or discovery runtime")
-        if not all(capability["features"][name] for name in ("workspace_materialization", "trusted_parse_authority", "supervised_pdf_parse")):
+        if not all(
+            capability["features"][name]
+            for name in (
+                "workspace_materialization",
+                "trusted_parse_authority",
+                "supervised_pdf_parse",
+                "trusted_parse_intake_application",
+            )
+        ):
             raise SystemExit("PDF wheel capability report lacks B1 Core services")
         if "trusted-parse-authority" not in capability["operational_record_kinds"]:
             raise SystemExit("PDF wheel capability report lacks trusted Parse authority records")

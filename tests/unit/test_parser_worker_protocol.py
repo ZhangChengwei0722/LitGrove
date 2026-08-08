@@ -94,6 +94,29 @@ class _FakeProcess:
         return self.returncode
 
 
+class _RunningFakeProcess(_FakeProcess):
+    def __init__(self) -> None:
+        super().__init__(b"")
+        self.returncode = None
+        self.terminated = False
+        self.killed = False
+        self.waited = False
+
+    def terminate(self) -> None:
+        self.terminated = True
+        self.returncode = 1
+
+    def kill(self) -> None:
+        self.killed = True
+        self.returncode = 1
+
+    def wait(self, timeout=None) -> int:
+        del timeout
+        self.waited = True
+        self.returncode = 1
+        return 1
+
+
 def test_parser_worker_crash_is_classified_without_parsing_status(tmp_path: Path, monkeypatch) -> None:
     request = _request(tmp_path)
     monkeypatch.setattr(
@@ -107,6 +130,22 @@ def test_parser_worker_crash_is_classified_without_parsing_status(tmp_path: Path
 
     assert caught.value.diagnostic.code == "RKBC-037"
     assert caught.value.diagnostic.json_path == "/worker"
+
+
+def test_parent_side_exception_settles_started_worker(tmp_path: Path, monkeypatch) -> None:
+    request = _request(tmp_path)
+    process = _RunningFakeProcess()
+    monkeypatch.setattr(worker_protocol.subprocess, "Popen", lambda *_args, **_kwargs: process)
+
+    def failing_cancel_check() -> bool:
+        raise RuntimeError("synthetic parent-side failure")
+
+    with pytest.raises(RuntimeError, match="parent-side"):
+        run_parser_worker(request, cancel_check=failing_cancel_check)
+
+    assert process.terminated is True
+    assert process.waited is True
+    assert process.poll() is not None
 
 
 def test_parser_worker_malformed_status_is_rejected(tmp_path: Path, monkeypatch) -> None:

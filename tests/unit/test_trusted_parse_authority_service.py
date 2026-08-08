@@ -9,7 +9,9 @@ from research_kb.errors import ResearchKBError
 from research_kb.catalog.models import canonical_digest
 from research_kb.parse.pdfplumber_adapter import PdfPlumberTextFlowAdapter
 from research_kb.services.registry import RegistryService
+from research_kb.services.pipeline_job import PipelineJobService
 from research_kb.services.trusted_parse_authority import TrustedParseAuthorityService
+from research_kb.process_events import read_process_events
 from research_kb.storage.json_io import read_jsonl, serialize_jsonl
 from research_kb.trusted_parse_authority import trusted_parse_authority_chain_diagnostics
 from tests.pdf_helpers import write_synthetic_pdf
@@ -174,3 +176,39 @@ def test_agent_cannot_commit_or_revoke_trust(tmp_path: Path) -> None:
     with pytest.raises(ResearchKBError) as caught:
         service.commit(preview, actor="agent")
     assert caught.value.diagnostic.code == "RKBC-006"
+
+
+def test_authority_commit_can_bind_exact_pipeline_job(tmp_path: Path) -> None:
+    layout = make_runtime_workspace(tmp_path)
+    paper, _ = _paper(layout)
+    job = PipelineJobService(layout).create(
+        requested_route="local_source",
+        requested_depth="semantic_gate",
+        current_node="trusted_parse_authority_primary",
+        input_refs=[],
+        authority_snapshot={
+            "actor": "user",
+            "granted_operations": ["parse_run"],
+            "captured_at": "2026-08-08T08:00:00Z",
+        },
+        idempotency_key="trusted-authority-job",
+        actor="user",
+    ).state
+    service = TrustedParseAuthorityService(layout, clock=lambda: NOW)
+    preview = _preview(service, paper["paper_id"])
+
+    committed = service.commit(
+        preview,
+        preview_digest=preview.preview_digest,
+        actor="user",
+        job_id=job["job_id"],
+    )
+
+    event = next(
+        item
+        for item in read_process_events(layout.process_events_path)
+        if item["event_id"] == committed.event_id
+    )
+    assert event["job_id"] == job["job_id"]
+    assert event["input_refs"] == [paper["paper_id"]]
+    assert event["output_refs"] == [committed.authority_id, committed.state_id]

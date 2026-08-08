@@ -32,6 +32,8 @@ from research_kb.services.parse import ParseService
 from research_kb.services.parse_application import ParseAdapterRegistry, ParseApplicationService
 from research_kb.services.supervised_parse_application import SupervisedParseApplicationService
 from research_kb.services.trusted_parse_authority import TrustedParseAuthorityService
+from research_kb.services.trusted_parse_intake_application import TrustedParseIntakeApplicationService
+from research_kb.trusted_parse_intake import TrustedParseIntakePreparation, TrustedParseIntakeResult
 from research_kb.services.parse_read import ParseReadService
 from research_kb.services.paper_context import PaperContextService
 from research_kb.services.pipeline_job import PipelineJobService
@@ -114,6 +116,9 @@ __all__ = [
     "ParseApplicationService",
     "SupervisedParseApplicationService",
     "TrustedParseAuthorityService",
+    "TrustedParseIntakeApplicationService",
+    "TrustedParseIntakePreparation",
+    "TrustedParseIntakeResult",
     "ParseReadService",
     "PaperContextService",
     "PipelineJobService",

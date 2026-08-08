@@ -81,7 +81,8 @@
       "tests/unit/test_source_adequacy_resolution_application_service.py",
       "tests/unit/test_source_adequacy_service.py",
       "tests/unit/test_supervised_parse_application_service.py",
-      "tests/unit/test_trusted_parse_authority_service.py"
+      "tests/unit/test_trusted_parse_authority_service.py",
+      "tests/unit/test_trusted_parse_intake_application_service.py"
     ],
     "application-semantic-a3a-source": [
       "tests/unit/test_reading_application_service.py"

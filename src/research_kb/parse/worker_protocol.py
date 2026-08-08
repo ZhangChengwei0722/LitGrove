@@ -92,6 +92,19 @@ def run_parser_worker(
         stderr=subprocess.PIPE,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
+    try:
+        return _complete_started_worker(process, request, frame, cancel_check)
+    except BaseException:
+        _settle_started_worker(process, request.budget.cancel_grace_seconds)
+        raise
+
+
+def _complete_started_worker(
+    process: Any,
+    request: WorkerParseRequest,
+    frame: bytes,
+    cancel_check: CancelCheck | None,
+) -> WorkerParseResult:
     assert process.stdin is not None
     process.stdin.write(frame)
     process.stdin.close()
@@ -175,6 +188,17 @@ def run_parser_worker(
     if parser != {"adapter": request.adapter_name, "version": request.adapter_version}:
         raise _error(PROTECTED_INPUT_CHANGED, "/worker/parser", "parser worker identity changed")
     return WorkerParseResult(tuple(pages), request.source_sha256, parser, status["output_utf8_bytes"])
+
+
+def _settle_started_worker(process: Any, grace_seconds: float) -> None:
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=grace_seconds)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
 
 
 def _validate_pages(pages: Any, budget: ParserBudgetProfile) -> int:

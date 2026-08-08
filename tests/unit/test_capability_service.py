@@ -10,7 +10,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
         "status": "success",
         "interface_version": "1.0",
         "core": {
-            "version": "0.1.1.dev2026080801",
+            "version": "0.1.1.dev2026080802",
             "contract_versions": ["1.0"],
                 "layout_versions": ["p7d-1"],
         },
@@ -153,6 +153,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
             "workspace_adoption": True,
             "trusted_parse_authority": True,
             "supervised_pdf_parse": True,
+            "trusted_parse_intake_application": True,
             "deterministic_trunk": True,
             "deterministic_intake_application": True,
             "agent_task_staging": True,
