@@ -47,6 +47,7 @@ _REQUESTED_OPERATIONS = frozenset({"basic_paper_card", "basic_review_memory"})
 _PARSE_POLICIES = frozenset({"legacy_direct_parse", "trusted_supervised_parse"})
 _TRUSTED_PARSE_NODE_PREFIX = "trusted_parse_"
 _TRUSTED_AUTHORITY_NODE_PREFIX = "trusted_parse_authority_"
+_TRUSTED_RECONCILE_NODE = "trusted_parse_reconcile_undecided"
 _UPLOAD_FIELDS = frozenset(
     {
         "idempotency_key",
@@ -247,6 +248,31 @@ class DeterministicIntakeApplicationService:
                     job_id=job_id,
                     actor="user",
                 )
+        if (
+            self.parse_policy == "trusted_supervised_parse"
+            and state["current_node"] == "semantic_route"
+            and state["wait_reason"] == "route_ambiguous"
+        ):
+            _require_trusted_route_resume_receipts(layout, state["job_id"])
+            paper = _paper_for_job(layout, state["job_id"])
+            if paper is None:
+                raise _receipt_error(state["job_id"], "trusted route resume paper is missing")
+            trunk = DeterministicTrunkService(layout).advance(
+                job_id=state["job_id"],
+                paper_id=paper["paper_id"],
+                requested_operation=normalized["requested_operation"],
+                adapter_name="pdfplumber-text-flow",
+                actor="user",
+                document_route=normalized["document_route"],
+                route_reason=normalized["route_reason"],
+            )
+            return _job_result(
+                layout,
+                trunk.state,
+                paper,
+                normalized,
+                trunk.persistent_writes,
+            )
         return self._continue(layout, state, source_state, normalized, 0)
 
     def cancel(
@@ -807,6 +833,21 @@ def _job_events(layout: WorkspaceLayout, job_id: str, operation: str) -> list[di
         and item["operation"] == operation
         and item["result"] == "success"
     ]
+
+
+def _require_trusted_route_resume_receipts(layout: WorkspaceLayout, job_id: str) -> None:
+    history = PipelineJobService(layout).show(job_id)["history"]
+    reconciled = [item for item in history if item["current_node"] == _TRUSTED_RECONCILE_NODE]
+    authority_events = _job_events(layout, job_id, "trusted_parse_authority_commit")
+    parse_events = _job_events(layout, job_id, "parse_run")
+    valid = (
+        len(reconciled) == 1
+        and len(authority_events) == 1
+        and len(parse_events) == 1
+        and parse_events[0]["input_refs"][1:] == authority_events[0]["output_refs"]
+    )
+    if not valid:
+        raise _receipt_error(job_id, "trusted route resume provenance is incomplete or ambiguous")
 
 
 def _paper_for_job(layout: WorkspaceLayout, job_id: str) -> dict[str, Any] | None:

@@ -11,6 +11,7 @@ import pytest
 
 from research_kb.catalog.models import canonical_digest
 from research_kb.errors import (
+    INCOMPLETE_TRANSACTION,
     INVALID_AUTHORITY,
     PARSER_WORKER_FAILED,
     Diagnostic,
@@ -264,6 +265,97 @@ def test_approval_uses_job_correlated_supervised_parse_and_continues_trunk(tmp_p
     )
     assert replay["persistent_writes"] == 0
     assert replay["pipeline"]["state_id"] == current["state_id"]
+
+
+def test_trusted_undecided_route_resume_reuses_receipted_parse_without_new_parse(
+    tmp_path: Path,
+) -> None:
+    layout, session, started = _trusted_case(tmp_path, route=None)
+    trusted = TrustedParseIntakeApplicationService(
+        clock=lambda: NOW,
+        nonce_factory=lambda: "undecided-nonce",
+    )
+    preparation = trusted.prepare(session, started["pipeline"]["job_id"], _expected_state(started))
+    approved = trusted.approve(
+        session,
+        preparation,
+        aggregate_preview_digest=preparation.preparation_digest,
+        actor="user",
+    )
+    assert approved.result["pipeline"]["current_node"] == "semantic_route"
+    assert approved.result["pipeline"]["wait_reason"] == "route_ambiguous"
+    before = read_process_events(layout.process_events_path)
+
+    current = PipelineJobService(layout).show(started["pipeline"]["job_id"])["current_state"]
+    resumed = DeterministicIntakeApplicationService(
+        parse_policy="trusted_supervised_parse",
+        clock=lambda: NOW,
+    ).resume(
+        session,
+        started["pipeline"]["job_id"],
+        {"state_id": current["state_id"], "state_digest": canonical_digest(current)},
+        {
+            "requested_operation": "basic_paper_card",
+            "document_route": "primary",
+            "route_reason": None,
+            "bibliography": _request(b"placeholder")["bibliography"],
+        },
+    )
+    after = read_process_events(layout.process_events_path)
+
+    assert resumed["pipeline"]["status"] == "completed"
+    assert resumed["pipeline"]["current_node"] == "primary_semantic_gate"
+    for operation in ("trusted_parse_authority_commit", "parse_run"):
+        assert len([item for item in before if item["operation"] == operation]) == 1
+        assert len([item for item in after if item["operation"] == operation]) == 1
+
+
+@pytest.mark.parametrize("corruption", ["missing_authority", "broken_parse_link"])
+def test_trusted_undecided_route_resume_rejects_incomplete_parse_lineage(
+    tmp_path: Path,
+    corruption: str,
+) -> None:
+    layout, session, started = _trusted_case(tmp_path, route=None)
+    trusted = TrustedParseIntakeApplicationService(
+        clock=lambda: NOW,
+        nonce_factory=lambda: "undecided-corrupt-nonce",
+    )
+    preparation = trusted.prepare(session, started["pipeline"]["job_id"], _expected_state(started))
+    approved = trusted.approve(
+        session,
+        preparation,
+        aggregate_preview_digest=preparation.preparation_digest,
+        actor="user",
+    )
+    assert approved.result["pipeline"]["wait_reason"] == "route_ambiguous"
+    events = read_process_events(layout.process_events_path)
+    if corruption == "missing_authority":
+        events = [item for item in events if item["operation"] != "trusted_parse_authority_commit"]
+    else:
+        parse_event = next(item for item in events if item["operation"] == "parse_run")
+        parse_event["input_refs"] = parse_event["input_refs"][:-1]
+    layout.process_events_path.write_bytes(serialize_jsonl(events))
+    current = PipelineJobService(layout).show(started["pipeline"]["job_id"])["current_state"]
+
+    with pytest.raises(ResearchKBError) as caught:
+        DeterministicIntakeApplicationService(
+            parse_policy="trusted_supervised_parse",
+            clock=lambda: NOW,
+        ).resume(
+            session,
+            started["pipeline"]["job_id"],
+            {"state_id": current["state_id"], "state_digest": canonical_digest(current)},
+            {
+                "requested_operation": "basic_paper_card",
+                "document_route": "primary",
+                "route_reason": None,
+                "bibliography": _request(b"placeholder")["bibliography"],
+            },
+        )
+
+    assert caught.value.diagnostic.code == INCOMPLETE_TRANSACTION
+    unchanged = PipelineJobService(layout).show(started["pipeline"]["job_id"])["current_state"]
+    assert unchanged == current
 
 
 def test_source_drift_after_preparation_routes_to_waiting_source(tmp_path: Path) -> None:

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "research-kb-core"
-version = "0.1.1.dev2026080802"
+version = "0.1.1.dev2026080803"
 description = "Cross-platform contracts and deterministic CLI primitives for local-first research knowledge bases"
 readme = "README.md"
 license = "Apache-2.0"
