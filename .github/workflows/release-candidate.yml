@@ -127,11 +127,23 @@ jobs:
             -r requirements/locks/linux_x86_64/py312/runtime.txt
           wheel="$(find "$GOVERNANCE_ROOT/dist" -maxdepth 1 -name '*.whl' -type f -print -quit)"
           "$GOVERNANCE_ROOT/venv/bin/python" -m pip install --no-index --no-deps --no-compile --only-binary=:all: --no-cache-dir \
-            --target "$GOVERNANCE_ROOT/install-root" "$wheel"
+            --prefix "$GOVERNANCE_ROOT/install-root" "$wheel"
+          site_packages="$("$GOVERNANCE_ROOT/venv/bin/python" - "$GOVERNANCE_ROOT/install-root" <<'PY'
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1]).resolve()
+          dist_infos = sorted(root.rglob("research_kb_core-*.dist-info"))
+          if len(dist_infos) != 1 or not dist_infos[0].is_dir() or dist_infos[0].is_symlink():
+              raise SystemExit("isolated prefix must contain exactly one regular Core .dist-info directory")
+          print(dist_infos[0].parent)
+          PY
+          )"
           mkdir -p "$GOVERNANCE_ROOT/smoke"
           cd "$GOVERNANCE_ROOT/smoke"
-          PYTHONPATH="$GOVERNANCE_ROOT/install-root" "$GOVERNANCE_ROOT/venv/bin/python" -m research_kb capability show > capability.json
-          module_path="$(PYTHONPATH="$GOVERNANCE_ROOT/install-root" "$GOVERNANCE_ROOT/venv/bin/python" -c 'import research_kb; print(research_kb.__file__)')"
+          printf '%s\n' "$site_packages" > "$GOVERNANCE_ROOT/smoke/site-packages-path.txt"
+          PYTHONPATH="$site_packages" "$GOVERNANCE_ROOT/venv/bin/python" -m research_kb capability show > capability.json
+          module_path="$(PYTHONPATH="$site_packages" "$GOVERNANCE_ROOT/venv/bin/python" -c 'import research_kb; print(research_kb.__file__)')"
           case "$module_path" in
             "$GOVERNANCE_ROOT/install-root/"*) ;;
             *) echo "unexpected source/editable import: $module_path" >&2; exit 1 ;;
@@ -139,7 +151,7 @@ jobs:
           printf '%s\n' "$module_path" > "$GOVERNANCE_ROOT/smoke/module-path.txt"
           INSTALL_ROOT="$GOVERNANCE_ROOT/install-root" \
           PYTHONNOUSERSITE=1 \
-          PYTHONPATH="$GOVERNANCE_ROOT/install-root:${GITHUB_WORKSPACE}" \
+          PYTHONPATH="$site_packages:${GITHUB_WORKSPACE}" \
             "$GOVERNANCE_ROOT/venv/bin/python" - "$GOVERNANCE_ROOT/smoke/runtime.json" <<'PY'
           import os
           import platform
@@ -195,9 +207,10 @@ jobs:
         run: |
           set -euo pipefail
           export PIP_CONFIG_FILE=/dev/null
+          site_packages="$(cat "$GOVERNANCE_ROOT/smoke/site-packages-path.txt")"
           "$GOVERNANCE_ROOT/venv/bin/python" -m pip install --isolated --index-url https://pypi.org/simple --require-hashes --no-deps --only-binary=:all: --no-cache-dir \
             -r requirements/locks/linux_x86_64/py312/audit.txt
-          PYTHONPATH="$GOVERNANCE_ROOT/install-root:${GITHUB_WORKSPACE}" \
+          PYTHONPATH="$site_packages:${GITHUB_WORKSPACE}" \
             "$GOVERNANCE_ROOT/venv/bin/python" -m pip_audit \
               --local --skip-editable --format cyclonedx-json \
               --output "$GOVERNANCE_ROOT/manifests/sbom.cdx.json"
