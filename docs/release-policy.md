@@ -58,8 +58,18 @@ artifact bytes:
    never rebuilds from the tag source or replaces them with locally built files.
 
 Any commit, digest, run, tag, or manifest mismatch stops the transaction before external
-publication. G1 documents this contract only. It creates no tag, GitHub Release, PyPI
-publication, or Trusted Publisher configuration; publication remains a later R1-B decision.
+publication. The R1 publisher runs only from the immutable accepted tag and consumes the
+exact accepted candidate artifact; it never treats workflow registration or a successful
+rebuild as publication authority. Before any artifact download, the authenticated dispatch
+must supply the canonical external R1-B authority manifest and its SHA-256. That authority
+binds the exact workflow run and attempt, source commit, artifact ID/name/service digest,
+wheel/sdist digests, tag, actor and Trusted Publisher tuple. Downstream jobs download by
+artifact ID with digest mismatch configured as a hard failure and check out the accepted
+commit rather than resolving the tag again. Before download, the publisher also confirms
+that the live protected-branch required-check set is the reviewed six-check allowlist and
+that every required check completed successfully on the accepted commit. The GitHub Release
+and PyPI jobs each resolve the tag to that commit again immediately before their external
+write authority is used.
 
 ## Reproducible Dependency Locks
 
@@ -78,13 +88,16 @@ and a lock from one CPython minor cannot substitute for another tuple.
 
 ## Distribution And Provenance
 
-GitHub Releases are the first supported release record. Publishing to PyPI is disabled until
-a separate reviewed workflow establishes the project identity, trusted publishing through
-OIDC, environment protection, and artifact attestations. Do not use a long-lived PyPI token.
+GitHub Releases are the primary public release record. PyPI publication uses the separately
+reviewed `publish-accepted-release.yml` workflow, a protected `pypi` environment and OIDC
+Trusted Publishing. Long-lived PyPI tokens are prohibited.
 
 Release automation must retain the accepted source commit, checksums, SBOM, build
 environment, and provenance/attestation links. It must upload the accepted bytes from the
-build-once transaction and must not perform a tag-source rebuild.
+build-once transaction and must not perform a tag-source rebuild. Its always-run
+reconciliation fails closed for tag-only, GitHub-only, PyPI-only or unknown public states.
+Both lightweight and annotated immutable tags are resolved to their final commit before
+reconciliation; a tag object that does not resolve to the accepted commit is rejected.
 
 ## Support
 

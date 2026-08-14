@@ -2,7 +2,14 @@
 
 ## Supported Versions
 
-The repository has no tagged stable release. Security fixes target the current `main` branch.
+| Version | Supported |
+|---|---|
+| `0.1.x` | Yes |
+| older untagged development snapshots | No |
+
+Security fixes target the current `0.1.x` line and protected `main`. A release advisory
+may narrow this window when a security, privacy, source-immutability, or data-integrity fix
+requires users to move to a newer patch.
 
 ## Reporting A Vulnerability
 

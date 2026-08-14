@@ -45,6 +45,7 @@ GIT_OBJECT_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 RUN_ID_PATTERN = re.compile(r"^[1-9][0-9]*$")
 VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:\.dev[0-9]+)?$")
 TAG_PATTERN = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+$")
+ASSET_BASENAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 
 
 class GovernanceInputError(ValueError):
@@ -241,6 +242,24 @@ def _require_mapping(value: Any, path: str, errors: list[Finding]) -> Mapping[st
     return value
 
 
+def _require_exact_fields(
+    value: Mapping[str, Any],
+    fields: set[str],
+    path: str,
+    errors: list[Finding],
+) -> bool:
+    actual = set(value)
+    if actual != fields:
+        _finding(
+            errors,
+            "noncanonical_fields",
+            path,
+            f"expected fields {sorted(fields)!r}; received {sorted(actual)!r}",
+        )
+        return False
+    return True
+
+
 def _require_sha256(value: Any, path: str, errors: list[Finding]) -> bool:
     if not isinstance(value, str) or not SHA256_PATTERN.fullmatch(value):
         _finding(errors, "invalid_sha256", path, "expected a lowercase 64-character SHA-256 digest")
@@ -283,6 +302,13 @@ def _require_safe_relative(value: Any, path: str, errors: list[Finding]) -> bool
 
 def _as_run_id(value: Any) -> str:
     return str(value) if isinstance(value, int) and not isinstance(value, bool) else value
+
+
+def _accepted_artifact_name(candidate: Mapping[str, Any]) -> str:
+    return (
+        f"accepted-release-candidate-{_as_run_id(candidate.get('workflow_run_id'))}-"
+        f"{_as_run_id(candidate.get('workflow_run_attempt'))}-{candidate.get('source_commit', '')}"
+    )
 
 
 def _require_run_attempt(value: Any, path: str, errors: list[Finding]) -> bool:
@@ -476,12 +502,14 @@ def verify_artifact_manifest(
     _require_run_id(candidate.get("workflow_run_id"), "manifest.candidate.workflow_run_id", errors)
     _require_run_attempt(candidate.get("workflow_run_attempt"), "manifest.candidate.workflow_run_attempt", errors)
     _require_version(candidate.get("version"), "manifest.candidate.version", errors)
-    expected_artifact_name = (
-        f"release-candidate-{_as_run_id(candidate.get('workflow_run_id'))}-"
-        f"{_as_run_id(candidate.get('workflow_run_attempt'))}"
-    )
+    expected_artifact_name = _accepted_artifact_name(candidate)
     if candidate.get("artifact_name") != expected_artifact_name:
-        _finding(errors, "invalid_artifact_name", "manifest.candidate.artifact_name", "artifact name must bind run id and run attempt")
+        _finding(
+            errors,
+            "invalid_artifact_name",
+            "manifest.candidate.artifact_name",
+            "accepted artifact name must bind run id, run attempt, and source commit",
+        )
     _compare_candidate(candidate, expected, errors, "manifest.candidate")
 
     build = _require_mapping(root.get("build_once"), "manifest.build_once", errors)
@@ -645,7 +673,8 @@ def build_artifact_manifest(
         "workflow_run_id": normalized_run,
         "workflow_run_attempt": normalized_attempt,
         "version": version,
-        "artifact_name": artifact_name or f"release-candidate-{normalized_run}-{normalized_attempt}",
+        "artifact_name": artifact_name
+        or f"accepted-release-candidate-{normalized_run}-{normalized_attempt}-{source_commit}",
     }
     cache_input = {
         "repository": repository,
@@ -1125,6 +1154,12 @@ def _publication_authority_parts(
     if not isinstance(expected, Mapping):
         _finding(errors, "invalid_expected_authority", "expected", "expected authority must be a JSON object")
         return {}, {}, False
+    exact_root = _require_exact_fields(
+        expected,
+        {"schema_version", "immutable", "candidate", "publication"},
+        "expected",
+        errors,
+    )
     if expected.get("schema_version") != PUBLICATION_AUTHORITY_SCHEMA_VERSION:
         _finding(errors, "invalid_expected_authority", "expected.schema_version", "expected must be an immutable publication authority manifest")
     if expected.get("immutable") is not True:
@@ -1133,8 +1168,37 @@ def _publication_authority_parts(
     publication = _require_mapping(expected.get("publication"), "expected.publication", errors)
     if candidate is None or publication is None:
         return candidate or {}, publication or {}, False
+    exact_candidate = _require_exact_fields(
+        candidate,
+        {"repository", "source_commit", "workflow_run_id", "workflow_run_attempt", "version", "artifact_name"},
+        "expected.candidate",
+        errors,
+    )
+    exact_publication = _require_exact_fields(
+        publication,
+        {
+            "accepted_run_id",
+            "accepted_run_attempt",
+            "accepted_commit",
+            "accepted_artifact_name",
+            "accepted_artifact_id",
+            "accepted_artifact_service_digest",
+            "accepted_version",
+            "authorized_actor_id",
+            "tag",
+            "workflow_ref",
+            "environment",
+            "trusted_publisher",
+            "accepted_artifact_digests",
+        },
+        "expected.publication",
+        errors,
+    )
     valid = (
         canonical_valid
+        and exact_root
+        and exact_candidate
+        and exact_publication
         and expected.get("schema_version") == PUBLICATION_AUTHORITY_SCHEMA_VERSION
         and expected.get("immutable") is True
     )
@@ -1155,8 +1219,12 @@ def _publication_authority_parts(
         "accepted_run_attempt",
         "accepted_commit",
         "accepted_artifact_name",
+        "accepted_artifact_id",
+        "accepted_artifact_service_digest",
         "accepted_version",
+        "authorized_actor_id",
         "tag",
+        "workflow_ref",
         "environment",
         "trusted_publisher",
         "accepted_artifact_digests",
@@ -1173,11 +1241,34 @@ def _publication_authority_parts(
     if not isinstance(publication.get("accepted_artifact_name"), str) or not publication.get("accepted_artifact_name"):
         _finding(errors, "invalid_expected_authority", "expected.publication.accepted_artifact_name", "authority artifact name is required")
         valid = False
+    valid = _require_run_id(
+        publication.get("accepted_artifact_id"),
+        "expected.publication.accepted_artifact_id",
+        errors,
+    ) and valid
+    valid = _require_sha256(
+        publication.get("accepted_artifact_service_digest"),
+        "expected.publication.accepted_artifact_service_digest",
+        errors,
+    ) and valid
+    valid = _require_run_id(
+        publication.get("authorized_actor_id"),
+        "expected.publication.authorized_actor_id",
+        errors,
+    ) and valid
     if not isinstance(publication.get("tag"), str) or not TAG_PATTERN.fullmatch(publication.get("tag", "")):
         _finding(errors, "invalid_expected_authority", "expected.publication.tag", "authority tag must be a final semantic version tag")
         valid = False
     if publication.get("environment") != "pypi":
         _finding(errors, "invalid_expected_authority", "expected.publication.environment", "authority environment must be pypi")
+        valid = False
+    if publication.get("workflow_ref") != f"refs/tags/{publication.get('tag')}":
+        _finding(
+            errors,
+            "invalid_expected_authority",
+            "expected.publication.workflow_ref",
+            "authority workflow ref must be the exact immutable release tag",
+        )
         valid = False
     trusted = publication.get("trusted_publisher")
     trusted_fields = {"owner", "repository", "workflow", "environment"}
@@ -1189,7 +1280,7 @@ def _publication_authority_parts(
             if not isinstance(trusted.get(field), str) or not trusted.get(field):
                 _finding(errors, "invalid_expected_authority", f"expected.publication.trusted_publisher.{field}", "authority Trusted Publisher field is required")
                 valid = False
-        if trusted.get("workflow") != ".github/workflows/publish-accepted-release.yml":
+        if trusted.get("workflow") != "publish-accepted-release.yml":
             _finding(errors, "invalid_expected_authority", "expected.publication.trusted_publisher.workflow", "authority workflow is not the reviewed publisher")
             valid = False
         if trusted.get("environment") != "pypi":
@@ -1203,7 +1294,12 @@ def _publication_authority_parts(
         wheel_count = 0
         sdist_count = 0
         for filename, digest in accepted_digests.items():
-            if not isinstance(filename, str) or not _require_safe_relative(filename, "expected.publication.accepted_artifact_digests", errors):
+            if (
+                not isinstance(filename, str)
+                or not _require_safe_relative(filename, "expected.publication.accepted_artifact_digests", errors)
+                or "/" in filename
+                or not ASSET_BASENAME_PATTERN.fullmatch(filename)
+            ):
                 _finding(errors, "invalid_expected_authority", "expected.publication.accepted_artifact_digests", "authority artifact names must be safe relative paths")
                 valid = False
             else:
@@ -1233,14 +1329,239 @@ def _publication_authority_parts(
         if ".dev" in candidate.get("version", "") or publication.get("tag") != f"v{candidate.get('version')}":
             _finding(errors, "invalid_expected_authority", "expected.publication.tag", "authority tag must match the final candidate version")
             valid = False
-        expected_artifact_name = (
-            f"release-candidate-{_as_run_id(candidate.get('workflow_run_id'))}-"
-            f"{_as_run_id(candidate.get('workflow_run_attempt'))}"
-        )
+        expected_artifact_name = _accepted_artifact_name(candidate)
         if candidate.get("artifact_name") != expected_artifact_name:
-            _finding(errors, "invalid_expected_authority", "expected.candidate.artifact_name", "authority artifact name must bind run id and run attempt")
+            _finding(
+                errors,
+                "invalid_expected_authority",
+                "expected.candidate.artifact_name",
+                "authority artifact name must bind run id, run attempt, and source commit",
+            )
             valid = False
     return candidate, publication, valid
+
+
+def build_publication_manifests(
+    artifact_manifest: Mapping[str, Any],
+    *,
+    artifact_dir: Path,
+    actor_id: str,
+    authorized_actor_id: str,
+    artifact_id: str,
+    artifact_service_digest: str,
+    tag: str,
+    environment: str,
+    trusted_owner: str,
+    trusted_repository: str,
+    trusted_workflow: str,
+    trusted_environment: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    artifact_result = verify_artifact_manifest(artifact_manifest, artifact_paths=artifact_dir)
+    if not artifact_result.ok:
+        raise GovernanceInputError(
+            f"candidate artifact verification failed: {','.join(artifact_result.codes)}"
+        )
+    candidate = artifact_manifest.get("candidate")
+    if not isinstance(candidate, Mapping):
+        raise GovernanceInputError("candidate manifest lacks candidate identity")
+    if actor_id != authorized_actor_id or not RUN_ID_PATTERN.fullmatch(actor_id):
+        raise GovernanceInputError("authenticated actor does not match the authorized release actor")
+    if not RUN_ID_PATTERN.fullmatch(artifact_id):
+        raise GovernanceInputError("artifact id must be a positive decimal GitHub artifact id")
+    if not SHA256_PATTERN.fullmatch(artifact_service_digest):
+        raise GovernanceInputError("artifact service digest must be a SHA-256 value")
+    version = candidate.get("version")
+    if not isinstance(version, str) or ".dev" in version or tag != f"v{version}":
+        raise GovernanceInputError("release tag must match a final candidate version")
+    if environment != "pypi" or trusted_environment != environment:
+        raise GovernanceInputError("publication environment must match the protected pypi environment")
+    if trusted_workflow != "publish-accepted-release.yml":
+        raise GovernanceInputError("Trusted Publisher workflow filename is not reviewed")
+    if candidate.get("repository") != f"{trusted_owner}/{trusted_repository}":
+        raise GovernanceInputError("Trusted Publisher owner/repository differs from the candidate repository")
+
+    digests = _expected_artifact_digests(artifact_manifest)
+    trusted_publisher = {
+        "owner": trusted_owner,
+        "repository": trusted_repository,
+        "workflow": trusted_workflow,
+        "environment": trusted_environment,
+    }
+    publication = {
+        "accepted_run_id": _as_run_id(candidate.get("workflow_run_id")),
+        "accepted_run_attempt": _as_run_id(candidate.get("workflow_run_attempt")),
+        "accepted_commit": candidate.get("source_commit"),
+        "accepted_artifact_name": candidate.get("artifact_name"),
+        "accepted_artifact_id": artifact_id,
+        "accepted_artifact_service_digest": artifact_service_digest,
+        "accepted_version": version,
+        "authorized_actor_id": actor_id,
+        "tag": tag,
+        "workflow_ref": f"refs/tags/{tag}",
+        "environment": environment,
+        "trusted_publisher": trusted_publisher,
+        "accepted_artifact_digests": digests,
+    }
+    authority = {
+        "schema_version": PUBLICATION_AUTHORITY_SCHEMA_VERSION,
+        "immutable": True,
+        "candidate": dict(candidate),
+        "publication": publication,
+    }
+    activation_body = {
+        "mode": "r1_b",
+        "enabled": True,
+        "publication_authorized": True,
+        "authority_manifest_sha256": canonical_digest(authority),
+        **publication,
+        "build_once": True,
+        "rebuild": False,
+        "source_artifact_only": True,
+        "long_lived_token": False,
+    }
+    activation = {
+        "schema_version": PUBLICATION_SCHEMA_VERSION,
+        "activation": activation_body,
+    }
+    verification = verify_publication_activation(
+        activation,
+        expected=authority,
+        downloaded_manifest=artifact_manifest,
+        downloaded_artifact_dir=artifact_dir,
+    )
+    if not verification.ok:
+        raise GovernanceInputError(
+            f"generated publication manifests failed verification: {','.join(verification.codes)}"
+        )
+    return authority, activation
+
+
+def verify_publication_authority(
+    expected: Mapping[str, Any],
+    *,
+    repository: str,
+    actor_id: str,
+    accepted_run_id: str,
+    accepted_run_attempt: str,
+    accepted_commit: str,
+    accepted_artifact_name: str,
+    accepted_artifact_id: str,
+    accepted_artifact_service_digest: str,
+    tag: str,
+    workflow_ref: str,
+    environment: str,
+    trusted_owner: str,
+    trusted_repository: str,
+    trusted_workflow: str,
+    trusted_environment: str,
+) -> VerificationResult:
+    """Verify a caller-supplied immutable authority before artifact download."""
+
+    errors: list[Finding] = []
+    canonical_valid = _check_canonical_input(expected, "expected", errors)
+    candidate, publication, authority_valid = _publication_authority_parts(
+        expected,
+        errors,
+        canonical_valid=canonical_valid,
+    )
+    expected_values = {
+        "candidate.repository": (candidate.get("repository"), repository),
+        "publication.authorized_actor_id": (publication.get("authorized_actor_id"), actor_id),
+        "publication.accepted_run_id": (_as_run_id(publication.get("accepted_run_id")), accepted_run_id),
+        "publication.accepted_run_attempt": (
+            _as_run_id(publication.get("accepted_run_attempt")),
+            accepted_run_attempt,
+        ),
+        "publication.accepted_commit": (publication.get("accepted_commit"), accepted_commit),
+        "publication.accepted_artifact_name": (
+            publication.get("accepted_artifact_name"),
+            accepted_artifact_name,
+        ),
+        "publication.accepted_artifact_id": (
+            _as_run_id(publication.get("accepted_artifact_id")),
+            accepted_artifact_id,
+        ),
+        "publication.accepted_artifact_service_digest": (
+            publication.get("accepted_artifact_service_digest"),
+            accepted_artifact_service_digest,
+        ),
+        "publication.tag": (publication.get("tag"), tag),
+        "publication.workflow_ref": (publication.get("workflow_ref"), workflow_ref),
+        "publication.environment": (publication.get("environment"), environment),
+    }
+    trusted = publication.get("trusted_publisher")
+    if isinstance(trusted, Mapping):
+        expected_values.update(
+            {
+                "publication.trusted_publisher.owner": (trusted.get("owner"), trusted_owner),
+                "publication.trusted_publisher.repository": (
+                    trusted.get("repository"),
+                    trusted_repository,
+                ),
+                "publication.trusted_publisher.workflow": (
+                    trusted.get("workflow"),
+                    trusted_workflow,
+                ),
+                "publication.trusted_publisher.environment": (
+                    trusted.get("environment"),
+                    trusted_environment,
+                ),
+            }
+        )
+    for path, (actual, required) in expected_values.items():
+        if actual != required:
+            _finding(errors, "authority_context_mismatch", f"expected.{path}", "authority differs from authenticated dispatch context")
+            authority_valid = False
+    return _finish(
+        errors,
+        {
+            "authority_manifest_sha256": canonical_digest(expected),
+            "accepted_commit": publication.get("accepted_commit"),
+            "accepted_artifact_id": publication.get("accepted_artifact_id"),
+            "authority_context_checked": authority_valid and not errors,
+        },
+    )
+
+
+def build_publication_activation(
+    authority: Mapping[str, Any],
+    *,
+    artifact_manifest: Mapping[str, Any],
+    artifact_dir: Path,
+) -> dict[str, Any]:
+    """Create activation only after external authority and downloaded bytes agree."""
+
+    errors: list[Finding] = []
+    _, publication, authority_valid = _publication_authority_parts(authority, errors)
+    if not authority_valid or errors:
+        raise GovernanceInputError(
+            f"external publication authority is invalid: {','.join(_finish(errors).codes)}"
+        )
+    activation = {
+        "schema_version": PUBLICATION_SCHEMA_VERSION,
+        "activation": {
+            "mode": "r1_b",
+            "enabled": True,
+            "publication_authorized": True,
+            "authority_manifest_sha256": canonical_digest(authority),
+            **dict(publication),
+            "build_once": True,
+            "rebuild": False,
+            "source_artifact_only": True,
+            "long_lived_token": False,
+        },
+    }
+    verification = verify_publication_activation(
+        activation,
+        expected=authority,
+        downloaded_manifest=artifact_manifest,
+        downloaded_artifact_dir=artifact_dir,
+    )
+    if not verification.ok:
+        raise GovernanceInputError(
+            f"publication activation failed verification: {','.join(verification.codes)}"
+        )
+    return activation
 
 
 def verify_publication_activation(
@@ -1263,11 +1584,41 @@ def verify_publication_activation(
     root = _require_mapping(activation, "activation", errors)
     if root is None:
         return _finish(errors)
+    _require_exact_fields(root, {"schema_version", "activation"}, "activation", errors)
     if root.get("schema_version") != PUBLICATION_SCHEMA_VERSION:
         _finding(errors, "unsupported_schema", "activation.schema_version", "publication activation schema is unsupported")
     body = _require_mapping(root.get("activation"), "activation.activation", errors)
     if body is None:
         body = {}
+    else:
+        _require_exact_fields(
+            body,
+            {
+                "mode",
+                "enabled",
+                "publication_authorized",
+                "authority_manifest_sha256",
+                "accepted_run_id",
+                "accepted_run_attempt",
+                "accepted_commit",
+                "accepted_artifact_name",
+                "accepted_artifact_id",
+                "accepted_artifact_service_digest",
+                "accepted_version",
+                "authorized_actor_id",
+                "tag",
+                "workflow_ref",
+                "environment",
+                "trusted_publisher",
+                "build_once",
+                "rebuild",
+                "source_artifact_only",
+                "long_lived_token",
+                "accepted_artifact_digests",
+            },
+            "activation.activation",
+            errors,
+        )
     if body.get("enabled") is not True or body.get("publication_authorized") is not True:
         _finding(errors, "publication_not_authorized", "activation.activation", "publication requires a future explicit R1-B authority")
     if body.get("mode") != "r1_b":
@@ -1284,19 +1635,28 @@ def verify_publication_activation(
     _require_commit(body.get("accepted_commit"), "activation.activation.accepted_commit", errors)
     if not isinstance(body.get("accepted_artifact_name"), str) or not body.get("accepted_artifact_name"):
         _finding(errors, "missing_identity", "activation.activation.accepted_artifact_name", "accepted artifact name is required")
+    _require_run_id(body.get("accepted_artifact_id"), "activation.activation.accepted_artifact_id", errors)
+    _require_sha256(
+        body.get("accepted_artifact_service_digest"),
+        "activation.activation.accepted_artifact_service_digest",
+        errors,
+    )
+    _require_run_id(body.get("authorized_actor_id"), "activation.activation.authorized_actor_id", errors)
     if not isinstance(body.get("accepted_version"), str) or not body.get("accepted_version"):
         _finding(errors, "missing_identity", "activation.activation.accepted_version", "accepted package version is required")
     if not isinstance(body.get("tag"), str) or not TAG_PATTERN.fullmatch(body.get("tag", "")):
         _finding(errors, "mutable_tag", "activation.activation.tag", "publication tag must be an immutable semantic version tag")
     if body.get("environment") != "pypi":
         _finding(errors, "wrong_environment", "activation.activation.environment", "publication must use the protected pypi environment")
+    if body.get("workflow_ref") != f"refs/tags/{body.get('tag')}":
+        _finding(errors, "wrong_workflow_ref", "activation.activation.workflow_ref", "publication must run from the exact release tag")
     trusted = _require_mapping(body.get("trusted_publisher"), "activation.activation.trusted_publisher", errors)
     if trusted is None:
         trusted = {}
     for field in ("owner", "repository", "workflow", "environment"):
         if not isinstance(trusted.get(field), str) or not trusted.get(field):
             _finding(errors, "missing_trusted_publisher", f"activation.activation.trusted_publisher.{field}", "trusted publisher identity is required")
-    if trusted.get("workflow") != ".github/workflows/publish-accepted-release.yml":
+    if trusted.get("workflow") != "publish-accepted-release.yml":
         _finding(errors, "wrong_trusted_publisher", "activation.activation.trusted_publisher.workflow", "trusted publisher workflow is not the reviewed workflow")
     if trusted.get("environment") != body.get("environment"):
         _finding(errors, "wrong_trusted_publisher", "activation.activation.trusted_publisher.environment", "trusted publisher environment does not match activation")
@@ -1310,7 +1670,17 @@ def verify_publication_activation(
         digests = {}
     else:
         for filename, digest in digests.items():
-            _require_safe_relative(filename, "activation.activation.accepted_artifact_digests", errors)
+            if (
+                not _require_safe_relative(filename, "activation.activation.accepted_artifact_digests", errors)
+                or "/" in filename
+                or not ASSET_BASENAME_PATTERN.fullmatch(filename)
+            ):
+                _finding(
+                    errors,
+                    "unsafe_artifact_basename",
+                    "activation.activation.accepted_artifact_digests",
+                    "publication artifact names must be safe basenames",
+                )
             _require_sha256(digest, f"activation.activation.accepted_artifact_digests.{filename}", errors)
 
     expected_run_id = expected_candidate.get("workflow_run_id", expected_publication.get("accepted_run_id"))
@@ -1321,8 +1691,12 @@ def verify_publication_activation(
         ("accepted_run_attempt", "wrong_run_attempt"),
         ("accepted_commit", "wrong_commit"),
         ("accepted_artifact_name", "wrong_artifact_name"),
+        ("accepted_artifact_id", "wrong_artifact_id"),
+        ("accepted_artifact_service_digest", "wrong_artifact_service_digest"),
         ("accepted_version", "version_mismatch"),
+        ("authorized_actor_id", "wrong_actor"),
         ("tag", "wrong_tag"),
+        ("workflow_ref", "wrong_workflow_ref"),
         ("environment", "wrong_environment"),
     ):
         if field == "accepted_run_id":
@@ -1335,7 +1709,7 @@ def verify_publication_activation(
             expected_value = expected_publication.get(field)
         if expected_value is not None:
             actual_value = body.get(field)
-            if field in {"accepted_run_id", "accepted_run_attempt"}:
+            if field in {"accepted_run_id", "accepted_run_attempt", "accepted_artifact_id"}:
                 actual_value, expected_value = _as_run_id(actual_value), _as_run_id(expected_value)
             if actual_value != expected_value:
                 _finding(errors, code, f"activation.activation.{field}", "publication identity does not match accepted identity")
@@ -1778,6 +2152,46 @@ def _build_parser() -> argparse.ArgumentParser:
     verify_publication.add_argument("--downloaded-manifest", required=True, type=Path)
     verify_publication.add_argument("--downloaded-artifact-dir", required=True, type=Path)
 
+    verify_authority = commands.add_parser("verify-publication-authority")
+    verify_authority.add_argument("--manifest", required=True, type=Path)
+    verify_authority.add_argument("--repository", required=True)
+    verify_authority.add_argument("--actor-id", required=True)
+    verify_authority.add_argument("--accepted-run-id", required=True)
+    verify_authority.add_argument("--accepted-run-attempt", required=True)
+    verify_authority.add_argument("--accepted-commit", required=True)
+    verify_authority.add_argument("--accepted-artifact-name", required=True)
+    verify_authority.add_argument("--accepted-artifact-id", required=True)
+    verify_authority.add_argument("--accepted-artifact-service-digest", required=True)
+    verify_authority.add_argument("--tag", required=True)
+    verify_authority.add_argument("--workflow-ref", required=True)
+    verify_authority.add_argument("--environment", required=True)
+    verify_authority.add_argument("--trusted-owner", required=True)
+    verify_authority.add_argument("--trusted-repository", required=True)
+    verify_authority.add_argument("--trusted-workflow", required=True)
+    verify_authority.add_argument("--trusted-environment", required=True)
+
+    publication_manifests = commands.add_parser("publication-manifests")
+    publication_manifests.add_argument("--candidate-manifest", required=True, type=Path)
+    publication_manifests.add_argument("--artifact-dir", required=True, type=Path)
+    publication_manifests.add_argument("--actor-id", required=True)
+    publication_manifests.add_argument("--authorized-actor-id", required=True)
+    publication_manifests.add_argument("--artifact-id", required=True)
+    publication_manifests.add_argument("--artifact-service-digest", required=True)
+    publication_manifests.add_argument("--tag", required=True)
+    publication_manifests.add_argument("--environment", required=True)
+    publication_manifests.add_argument("--trusted-owner", required=True)
+    publication_manifests.add_argument("--trusted-repository", required=True)
+    publication_manifests.add_argument("--trusted-workflow", required=True)
+    publication_manifests.add_argument("--trusted-environment", required=True)
+    publication_manifests.add_argument("--authority-output", required=True, type=Path)
+    publication_manifests.add_argument("--activation-output", required=True, type=Path)
+
+    publication_activation = commands.add_parser("publication-activation")
+    publication_activation.add_argument("--expected-authority", required=True, type=Path)
+    publication_activation.add_argument("--candidate-manifest", required=True, type=Path)
+    publication_activation.add_argument("--artifact-dir", required=True, type=Path)
+    publication_activation.add_argument("--activation-output", required=True, type=Path)
+
     verify_release = commands.add_parser("verify-release")
     verify_release.add_argument("--artifact-manifest", required=True, type=Path)
     verify_release.add_argument("--installed-manifest", required=True, type=Path)
@@ -1866,6 +2280,66 @@ def main(argv: Sequence[str] | None = None) -> int:
                 downloaded_manifest=downloaded,
                 downloaded_artifact_dir=args.downloaded_artifact_dir,
             )
+        elif args.command == "verify-publication-authority":
+            authority = _read_json(args.manifest)
+            result = _result_or_error(
+                verify_publication_authority,
+                authority,
+                repository=args.repository,
+                actor_id=args.actor_id,
+                accepted_run_id=args.accepted_run_id,
+                accepted_run_attempt=args.accepted_run_attempt,
+                accepted_commit=args.accepted_commit,
+                accepted_artifact_name=args.accepted_artifact_name,
+                accepted_artifact_id=args.accepted_artifact_id,
+                accepted_artifact_service_digest=args.accepted_artifact_service_digest,
+                tag=args.tag,
+                workflow_ref=args.workflow_ref,
+                environment=args.environment,
+                trusted_owner=args.trusted_owner,
+                trusted_repository=args.trusted_repository,
+                trusted_workflow=args.trusted_workflow,
+                trusted_environment=args.trusted_environment,
+            )
+        elif args.command == "publication-manifests":
+            candidate_manifest = _read_json(args.candidate_manifest)
+            authority, activation = build_publication_manifests(
+                candidate_manifest,
+                artifact_dir=args.artifact_dir,
+                actor_id=args.actor_id,
+                authorized_actor_id=args.authorized_actor_id,
+                artifact_id=args.artifact_id,
+                artifact_service_digest=args.artifact_service_digest,
+                tag=args.tag,
+                environment=args.environment,
+                trusted_owner=args.trusted_owner,
+                trusted_repository=args.trusted_repository,
+                trusted_workflow=args.trusted_workflow,
+                trusted_environment=args.trusted_environment,
+            )
+            _write_json(args.authority_output, authority)
+            _write_json(args.activation_output, activation)
+            result = verify_publication_activation(
+                activation,
+                expected=authority,
+                downloaded_manifest=candidate_manifest,
+                downloaded_artifact_dir=args.artifact_dir,
+            )
+        elif args.command == "publication-activation":
+            authority = _read_json(args.expected_authority)
+            candidate_manifest = _read_json(args.candidate_manifest)
+            activation = build_publication_activation(
+                authority,
+                artifact_manifest=candidate_manifest,
+                artifact_dir=args.artifact_dir,
+            )
+            _write_json(args.activation_output, activation)
+            result = verify_publication_activation(
+                activation,
+                expected=authority,
+                downloaded_manifest=candidate_manifest,
+                downloaded_artifact_dir=args.artifact_dir,
+            )
         elif args.command == "verify-release":
             artifact_manifest = _read_json(args.artifact_manifest)
             installed_manifest = _read_json(args.installed_manifest)
@@ -1926,6 +2400,8 @@ __all__ = [
     "archive_member_manifest",
     "build_artifact_manifest",
     "build_installed_manifest",
+    "build_publication_activation",
+    "build_publication_manifests",
     "canonical_digest",
     "canonical_json",
     "canonical_json_bytes",
@@ -1936,6 +2412,7 @@ __all__ = [
     "verify_artifact_manifest",
     "verify_installed_distribution",
     "verify_installed_manifest",
+    "verify_publication_authority",
     "verify_publication_activation",
     "verify_operation_manifest",
     "verify_canonical_value",

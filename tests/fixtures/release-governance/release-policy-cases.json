@@ -7,7 +7,7 @@
     "workflow_run_id": "71001",
     "workflow_run_attempt": "1",
     "version": "0.1.1",
-    "artifact_name": "release-candidate-71001-1"
+    "artifact_name": "accepted-release-candidate-71001-1-1111111111111111111111111111111111111111"
   },
   "publication_authority": {
     "schema_version": "ppwb.g1.publication_authority.v1",
@@ -18,20 +18,24 @@
       "workflow_run_id": "71001",
       "workflow_run_attempt": "1",
       "version": "0.1.1",
-      "artifact_name": "release-candidate-71001-1"
+      "artifact_name": "accepted-release-candidate-71001-1-1111111111111111111111111111111111111111"
     },
     "publication": {
       "accepted_run_id": "71001",
       "accepted_run_attempt": "1",
       "accepted_commit": "1111111111111111111111111111111111111111",
-      "accepted_artifact_name": "release-candidate-71001-1",
+      "accepted_artifact_name": "accepted-release-candidate-71001-1-1111111111111111111111111111111111111111",
+      "accepted_artifact_id": "99001",
+      "accepted_artifact_service_digest": "5555555555555555555555555555555555555555555555555555555555555555",
       "accepted_version": "0.1.1",
+      "authorized_actor_id": "237524179",
       "tag": "v0.1.1",
+      "workflow_ref": "refs/tags/v0.1.1",
       "environment": "pypi",
       "trusted_publisher": {
-        "owner": "synthetic-owner",
-        "repository": "synthetic.example/LitGrove",
-        "workflow": ".github/workflows/publish-accepted-release.yml",
+        "owner": "synthetic.example",
+        "repository": "LitGrove",
+        "workflow": "publish-accepted-release.yml",
         "environment": "pypi"
       },
       "accepted_artifact_digests": {
@@ -50,14 +54,18 @@
       "accepted_run_id": "71001",
       "accepted_run_attempt": "1",
       "accepted_commit": "1111111111111111111111111111111111111111",
-      "accepted_artifact_name": "release-candidate-71001-1",
+      "accepted_artifact_name": "accepted-release-candidate-71001-1-1111111111111111111111111111111111111111",
+      "accepted_artifact_id": "99001",
+      "accepted_artifact_service_digest": "5555555555555555555555555555555555555555555555555555555555555555",
       "accepted_version": "0.1.1",
+      "authorized_actor_id": "237524179",
       "tag": "v0.1.1",
+      "workflow_ref": "refs/tags/v0.1.1",
       "environment": "pypi",
       "trusted_publisher": {
-        "owner": "synthetic-owner",
-        "repository": "synthetic.example/LitGrove",
-        "workflow": ".github/workflows/publish-accepted-release.yml",
+        "owner": "synthetic.example",
+        "repository": "LitGrove",
+        "workflow": "publish-accepted-release.yml",
         "environment": "pypi"
       },
       "build_once": true,

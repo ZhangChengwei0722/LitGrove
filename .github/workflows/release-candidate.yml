@@ -48,7 +48,9 @@ jobs:
 
       - name: Initialize operation root
         shell: bash
-        run: echo "GOVERNANCE_ROOT=${RUNNER_TEMP}/release-candidate" >> "$GITHUB_ENV"
+        run: |
+          echo "GOVERNANCE_ROOT=${RUNNER_TEMP}/release-candidate/accepted" >> "$GITHUB_ENV"
+          echo "DIAGNOSTICS_ROOT=${RUNNER_TEMP}/release-candidate/diagnostics" >> "$GITHUB_ENV"
 
       - name: Prove source and workflow identity
         shell: bash
@@ -59,7 +61,8 @@ jobs:
           actual="$(git rev-parse HEAD)"
           test "$actual" = "${PROTECTED_COMMIT}"
           git diff --exit-code
-          git status --short --untracked-files=all
+          status="$(git status --porcelain=v1 --untracked-files=all)"
+          test -z "$status"
 
       - name: Install the exact release-lock bootstrap first
         shell: bash
@@ -91,7 +94,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf "$GOVERNANCE_ROOT"
+          rm -rf "${RUNNER_TEMP}/release-candidate"
           mkdir -p "$GOVERNANCE_ROOT/dist" "$GOVERNANCE_ROOT/manifests"
           python -m build --no-isolation --outdir "$GOVERNANCE_ROOT/dist"
           test "$(find "$GOVERNANCE_ROOT/dist" -maxdepth 1 -name '*.whl' -type f | wc -l)" = "1"
@@ -109,7 +112,7 @@ jobs:
             --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" \
             --version "$version" \
-            --artifact-name "release-candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --artifact-name "accepted-release-candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${PROTECTED_COMMIT}" \
             --output "$GOVERNANCE_ROOT/manifests/artifact-manifest.json"
 
       - name: Install the accepted wheel into an isolated smoke root
@@ -227,14 +230,56 @@ jobs:
             --audit-lock requirements/locks/linux_x86_64/py312/audit.txt \
             --output "$GOVERNANCE_ROOT/manifests/operation-manifest.json"
 
-      - name: Upload immutable release-candidate operation artifacts
-        if: always()
+      - name: Stage only accepted bytes and durable manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$GOVERNANCE_ROOT/manifests/artifact-manifest.json"
+          test -f "$GOVERNANCE_ROOT/manifests/installed-manifest.json"
+          test -f "$GOVERNANCE_ROOT/manifests/operation-manifest.json"
+          test -f "$GOVERNANCE_ROOT/manifests/provenance-inputs.json"
+          test -f "$GOVERNANCE_ROOT/manifests/release-verification.json"
+          test -f "$GOVERNANCE_ROOT/manifests/sbom.cdx.json"
+          rm -rf "$GOVERNANCE_ROOT/venv" "$GOVERNANCE_ROOT/install-root" "$GOVERNANCE_ROOT/smoke"
+          test "$(find "$GOVERNANCE_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | tr '\n' ' ')" = "dist manifests "
+          test -z "$(find "$GOVERNANCE_ROOT" -mindepth 1 -maxdepth 1 -type f -print -quit)"
+          test "$(find "$(dirname "$GOVERNANCE_ROOT")" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | tr '\n' ' ')" = "accepted "
+
+      - name: Upload accepted release-candidate bytes and manifests
+        if: success()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-candidate-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/release-candidate/dist
-            ${{ runner.temp }}/release-candidate/manifests
+          name: accepted-release-candidate-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          path: ${{ runner.temp }}/release-candidate
           if-no-files-found: error
           overwrite: false
           retention-days: 30
+
+      - name: Create public-safe failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$DIAGNOSTICS_ROOT"
+          mkdir -p "$DIAGNOSTICS_ROOT"
+          {
+            printf 'result=failed\n'
+            printf 'repository=%s\n' "$GITHUB_REPOSITORY"
+            printf 'source_commit=%s\n' "$PROTECTED_COMMIT"
+            printf 'workflow_run_id=%s\n' "$GITHUB_RUN_ID"
+            printf 'workflow_run_attempt=%s\n' "$GITHUB_RUN_ATTEMPT"
+          } > "$DIAGNOSTICS_ROOT/summary.txt"
+          if find "$DIAGNOSTICS_ROOT" -type f \( -name '*.whl' -o -name '*.tar.gz' \) -print -quit | grep -q .; then
+            echo "failure diagnostics contain publishable package bytes" >&2
+            exit 1
+          fi
+
+      - name: Upload failure diagnostics without package bytes
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-candidate-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          path: ${{ runner.temp }}/release-candidate/diagnostics
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 14
