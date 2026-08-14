@@ -5,6 +5,7 @@ import copy
 import csv
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -16,6 +17,7 @@ import pytest
 
 from tools.release_governance import (
     ARTIFACT_SCHEMA_VERSION,
+    GovernanceInputError,
     INSTALLED_SCHEMA_VERSION,
     MAX_SAFE_INTEGER,
     OPERATION_SCHEMA_VERSION,
@@ -71,11 +73,15 @@ def _write_archives(root: Path) -> tuple[Path, Path]:
 
 
 def _write_installed(root: Path, capability: Path, artifact: Path) -> dict:
-    package = root / "research_kb"
-    dist_info = root / f"synthetic_core-{VERSION}.dist-info"
+    site_packages = root / "Lib" / "site-packages"
+    package = site_packages / "research_kb"
+    dist_info = site_packages / f"synthetic_core-{VERSION}.dist-info"
+    script = root / "Scripts" / "research-kb.exe"
     package.mkdir(parents=True)
     dist_info.mkdir(parents=True)
+    script.parent.mkdir(parents=True)
     (package / "__init__.py").write_bytes(b"__version__ = 'synthetic'\n")
+    script.write_bytes(b"synthetic launcher\n")
     (dist_info / "METADATA").write_text(
         f"Metadata-Version: 2.1\nName: synthetic-core\nVersion: {VERSION}\n",
         encoding="utf-8",
@@ -87,12 +93,12 @@ def _write_installed(root: Path, capability: Path, artifact: Path) -> dict:
         newline="\n",
     )
     rows = []
-    for path in (package / "__init__.py", dist_info / "METADATA", dist_info / "WHEEL"):
-        relative = path.relative_to(root).as_posix()
+    for path in (script, package / "__init__.py", dist_info / "METADATA", dist_info / "WHEEL"):
+        relative = Path(os.path.relpath(path, site_packages)).as_posix()
         encoded = base64.urlsafe_b64encode(__import__("hashlib").sha256(path.read_bytes()).digest()).decode().rstrip("=")
         rows.append((relative, f"sha256={encoded}", str(path.stat().st_size)))
     record_path = dist_info / "RECORD"
-    rows.append((record_path.relative_to(root).as_posix(), "", ""))
+    rows.append((record_path.relative_to(site_packages).as_posix(), "", ""))
     record_path.write_text("", encoding="utf-8", newline="\n")
     with record_path.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.writer(stream, lineterminator="\n")
@@ -228,6 +234,44 @@ def test_positive_synthetic_release_contract(tmp_path: Path) -> None:
     assert activation["schema_version"] == PUBLICATION_SCHEMA_VERSION
     assert verify_artifact_manifest(artifact, expected=artifact, artifact_paths=tmp_path / "dist").ok
     assert verify_installed_manifest(installed, expected=artifact, installed_root=install, capability_output=capability).ok
+    assert any(item["path"] == "Scripts/research-kb.exe" for item in installed["distribution"]["record_entries"])
+
+
+def test_installed_record_path_that_escapes_prefix_fails_closed(tmp_path: Path) -> None:
+    artifact, _, install, capability, _, _ = _materialize(tmp_path)
+    record_path = next(install.rglob("RECORD"))
+    outside = tmp_path / "outside.exe"
+    outside.write_bytes(b"outside prefix\n")
+    encoded = base64.urlsafe_b64encode(__import__("hashlib").sha256(outside.read_bytes()).digest()).decode().rstrip("=")
+    with record_path.open("a", encoding="utf-8", newline="") as stream:
+        csv.writer(stream, lineterminator="\n").writerow(("../../../outside.exe", f"sha256={encoded}", str(outside.stat().st_size)))
+
+    with pytest.raises(GovernanceInputError, match="RECORD path escapes installed root"):
+        build_installed_manifest(
+            install,
+            candidate=artifact["candidate"],
+            capability_json=capability,
+        )
+
+
+def test_installed_record_alias_duplicate_fails_closed(tmp_path: Path) -> None:
+    artifact, _, install, capability, _, _ = _materialize(tmp_path)
+    package_file = install / "Lib" / "site-packages" / "research_kb" / "__init__.py"
+    record_path = next(install.rglob("RECORD"))
+    encoded = base64.urlsafe_b64encode(
+        __import__("hashlib").sha256(package_file.read_bytes()).digest()
+    ).decode().rstrip("=")
+    with record_path.open("a", encoding="utf-8", newline="") as stream:
+        csv.writer(stream, lineterminator="\n").writerow(
+            ("synthetic/../research_kb/__init__.py", f"sha256={encoded}", str(package_file.stat().st_size))
+        )
+
+    with pytest.raises(GovernanceInputError, match="duplicate normalized RECORD path"):
+        build_installed_manifest(
+            install,
+            candidate=artifact["candidate"],
+            capability_json=capability,
+        )
 
 
 def test_fixture_roster_executes_every_positive_and_negative_case(tmp_path: Path) -> None:
@@ -643,6 +687,9 @@ def test_workflows_are_pinned_and_publication_is_inert() -> None:
     assert "--require-hashes" in candidate
     assert "--no-deps" in candidate
     assert "--only-binary=:all:" in candidate
+    assert '--prefix "$GOVERNANCE_ROOT/install-root"' in candidate
+    assert '--target "$GOVERNANCE_ROOT/install-root"' not in candidate
+    assert "site-packages-path.txt" in candidate
     assert "tools/release-lock-bootstrap.txt" in candidate
     assert candidate.index("tools/release-lock-bootstrap.txt") < candidate.index("requirements/locks/linux_x86_64/py312/build.txt")
     assert "--run-attempt" in candidate

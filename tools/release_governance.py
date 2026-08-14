@@ -684,8 +684,26 @@ def _relative_path(root: Path, path: Path) -> str:
     return path.relative_to(root).as_posix()
 
 
+def _resolve_record_entry(root: Path, anchor: Path, value: Any) -> tuple[str, Path]:
+    if not isinstance(value, str) or not value or "\\" in value or value.startswith("/"):
+        raise GovernanceInputError(f"invalid RECORD path: {value}")
+    parts = value.split("/")
+    if any(part in {"", "."} for part in parts) or ":" in parts[0]:
+        raise GovernanceInputError(f"invalid RECORD path: {value}")
+    target = anchor.joinpath(*parts).resolve()
+    try:
+        relative = target.relative_to(root)
+    except ValueError as error:
+        raise GovernanceInputError(f"RECORD path escapes installed root: {value}") from error
+    normalized = relative.as_posix()
+    if not _safe_member_path(normalized):
+        raise GovernanceInputError(f"invalid normalized RECORD path: {value}")
+    return normalized, target
+
+
 def _record_entries(root: Path, record_path: Path) -> list[dict[str, Any]]:
     record_relative = _relative_path(root, record_path)
+    record_anchor = record_path.parent.parent
     result: list[dict[str, Any]] = []
     with record_path.open("r", encoding="utf-8", newline="") as stream:
         rows = list(csv.reader(stream))
@@ -693,11 +711,11 @@ def _record_entries(root: Path, record_path: Path) -> list[dict[str, Any]]:
     for row in rows:
         if len(row) != 3:
             raise GovernanceInputError(f"invalid RECORD row in {record_relative}")
-        relative, digest, size = row
-        if not _safe_member_path(relative) or relative in seen:
-            raise GovernanceInputError(f"invalid or duplicate RECORD path: {relative}")
+        recorded_path, digest, size = row
+        relative, target = _resolve_record_entry(root, record_anchor, recorded_path)
+        if relative in seen:
+            raise GovernanceInputError(f"duplicate normalized RECORD path: {recorded_path}")
         seen.add(relative)
-        target = root.joinpath(*relative.split("/"))
         if not target.is_file() or target.is_symlink():
             raise GovernanceInputError(f"RECORD points to a missing or non-regular file: {relative}")
         actual_size = target.stat().st_size
@@ -786,7 +804,7 @@ def build_installed_manifest(
     record_files = sorted(item["path"] for item in entries)
     if actual_files != record_files:
         raise GovernanceInputError("installed files and RECORD entries are not identical")
-    dist_prefix = f"{dist_info.name}/"
+    dist_prefix = f"{_relative_path(root, dist_info)}/"
     payload_files = [item for item in entries if not item["path"].startswith(dist_prefix)]
     requires_dist = sorted(headers.get_all("Requires-Dist") or [])
     requires_dist_digest = canonical_digest({"requires_dist": requires_dist})
