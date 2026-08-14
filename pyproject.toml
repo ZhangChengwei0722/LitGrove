@@ -4,16 +4,17 @@ build-backend = "hatchling.build"
 
 [project]
 name = "research-kb-core"
-version = "0.1.0"
+version = "0.1.1.dev2026080805"
 description = "Cross-platform contracts and deterministic CLI primitives for local-first research knowledge bases"
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 keywords = ["research", "knowledge-base", "provenance", "local-first", "cli"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "License :: OSI Approved :: Apache Software License",
-  "Operating System :: OS Independent",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -27,7 +28,7 @@ dependencies = [
 
 [project.optional-dependencies]
 pdf = [
-  "pdfplumber>=0.11.9,<0.12",
+  "pdfplumber==0.11.10",
 ]
 test = [
   "build>=1.2,<2",
@@ -39,11 +40,11 @@ test = [
 research-kb = "research_kb.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base"
-Repository = "https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base"
-Issues = "https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/issues"
-Security = "https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/security/policy"
-Changelog = "https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/ZhangChengwei0722/LitGrove"
+Repository = "https://github.com/ZhangChengwei0722/LitGrove"
+Issues = "https://github.com/ZhangChengwei0722/LitGrove/issues"
+Security = "https://github.com/ZhangChengwei0722/LitGrove/security/policy"
+Changelog = "https://github.com/ZhangChengwei0722/LitGrove/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/research_kb"]

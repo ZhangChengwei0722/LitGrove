@@ -8,6 +8,10 @@ class SyntheticTextAdapter:
     name = "synthetic-text"
     version = "1.0"
 
+    @classmethod
+    def static_identity(cls) -> dict[str, str]:
+        return {"adapter": cls.name, "version": cls.version}
+
     def parse(
         self,
         source: Path,

@@ -4,6 +4,7 @@ from research_kb.services.acquired_candidate_intake import AcquiredCandidateInta
 from research_kb.services.application_validation import ContractValidationService, JsonlValidationService
 from research_kb.services.agent_task_application import AgentTaskApplicationService
 from research_kb.services.bootstrap import WorkspaceBootstrapService
+from research_kb.services.workspace_materialization import WorkspaceMaterializationApplicationService
 from research_kb.services.catalog import CatalogCapabilityService, CatalogProjectionService, CatalogQueryService
 from research_kb.services.capability import CapabilityService
 from research_kb.services.compatibility import CompatibilityAdapterRegistry, CompatibilityInspectionService
@@ -20,6 +21,11 @@ from research_kb.services.deterministic_intake_application import DeterministicI
 from research_kb.services.exchange_application import ExchangeApplicationService
 from research_kb.exchange_import import ExchangeArchiveReader, ExchangeImportService, SafeReaderProfile
 from research_kb.services.intake_inspect import IntakeInspectService
+from research_kb.services.intake_source_adequacy_resolution_application import (
+    IntakeSourceAdequacyResolutionApplicationService,
+    IntakeSourceReviewHandle,
+    PreparedIntakeSourceReview,
+)
 from research_kb.services.guardian_disposition import GuardianFindingDispositionService
 from research_kb.services.local_source_intake import LocalSourceIntakeService
 from research_kb.services.manuscript_projection import ManuscriptProjectionService
@@ -29,6 +35,10 @@ from research_kb.services.obsidian_generated_views_application import (
 )
 from research_kb.services.parse import ParseService
 from research_kb.services.parse_application import ParseAdapterRegistry, ParseApplicationService
+from research_kb.services.supervised_parse_application import SupervisedParseApplicationService
+from research_kb.services.trusted_parse_authority import TrustedParseAuthorityService
+from research_kb.services.trusted_parse_intake_application import TrustedParseIntakeApplicationService
+from research_kb.trusted_parse_intake import TrustedParseIntakePreparation, TrustedParseIntakeResult
 from research_kb.services.parse_read import ParseReadService
 from research_kb.services.paper_context import PaperContextService
 from research_kb.services.pipeline_job import PipelineJobService
@@ -48,6 +58,11 @@ from research_kb.services.step7_context import Step7ContextService
 from research_kb.services.step7_render import WorkspaceStep7ReadingViewService
 from research_kb.services.step7_view import Step7ReadingViewService
 from research_kb.services.workspace_session import WorkspaceSession, WorkspaceSessionService
+from research_kb.services.workspace_storage import WorkspaceStorageInspectionService, WorkspaceStorageRoots
+from research_kb.services.workspace_adoption import (
+    WorkspaceAdoptionApplicationService,
+    WorkspaceAdoptionInspection,
+)
 from research_kb.services.question_mapping import QuestionMappingService
 from research_kb.services.question_screening import QuestionScreeningService
 from research_kb.services.question_screening_application import QuestionScreeningApplicationService
@@ -62,6 +77,11 @@ from research_kb.services.registry import RegistryService
 from research_kb.services.registry_identity import RegistryIdentityCorrectionService
 from research_kb.services.source_asset import SourceAssetService
 from research_kb.services.source_adequacy import SourceAdequacyMutationResult, SourceAdequacyService
+from research_kb.services.source_adequacy_resolution_application import (
+    PreparedSourceReview,
+    SourceAdequacyResolutionApplicationService,
+    SourceReviewHandle,
+)
 
 __all__ = [
     "AcquiredCandidateIntakeService",
@@ -90,6 +110,8 @@ __all__ = [
     "ExchangeImportService",
     "SafeReaderProfile",
     "IntakeInspectService",
+    "IntakeSourceAdequacyResolutionApplicationService",
+    "IntakeSourceReviewHandle",
     "GuardianFindingDispositionService",
     "JsonlValidationService",
     "LocalSourceIntakeService",
@@ -99,6 +121,11 @@ __all__ = [
     "ParseService",
     "ParseAdapterRegistry",
     "ParseApplicationService",
+    "SupervisedParseApplicationService",
+    "TrustedParseAuthorityService",
+    "TrustedParseIntakeApplicationService",
+    "TrustedParseIntakePreparation",
+    "TrustedParseIntakeResult",
     "ParseReadService",
     "PaperContextService",
     "PipelineJobService",
@@ -107,6 +134,7 @@ __all__ = [
     "EvidenceSourceHandle",
     "OpenedEvidenceSource",
     "PreparedEvidenceSource",
+    "PreparedIntakeSourceReview",
     "ReadingApplicationService",
     "ReviewContextService",
     "ReviewMemoryService",
@@ -128,10 +156,18 @@ __all__ = [
     "RegistryIdentityCorrectionService",
     "SourceAssetService",
     "SourceAdequacyMutationResult",
+    "SourceAdequacyResolutionApplicationService",
     "SourceAdequacyService",
+    "PreparedSourceReview",
+    "SourceReviewHandle",
     "WorkspaceBootstrapService",
+    "WorkspaceAdoptionApplicationService",
+    "WorkspaceAdoptionInspection",
+    "WorkspaceMaterializationApplicationService",
     "WorkspaceSession",
     "WorkspaceSessionService",
+    "WorkspaceStorageInspectionService",
+    "WorkspaceStorageRoots",
     "WorkspaceQuestionReadingViewService",
     "WorkspaceStep7ReadingViewService",
 ]

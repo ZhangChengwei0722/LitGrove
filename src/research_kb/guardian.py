@@ -51,10 +51,12 @@ from research_kb.source_resolution import inspect_source_ref, observe_paper_sour
 from research_kb.source_adequacy import profile_freshness
 from research_kb.step7_support import STEP7_RECORD_KINDS, candidate_freshness
 from research_kb.storage.json_io import file_sha256, read_json_document, read_jsonl, serialize_jsonl
+from research_kb.trusted_parse_authority import trusted_parse_authority_chain_diagnostics
 from research_kb.storage.transactions import (
     TransactionManager,
     TransactionResult,
     expected_journal_event,
+    transaction_integrity_diagnostics,
 )
 from research_kb.workspace import WorkspaceLayout
 
@@ -123,6 +125,11 @@ class GuardianService:
                 )
             )
             diagnostics.extend(self._acquisition_diagnostics(workspace_entries))
+            diagnostics.extend(
+                trusted_parse_authority_chain_diagnostics(
+                    [record for kind, record in workspace_entries if kind == "trusted-parse-authority"]
+                )
+            )
             diagnostics.extend(self._local_source_intake_diagnostics(workspace_entries))
             effective_entries = expand_active_organization_entries(
                 expand_active_review_entries(expand_active_primary_entries(workspace_entries))
@@ -190,6 +197,12 @@ class GuardianService:
         diagnostics.extend(self._transaction_diagnostics(process_events))
         diagnostics.extend(self._operational_archive_diagnostics(process_events))
         diagnostics.extend(self._job_event_diagnostics(workspace_entries, process_events))
+        diagnostics.extend(
+            self._trusted_parse_provenance_diagnostics(
+                workspace_entries,
+                process_events,
+            )
+        )
         diagnostics.extend(self._agent_task_diagnostics(workspace_entries, process_events))
         diagnostics.extend(
             self._source_event_diagnostics(
@@ -1128,6 +1141,141 @@ class GuardianService:
                 )
         return diagnostics
 
+    def _trusted_parse_provenance_diagnostics(
+        self,
+        entries: list[BundleEntry],
+        process_events: list[dict[str, Any]],
+    ) -> list[Diagnostic]:
+        diagnostics: list[Diagnostic] = []
+        authorities = [record for kind, record in entries if kind == "trusted-parse-authority"]
+        authority_by_state = {record["state_id"]: record for record in authorities}
+        pages_by_run: dict[str, list[dict[str, Any]]] = {}
+        for kind, record in entries:
+            if kind == "parsed-page":
+                pages_by_run.setdefault(record["parse_run_id"], []).append(record)
+        job_states = [record for kind, record in entries if kind == "pipeline-job-state"]
+        try:
+            job_heads = {record["job_id"]: record for record in current_pipeline_states(job_states)}
+        except ResearchKBError:
+            job_heads = {}
+        commits_by_job: dict[str, list[dict[str, Any]]] = {}
+        for event in process_events:
+            if (
+                event.get("job_id") is not None
+                and event.get("operation") == "trusted_parse_authority_commit"
+                and event.get("result") == "success"
+            ):
+                commits_by_job.setdefault(event["job_id"], []).append(event)
+
+        for job_id, commits in commits_by_job.items():
+            if len(commits) != 1:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "process-event",
+                        commits[0]["event_id"],
+                        "/job_id",
+                        "trusted Parse Job must have exactly one authority commit event",
+                    )
+                )
+
+        for event in process_events:
+            if event.get("operation") != "parse_run" or event.get("result") != "success":
+                continue
+            refs = event.get("input_refs", [])
+            authority_refs = [item for item in refs if isinstance(item, str) and item.startswith("parseauth_")]
+            state_refs = [item for item in refs if isinstance(item, str) and item.startswith("parseauthstate_")]
+            job_id = event.get("job_id")
+            is_trusted_claim = bool(authority_refs or state_refs or (job_id in commits_by_job))
+            if not is_trusted_claim:
+                continue
+            if job_id is None or len(authority_refs) != 1 or len(state_refs) != 1:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "process-event",
+                        event["event_id"],
+                        "/input_refs",
+                        "trusted Parse event must reference one authority and one authority state",
+                    )
+                )
+                continue
+            authority = authority_by_state.get(state_refs[0])
+            if authority is None or authority["authority_id"] != authority_refs[0]:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "process-event",
+                        event["event_id"],
+                        "/input_refs",
+                        "trusted Parse event authority and state do not identify one record",
+                    )
+                )
+                continue
+            commits = commits_by_job.get(job_id, [])
+            matching_commits = [
+                item
+                for item in commits
+                if authority["authority_id"] in item.get("output_refs", [])
+                and authority["state_id"] in item.get("output_refs", [])
+            ]
+            if len(matching_commits) != 1:
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "process-event",
+                        event["event_id"],
+                        "/job_id",
+                        "trusted Parse event does not match exactly one authority commit in the same Job",
+                    )
+                )
+            paper_id = refs[0] if refs else None
+            pages = pages_by_run.get(event["event_id"], [])
+            if (
+                paper_id != authority["paper_id"]
+                or not pages
+                or any(
+                    page["paper_id"] != authority["paper_id"]
+                    or page["parser"] != authority["parser"]
+                    for page in pages
+                )
+            ):
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "process-event",
+                        event["event_id"],
+                        "/output_refs",
+                        "trusted Parse pages, paper or parser do not match the authority",
+                    )
+                )
+            if not (authority["decision_at"] <= event["created_at"] < authority["expires_at"]):
+                diagnostics.append(
+                    Diagnostic(
+                        INVALID_AUTHORITY,
+                        "process-event",
+                        event["event_id"],
+                        "/created_at",
+                        "trusted Parse event is outside the authority interval",
+                    )
+                )
+            head = job_heads.get(job_id)
+            if head is None or not {
+                authority["authority_id"],
+                authority["state_id"],
+                event["event_id"],
+            }.issubset(head.get("output_refs", [])):
+                diagnostics.append(
+                    Diagnostic(
+                        INCOMPLETE_TRANSACTION,
+                        "pipeline-job-state",
+                        None if head is None else head["state_id"],
+                        "/output_refs",
+                        "trusted Parse Job does not retain the authority and Parse provenance refs",
+                    )
+                )
+        return diagnostics
+
     def _adequacy_diagnostics(
         self,
         entries: list[BundleEntry],
@@ -1228,54 +1376,15 @@ class GuardianService:
         diagnostics: list[Diagnostic] = []
         if not self.layout.transactions_root.exists():
             return diagnostics
-        events_by_id: dict[str, list[dict[str, Any]]] = {}
-        for event in process_events:
-            events_by_id.setdefault(event["event_id"], []).append(event)
         validation = RecordValidationSession("transaction-journal", actor="stored")
-        for path in sorted(self.layout.transactions_root.glob("*.json"), key=lambda item: item.name):
-            try:
-                journal = read_json_document(path, record_kind="transaction-journal")
-                journal_diagnostics = validation.validate(journal)
-            except ResearchKBError as error:
-                diagnostics.append(error.diagnostic)
-                continue
-            diagnostics.extend(journal_diagnostics)
-            if journal_diagnostics:
-                continue
-            if journal["phase"] != "complete":
-                diagnostics.append(
-                    Diagnostic(
-                        INCOMPLETE_TRANSACTION,
-                        "transaction-journal",
-                        journal["event_id"],
-                        "/phase",
-                        f"transaction journal is not complete: {journal['phase']}",
-                    )
-                )
-                continue
-            matching_events = events_by_id.get(journal["event_id"], [])
-            if len(matching_events) != 1:
-                diagnostics.append(
-                    Diagnostic(
-                        INCOMPLETE_TRANSACTION,
-                        "transaction-journal",
-                        journal["event_id"],
-                        "/event_id",
-                        f"completed transaction must have exactly one process event; found {len(matching_events)}",
-                    )
-                )
-                continue
-            expected_event = expected_journal_event(journal, journal["result"])
-            if matching_events[0] != expected_event:
-                diagnostics.append(
-                    Diagnostic(
-                        INCOMPLETE_TRANSACTION,
-                        "transaction-journal",
-                        journal["event_id"],
-                        "/event_id",
-                        "completed transaction process event does not match its journal",
-                    )
-                )
+        diagnostics.extend(
+            transaction_integrity_diagnostics(
+                self.layout,
+                sorted(self.layout.transactions_root.glob("*.json"), key=lambda item: item.name),
+                process_events,
+                validation=validation,
+            )
+        )
         return diagnostics
 
     def _operational_archive_diagnostics(
@@ -1657,6 +1766,7 @@ def _defined_ids(entries: list[BundleEntry]) -> set[str]:
         "source-asset-state": "source_asset_state_id",
         "registry-identity-correction": "correction_id",
         "source-adequacy-profile": "profile_id",
+        "trusted-parse-authority": "state_id",
         "agent-task-state": "state_id",
         "primary-semantic-bundle": "active_revision_id",
         "direction": "direction_id",

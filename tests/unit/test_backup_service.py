@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import zipfile
 
@@ -10,7 +10,9 @@ import research_kb.backup as backup_module
 from research_kb.backup import BackupArchiveReader, BackupService
 from research_kb.errors import ResearchKBError
 from research_kb.services.registry import RegistryService
-from research_kb.storage.json_io import file_sha256
+from research_kb.parse.pdfplumber_adapter import PdfPlumberTextFlowAdapter
+from research_kb.services.trusted_parse_authority import TrustedParseAuthorityService
+from research_kb.storage.json_io import file_sha256, read_jsonl
 from research_kb.storage.locking import workspace_lock
 from research_kb.storage.transactions import TransactionManager
 from research_kb.workspace import WorkspaceLayout
@@ -89,6 +91,46 @@ def test_source_free_backup_restores_equivalent_workspace_without_copying_pdf(tm
     assert restored_layout.workspace_id == layout.workspace_id
     assert restored_layout.source_roots["alpha-sources"] == layout.source_roots["alpha-sources"]
     assert source.read_bytes().startswith(b"%PDF")
+
+
+def test_source_free_backup_preserves_trusted_parse_authority_and_revalidates_binding(tmp_path: Path) -> None:
+    layout, _source = _workspace(tmp_path)
+    paper = read_jsonl(layout.registry_path, record_kind="registry-paper", id_field="paper_id")[0]
+    adapter = PdfPlumberTextFlowAdapter()
+    trust = TrustedParseAuthorityService(layout, clock=lambda: FIXED_TIME)
+    preview = trust.preview(
+        paper_id=paper["paper_id"],
+        adapter_name=adapter.name,
+        adapter_version=adapter.version,
+        parser_profile_id="trusted-local-pdf-standard@1.0",
+        policy_version="trusted-local-pdf@1.0",
+        allowed_operation="parse_run",
+        idempotency_key="backup-trusted-parse-0001",
+        actor="user",
+        expires_at=FIXED_TIME + timedelta(hours=1),
+    )
+    authority = trust.commit(preview, preview_digest=preview.preview_digest, actor="user")
+    service = BackupService(layout, clock=lambda: FIXED_TIME)
+    backup_preview = service.preview(include_sources=False)
+    archive = tmp_path / "trusted-authority.rkb-backup.zip"
+    service.create(_request(backup_preview), target=archive, actor="user")
+    inspection = BackupArchiveReader().inspect(archive)
+
+    restored = BackupService.restore(
+        archive,
+        {
+            "restore_id": RESTORE_ID,
+            "expected_archive_sha256": inspection["archive_sha256"],
+            "source_root_mappings": {"alpha-sources": str(layout.source_roots["alpha-sources"])},
+            "created_at": CREATED_AT,
+        },
+        target_root=tmp_path / "restored-trusted-authority",
+        actor="user",
+    )
+    restored_layout = WorkspaceLayout.load(Path(restored["workspace_config_path"]))
+
+    assert restored_layout.trusted_parse_authorities_path.read_bytes() == layout.trusted_parse_authorities_path.read_bytes()
+    assert TrustedParseAuthorityService(restored_layout, clock=lambda: FIXED_TIME).current(authority.authority_id).status == "current"
 
 
 def test_source_inclusive_backup_requires_authority_and_restores_exact_source(tmp_path: Path) -> None:

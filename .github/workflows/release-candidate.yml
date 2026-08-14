@@ -1,0 +1,227 @@
+name: Release candidate governance
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      protected_commit:
+        description: Exact protected-main commit to inspect
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_NO_CACHE_DIR: "1"
+  PYTHONNOUSERSITE: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUTF8: "1"
+
+jobs:
+  build-once:
+    name: Build and attest one release candidate
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PROTECTED_COMMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.protected_commit || github.sha }}
+    steps:
+      - name: Check out the exact protected-main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.protected_commit || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Initialize operation root
+        shell: bash
+        run: echo "GOVERNANCE_ROOT=${RUNNER_TEMP}/release-candidate" >> "$GITHUB_ENV"
+
+      - name: Prove source and workflow identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "${PROTECTED_COMMIT}" = "${GITHUB_SHA}"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "${PROTECTED_COMMIT}"
+          git diff --exit-code
+          git status --short --untracked-files=all
+
+      - name: Install the exact release-lock bootstrap first
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PIP_CONFIG_FILE=/dev/null
+          python -m pip install --isolated --index-url https://pypi.org/simple --require-hashes --no-deps --only-binary=:all: --no-cache-dir \
+            --disable-pip-version-check \
+            -r tools/release-lock-bootstrap.txt
+          python - <<'PY'
+          import importlib.metadata
+
+          expected = {"pip": "26.2.1", "pip-tools": "7.6.1"}
+          actual = {name: importlib.metadata.version(name) for name in expected}
+          if actual != expected:
+              raise SystemExit(f"release bootstrap identity mismatch: {actual!r}")
+          PY
+
+      - name: Install the exact build tuple lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PIP_CONFIG_FILE=/dev/null
+          python -m pip install --isolated --index-url https://pypi.org/simple --require-hashes --no-deps --only-binary=:all: --no-cache-dir \
+            --disable-pip-version-check \
+            -r requirements/locks/linux_x86_64/py312/build.txt
+
+      - name: Build wheel and sdist once
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$GOVERNANCE_ROOT"
+          mkdir -p "$GOVERNANCE_ROOT/dist" "$GOVERNANCE_ROOT/manifests"
+          python -m build --no-isolation --outdir "$GOVERNANCE_ROOT/dist"
+          test "$(find "$GOVERNANCE_ROOT/dist" -maxdepth 1 -name '*.whl' -type f | wc -l)" = "1"
+          test "$(find "$GOVERNANCE_ROOT/dist" -maxdepth 1 -name '*.tar.gz' -type f | wc -l)" = "1"
+
+      - name: Create canonical artifact and digest manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          python tools/release_governance.py artifact-manifest \
+            --artifact-dir "$GOVERNANCE_ROOT/dist" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --source-commit "${PROTECTED_COMMIT}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --version "$version" \
+            --artifact-name "release-candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --output "$GOVERNANCE_ROOT/manifests/artifact-manifest.json"
+
+      - name: Install the accepted wheel into an isolated smoke root
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "$GOVERNANCE_ROOT/venv"
+          mkdir -p "$GOVERNANCE_ROOT/install-root"
+          export PIP_CONFIG_FILE=/dev/null
+          "$GOVERNANCE_ROOT/venv/bin/python" -m pip install --isolated --index-url https://pypi.org/simple --require-hashes --no-deps --only-binary=:all: --no-cache-dir \
+            --disable-pip-version-check \
+            -r tools/release-lock-bootstrap.txt
+          "$GOVERNANCE_ROOT/venv/bin/python" -m pip install --isolated --index-url https://pypi.org/simple --require-hashes --no-deps --only-binary=:all: --no-cache-dir \
+            --disable-pip-version-check \
+            -r requirements/locks/linux_x86_64/py312/runtime.txt
+          wheel="$(find "$GOVERNANCE_ROOT/dist" -maxdepth 1 -name '*.whl' -type f -print -quit)"
+          "$GOVERNANCE_ROOT/venv/bin/python" -m pip install --no-index --no-deps --no-compile --only-binary=:all: --no-cache-dir \
+            --target "$GOVERNANCE_ROOT/install-root" "$wheel"
+          mkdir -p "$GOVERNANCE_ROOT/smoke"
+          cd "$GOVERNANCE_ROOT/smoke"
+          PYTHONPATH="$GOVERNANCE_ROOT/install-root" "$GOVERNANCE_ROOT/venv/bin/python" -m research_kb capability show > capability.json
+          module_path="$(PYTHONPATH="$GOVERNANCE_ROOT/install-root" "$GOVERNANCE_ROOT/venv/bin/python" -c 'import research_kb; print(research_kb.__file__)')"
+          case "$module_path" in
+            "$GOVERNANCE_ROOT/install-root/"*) ;;
+            *) echo "unexpected source/editable import: $module_path" >&2; exit 1 ;;
+          esac
+          printf '%s\n' "$module_path" > "$GOVERNANCE_ROOT/smoke/module-path.txt"
+          INSTALL_ROOT="$GOVERNANCE_ROOT/install-root" \
+          PYTHONNOUSERSITE=1 \
+          PYTHONPATH="$GOVERNANCE_ROOT/install-root:${GITHUB_WORKSPACE}" \
+            "$GOVERNANCE_ROOT/venv/bin/python" - "$GOVERNANCE_ROOT/smoke/runtime.json" <<'PY'
+          import os
+          import platform
+          import site
+          import sys
+          from pathlib import Path
+
+          from tools.release_governance import canonical_json
+          import research_kb
+
+          install_root = Path(os.environ["INSTALL_ROOT"]).resolve()
+          module_path = Path(research_kb.__file__).resolve()
+          site_packages_class = "install-root" if module_path.is_relative_to(install_root) else "unexpected"
+          measured = {
+              "interpreter_path": str(Path(sys.executable).resolve()),
+              "implementation": platform.python_implementation(),
+              "cpython_version": platform.python_version(),
+              "platform": platform.platform(),
+              "machine": platform.machine(),
+              "isolated_interpreter": site.ENABLE_USER_SITE is False and site_packages_class == "install-root",
+              "user_site_disabled": site.ENABLE_USER_SITE is False,
+              "user_site_evidence": {
+                  "python_no_user_site": os.environ.get("PYTHONNOUSERSITE") == "1",
+                  "site_enable_user_site": site.ENABLE_USER_SITE is False,
+              },
+              "site_packages_class": site_packages_class,
+          }
+          Path(sys.argv[1]).write_text(canonical_json(measured), encoding="utf-8", newline="\n")
+          PY
+
+      - name: Create installed RECORD, payload, and capability identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          install_root="$GOVERNANCE_ROOT/install-root"
+          wheel="$(find "$GOVERNANCE_ROOT/dist" -maxdepth 1 -name '*.whl' -type f -print -quit)"
+          python tools/release_governance.py installed-manifest \
+            --root "$install_root" \
+            --candidate-manifest "$GOVERNANCE_ROOT/manifests/artifact-manifest.json" \
+            --capability-json "$GOVERNANCE_ROOT/smoke/capability.json" \
+            --artifact "$wheel" \
+            --module-path "$(cat "$GOVERNANCE_ROOT/smoke/module-path.txt")" \
+            --runtime-json "$GOVERNANCE_ROOT/smoke/runtime.json" \
+            --output "$GOVERNANCE_ROOT/manifests/installed-manifest.json"
+          python tools/release_governance.py verify-release \
+            --artifact-manifest "$GOVERNANCE_ROOT/manifests/artifact-manifest.json" \
+            --installed-manifest "$GOVERNANCE_ROOT/manifests/installed-manifest.json" \
+            --expected "$GOVERNANCE_ROOT/manifests/artifact-manifest.json" \
+            > "$GOVERNANCE_ROOT/manifests/release-verification.json"
+
+      - name: Install exact audit lock and produce CycloneDX SBOM
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PIP_CONFIG_FILE=/dev/null
+          "$GOVERNANCE_ROOT/venv/bin/python" -m pip install --isolated --index-url https://pypi.org/simple --require-hashes --no-deps --only-binary=:all: --no-cache-dir \
+            -r requirements/locks/linux_x86_64/py312/audit.txt
+          PYTHONPATH="$GOVERNANCE_ROOT/install-root:${GITHUB_WORKSPACE}" \
+            "$GOVERNANCE_ROOT/venv/bin/python" -m pip_audit \
+              --local --skip-editable --format cyclonedx-json \
+              --output "$GOVERNANCE_ROOT/manifests/sbom.cdx.json"
+
+      - name: Create immutable operation manifest and provenance inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/release_governance.py operation-manifest \
+            --artifact-manifest "$GOVERNANCE_ROOT/manifests/artifact-manifest.json" \
+            --installed-manifest "$GOVERNANCE_ROOT/manifests/installed-manifest.json" \
+            --sbom "$GOVERNANCE_ROOT/manifests/sbom.cdx.json" \
+            --provenance-inputs "$GOVERNANCE_ROOT/manifests/provenance-inputs.json" \
+            --audit-lock requirements/locks/linux_x86_64/py312/audit.txt \
+            --output "$GOVERNANCE_ROOT/manifests/operation-manifest.json"
+
+      - name: Upload immutable release-candidate operation artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/release-candidate/dist
+            ${{ runner.temp }}/release-candidate/manifests
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 30

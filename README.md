@@ -1,7 +1,7 @@
 # Research KB Core：可追溯科研知识库核心
 
-[![CI](https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/actions/workflows/ci.yml/badge.svg)](https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/actions/workflows/ci.yml)
-[![Dependency security](https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/actions/workflows/dependency-security.yml/badge.svg)](https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/actions/workflows/dependency-security.yml)
+[![CI](https://github.com/ZhangChengwei0722/LitGrove/actions/workflows/ci.yml/badge.svg)](https://github.com/ZhangChengwei0722/LitGrove/actions/workflows/ci.yml)
+[![Dependency security](https://github.com/ZhangChengwei0722/LitGrove/actions/workflows/dependency-security.yml/badge.svg)](https://github.com/ZhangChengwei0722/LitGrove/actions/workflows/dependency-security.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
 Research KB Core 是一个跨平台、local-first 的科研知识库确定性执行层。它提供公共
@@ -10,7 +10,7 @@ contracts、稳定 ID、结构化存储、provenance、事务、CLI 和 Applicat
 
 ```text
 Research KB App
--> 本地交互界面、任务状态、预览审批、PDF 阅读和运行维护
+-> 面向中文用户的 end-user product：本地交互界面、任务状态、预览审批、PDF 阅读和运行维护
 
 Research KB Core
 -> schema、ID、事务、provenance、确定性流程、Guardian 和可重建投影
@@ -24,13 +24,13 @@ Private Workspace
 
 Core 本身不调用 LLM、不作科研判断，也不包含任何真实论文或私有知识库内容。
 这是已经公开的 Core 基础设施仓库，不是完整的 GUI 产品。面向普通用户的产品入口由
-`research-kb-app` 承担；在经过脱敏审计的 App 公共仓库实际建立前，此处不提供未经验证的
-App 下载或仓库链接。
+`research-kb-app` 承担，它是面向中文用户的 end-user product；在经过脱敏审计的 App
+公共仓库实际建立前，此处不提供未经验证的 App 下载或仓库链接。
 
 ## 当前状态
 
-P0-P11 路线图已经交付，当前 package version 为 `0.1.0`，公共 Application Service
-interface 为 `1.18`，workspace layout 为 `p7d-1`。已验证能力覆盖论文导入、解析、Source Adequacy、Primary/Review
+P0-P11 路线图已经交付，当前开发 package version 为 `0.1.1.dev2026080805`，公共
+Application Service interface 为 `1.23`，workspace layout 为 `p7d-1`。已验证能力覆盖论文导入、解析、Source Adequacy、Primary/Review
 语义提交、阅读与 Evidence 回源、发现、研究组织、Research Synthesis、Obsidian
 generated views、Exchange、备份恢复和 operational maintenance。
 
@@ -46,7 +46,7 @@ validation 目前是 best-effort，除非后续 milestone 单独要求。
 | Source | portable source reference、SHA-256 identity、Source Asset manifestation 和显式 relink |
 | Registry | Paper identity、duplicate link、merge/split/alias/archive/tombstone correction |
 | Parse | synthetic test adapter、`pdfplumber` 和 `pdfplumber-text-flow` 明确适配器 |
-| Source Adequacy | 按具体用途判断解析结果是否支持阅读、引用、图表、公式或补充材料任务 |
+| Source Adequacy | 按具体用途判断解析结果是否支持阅读、引用、图表、公式或补充材料任务，并提供受限的连续正文阅读顺序复核 contract |
 | Scientific records | Paper Card、canonical Evidence、review queue、background-only Review Memory 和 revision lineage |
 | Agent Task | privacy payload、CAS lease、staging、escaped preview、revision/reject/approve contract |
 | Research organization | Direction、Field Map Entry、Question Mapping、Question Screening 和 Tag |
@@ -121,7 +121,7 @@ Core 不启动 Agent、不管理模型凭证，也不允许 Agent payload 中的
 
 ## 快速开始
 
-要求 Python 3.11+。
+要求 Python 3.11 或 3.12。
 
 ### Windows
 
@@ -260,10 +260,12 @@ diff review。验证层级、分片和 receipt 规则见 [Test Validation](docs/
 
 - 提交 issue 或 pull request 前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 和
   [Contributor Guide](docs/contributor-guide.md)。
-- 使用问题与维护边界见 [SUPPORT.md](SUPPORT.md)；疑似漏洞或凭证泄露必须按
+- 使用问题与维护边界见 [SUPPORT.md](SUPPORT.md)；Core 支持是公开、尽力而为的维护支持，
+  不承诺私有工作区接入、科研结论、GUI/App 发布、PyPI 发布或响应时间；疑似漏洞或凭证泄露必须按
   [SECURITY.md](SECURITY.md) 私密报告，不要创建公开 issue。
 - 版本、兼容性、弃用和制品要求见 [Release Policy](docs/release-policy.md) 与
-  [CHANGELOG.md](CHANGELOG.md)。当前没有已发布的稳定版本或自动 PyPI 发布。
+  [CHANGELOG.md](CHANGELOG.md)。当前没有已发布的稳定版本、tag、GitHub Release、PyPI
+  publication 或 Trusted Publisher 配置。
 
 ## 许可证
 

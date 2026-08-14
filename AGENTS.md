@@ -38,3 +38,17 @@ python -m build
 python -m research_kb --version
 python -m research_kb privacy scan --root .
 ```
+
+## Repository Governance
+
+- The accepted single-maintainer exception keeps required approvals at `0`; it does not
+  remove required checks, administrator enforcement, conversation resolution, or the
+  prohibition on force-push and branch deletion.
+- The G1 risk classifier is shadow-only. Its suggested L0-L4 level never skips the existing
+  Windows, Linux, dependency, security, or full L3/L4 validation gates. Unknown, renamed,
+  governance, release, security, privacy, schema, storage, transaction, recovery, authority,
+  or scale changes remain high-risk until independently classified.
+- Release artifacts follow a build-once transaction: build from the exact protected `main`
+  commit, accept the exact artifact bytes, create an immutable `v*` tag at that same commit,
+  and publish those accepted bytes without rebuilding from the tag. G1 creates no tag,
+  GitHub Release, PyPI publication, or Trusted Publisher configuration.

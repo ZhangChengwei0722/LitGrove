@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:research-kb:schema:1.0:trusted-parse-authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "state_id", "authority_id", "workspace_id", "revision", "predecessor", "paper_id", "source_ref", "source_fingerprint", "parser", "parser_profile_id", "policy_version", "allowed_operation", "idempotency_key_sha256", "decision", "revocation_reason", "actor", "decision_at", "expires_at", "created_at"],
+  "properties": {
+    "schema_version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/schema_version"},
+    "state_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/parse_authority_state_id"},
+    "authority_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/parse_authority_id"},
+    "workspace_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/workspace_id"},
+    "revision": {"type": "integer", "minimum": 1},
+    "predecessor": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "object", "additionalProperties": false, "required": ["state_id", "state_digest"], "properties": {
+          "state_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/parse_authority_state_id"},
+          "state_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }}
+      ]
+    },
+    "paper_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/paper_id"},
+    "source_ref": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_ref"},
+    "source_fingerprint": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/source_fingerprint"},
+    "parser": {"type": "object", "additionalProperties": false, "required": ["adapter", "version"], "properties": {
+      "adapter": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/slug"},
+      "version": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"}
+    }},
+    "parser_profile_id": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/non_empty_string"},
+    "policy_version": {"const": "trusted-local-pdf@1.0"},
+    "allowed_operation": {"const": "parse_run"},
+    "idempotency_key_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "decision": {"enum": ["active", "revoked"]},
+    "revocation_reason": {"type": ["string", "null"], "minLength": 1, "maxLength": 256},
+    "actor": {"const": "user"},
+    "decision_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "expires_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "created_at": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/timestamp"},
+    "fixture_origin": {"$ref": "urn:research-kb:schema:1.0:definitions#/$defs/fixture_origin"}
+  },
+  "allOf": [
+    {"if": {"properties": {"revision": {"const": 1}}}, "then": {"properties": {"predecessor": {"type": "null"}}}, "else": {"properties": {"predecessor": {"type": "object"}}}},
+    {"if": {"properties": {"decision": {"const": "active"}}}, "then": {"properties": {"revocation_reason": {"type": "null"}}}, "else": {"properties": {"revocation_reason": {"type": "string"}}}}
+  ]
+}

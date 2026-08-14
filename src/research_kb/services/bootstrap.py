@@ -29,7 +29,7 @@ from research_kb.storage.json_io import (
     serialize_json,
 )
 from research_kb.storage.locking import workspace_lock
-from research_kb.storage.transactions import build_journal_event
+from research_kb.storage.transactions import transaction_integrity_diagnostics
 from research_kb.workspace import WorkspaceLayout
 from research_kb.workspace_validation import (
     MANAGED_DIRECTORIES,
@@ -374,72 +374,16 @@ class WorkspaceBootstrapService:
         layout = WorkspaceLayout._from_context(context)
         WorkspaceBootstrapService._validate_store_bindings(layout)
         validate_workspace_entries(load_workspace_entries(layout), actor="stored")
-        events = {
-            item["event_id"]: item
-            for item in read_jsonl(layout.process_events_path, record_kind="process-event", id_field="event_id")
-        }
+        events = read_jsonl(layout.process_events_path, record_kind="process-event", id_field="event_id")
         if not layout.transactions_root.is_dir():
             return
-        for path in sorted(layout.transactions_root.glob("*.json")):
-            journal = read_json_document(path, record_kind="transaction-journal")
-            diagnostics = validate_record("transaction-journal", journal, actor="stored")
-            if diagnostics:
-                raise ResearchKBError(diagnostics[0])
-            if path.name != f"{journal['event_id']}.json":
-                raise ResearchKBError(
-                    Diagnostic(
-                        WORKSPACE_LAYOUT_CONFLICT,
-                        "transaction-journal",
-                        journal["event_id"],
-                        "/event_id",
-                        "transaction journal filename does not match event_id",
-                    )
-                )
-            if not _journal_target_matches_store(journal["target_store"], journal["target_relative_path"]):
-                raise ResearchKBError(
-                    Diagnostic(
-                        INCOMPLETE_TRANSACTION,
-                        "transaction-journal",
-                        journal["event_id"],
-                        "/target_relative_path",
-                        "transaction target path does not match target_store",
-                    )
-                )
-            if journal["phase"] != "complete" or journal["result"] not in {"success", "failure"}:
-                raise ResearchKBError(
-                    Diagnostic(
-                        INCOMPLETE_TRANSACTION,
-                        "transaction-journal",
-                        journal.get("event_id"),
-                        "/phase",
-                        "markerless workspace contains an incomplete transaction",
-                    )
-                )
-            expected_event = build_journal_event(journal, journal["result"])
-            if events.get(journal["event_id"]) != expected_event:
-                raise ResearchKBError(
-                    Diagnostic(
-                        INCOMPLETE_TRANSACTION,
-                        "transaction-journal",
-                        journal["event_id"],
-                        "/event_id",
-                        "transaction journal and process event do not match",
-                    )
-                )
-            target = layout.ensure_writable_target(
-                layout.knowledge_root / Path(*journal["target_relative_path"].split("/"))
-            )
-            expected_digest = journal["after_sha256"] if journal["result"] == "success" else journal["before_sha256"]
-            if file_sha256(target) != expected_digest:
-                raise ResearchKBError(
-                    Diagnostic(
-                        INCOMPLETE_TRANSACTION,
-                        "transaction-journal",
-                        journal["event_id"],
-                        "/target_relative_path",
-                        "transaction target does not match the completed journal",
-                    )
-                )
+        diagnostics = transaction_integrity_diagnostics(
+            layout,
+            sorted(layout.transactions_root.glob("*.json")),
+            events,
+        )
+        if diagnostics:
+            raise ResearchKBError(diagnostics[0])
 
     @staticmethod
     def _validate_store_bindings(layout: WorkspaceLayout) -> None:
@@ -631,35 +575,3 @@ def _redact_diagnostic(context: WorkspaceContext, diagnostic: Diagnostic) -> Dia
         message,
         diagnostic.severity,
     )
-
-
-def _journal_target_matches_store(target_store: str, relative_path: str) -> bool:
-    exact = {
-        "registry": "registry/papers.jsonl",
-        "review_queue": "review_queue/items.jsonl",
-        "guardian_reports": "guardian/reports.jsonl",
-        "question_mappings": "questions/mappings.jsonl",
-        "discovery_candidates": "discovery/candidates.jsonl",
-        "step7_synthesis": "step7/synthesis.jsonl",
-        "step7_review_angles": "step7/review_angles.jsonl",
-        "step7_insights": "step7/insights.jsonl",
-        "step7_cross_views": "step7/cross_views.jsonl",
-        "agent_tasks": "process/agent_tasks.jsonl",
-        "maintenance_work": "process/maintenance.jsonl",
-    }
-    if target_store in exact:
-        return relative_path == exact[target_store]
-    patterns = {
-        "parsed_pages": ("parse/by_paper/", ".pages.jsonl"),
-        "paper_cards": ("paper_cards/by_paper/", ".card.json"),
-        "evidence": ("evidence/by_paper/", ".evidence.jsonl"),
-        "review_memories": ("review_memories/by_paper/", ".review.json"),
-        "primary_bundles": ("primary_bundles/by_paper/", ".primary.json"),
-        "review_bundles": ("review_bundles/by_paper/", ".review-bundle.json"),
-    }
-    match = patterns.get(target_store)
-    if match is None:
-        return False
-    prefix, suffix = match
-    remainder = relative_path[len(prefix) :] if relative_path.startswith(prefix) else ""
-    return bool(remainder) and "/" not in remainder and remainder.endswith(suffix)

@@ -31,6 +31,14 @@ class PdfPlumberAdapter:
     name = "pdfplumber"
     extraction_options = EXTRACTION_OPTIONS
 
+    @classmethod
+    def static_identity(cls) -> dict[str, str]:
+        try:
+            installed_version = package_version("pdfplumber")
+        except PackageNotFoundError as error:
+            raise _unavailable_error(None) from error
+        return {"adapter": cls.name, "version": installed_version}
+
     @property
     def version(self) -> str:
         try:

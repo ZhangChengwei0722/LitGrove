@@ -1,0 +1,4 @@
+# Tools required to build and inspect one release-candidate artifact set.
+build==1.5.0
+cyclonedx-bom==7.3.1
+hatchling>=1.27,<2

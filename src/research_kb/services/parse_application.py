@@ -60,6 +60,27 @@ class ParseAdapterRegistry:
             )
         return factory()
 
+    def identity(self, name: str) -> dict[str, str]:
+        factory = self.factories.get(name)
+        identity_provider = getattr(factory, "static_identity", None)
+        identity = identity_provider() if callable(identity_provider) else None
+        if (
+            factory is None
+            or not isinstance(identity, dict)
+            or identity.get("adapter") != name
+            or not isinstance(identity.get("version"), str)
+        ):
+            raise ResearchKBError(
+                Diagnostic(
+                    PARSE_ADAPTER_UNAVAILABLE,
+                    "parse-adapter",
+                    None,
+                    "/adapter",
+                    "parse adapter identity is not statically registered",
+                )
+            )
+        return {"adapter": identity["adapter"], "version": identity["version"]}
+
 
 class ParseApplicationService:
     def __init__(

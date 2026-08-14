@@ -29,6 +29,27 @@ Every collected test receives exactly one structural marker from its directory: 
 Pytest runs with `--strict-markers`. Collection fails when a test is outside a registered
 structural directory or receives an invalid structural classification.
 
+## G1 Shadow Classifier
+
+G1 adds a deterministic risk classifier as an observation-only, shadow-mode control. It may
+recommend a validation level from the changed tree, but it does not select or skip tests and
+does not replace the existing required checks. Every pull request still keeps the Windows,
+Linux, dependency, security, and full L3/L4 gates in force.
+
+The documented baseline is fail-closed:
+
+- allowlisted documentation-only changes may recommend L0;
+- an ordinary bounded code change is at least L2 with explicit affected tests;
+- classifier, workflow, metadata, dependency-lock, release, security, privacy, schema,
+  storage, transaction, recovery, authority, or provenance changes require L3;
+- scale or benchmark changes require L3 and L4;
+- unknown paths, unknown rename pairs, classifier failure, or classifier drift require full
+  L3, and L4 when scale relevance is unknown.
+
+Shadow output is evidence for later review, not an acceptance result. Promotion from shadow
+observation to an execution-frequency control requires a separate decision and at least ten
+consecutive live pull-request reports with zero under-classification.
+
 ## Stable Shards
 
 `tools/test-shards.json` is the canonical shard manifest. Unit files are listed explicitly.

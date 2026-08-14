@@ -44,6 +44,10 @@ OperationHook = Callable[[str], None]
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _INBOX_HANDLE_PATTERN = re.compile(r"^inbox-v1:[0-9a-f]{64}$")
 _REQUESTED_OPERATIONS = frozenset({"basic_paper_card", "basic_review_memory"})
+_PARSE_POLICIES = frozenset({"legacy_direct_parse", "trusted_supervised_parse"})
+_TRUSTED_PARSE_NODE_PREFIX = "trusted_parse_"
+_TRUSTED_AUTHORITY_NODE_PREFIX = "trusted_parse_authority_"
+_TRUSTED_RECONCILE_NODE = "trusted_parse_reconcile_undecided"
 _UPLOAD_FIELDS = frozenset(
     {
         "idempotency_key",
@@ -99,9 +103,13 @@ class DeterministicIntakeApplicationService:
     def __init__(
         self,
         *,
+        parse_policy: str = "legacy_direct_parse",
         clock: Clock = utc_now,
         operation_hook: OperationHook | None = None,
     ):
+        if parse_policy not in _PARSE_POLICIES:
+            raise _request_error("parse policy is not supported", "/parse_policy")
+        self.parse_policy = parse_policy
         self.clock = clock
         self.operation_hook = operation_hook
 
@@ -139,6 +147,7 @@ class DeterministicIntakeApplicationService:
     ) -> dict[str, Any]:
         layout = _session_layout(session)
         normalized = _normalize_start_request(request, mode="upload")
+        normalized["parse_policy"] = self.parse_policy
         state, writes = self._create_or_replay_job(layout, normalized)
         if state["status"] in TERMINAL_STATUSES:
             source_state = _source_state_for_job(layout, state["job_id"], "upload")
@@ -170,6 +179,7 @@ class DeterministicIntakeApplicationService:
             {**dict(request), "candidate_token": candidate_token},
             mode="watched_inbox",
         )
+        normalized["parse_policy"] = self.parse_policy
         state, writes = self._create_or_replay_job(layout, normalized)
         if state["status"] in TERMINAL_STATUSES:
             source_state = _source_state_for_job(layout, state["job_id"], "watched_inbox")
@@ -197,7 +207,18 @@ class DeterministicIntakeApplicationService:
         layout = _session_layout(session)
         job_id = validate_id(job_id, Namespace.JOB)
         normalized = _normalize_resume_request(request)
+        normalized["parse_policy"] = self.parse_policy
         state = _require_expected_state(PipelineJobService(layout).show(job_id)["current_state"], expected_state)
+        if _is_trusted_parse_node(state["current_node"]):
+            raise ResearchKBError(
+                Diagnostic(
+                    INVALID_AUTHORITY,
+                    "deterministic-intake",
+                    job_id,
+                    "/current_node",
+                    "trusted Parse nodes require the dedicated trusted intake service",
+                )
+            )
         mode = _ingress_mode(state)
         source_state = _source_state_for_job(layout, job_id, mode, missing_ok=True)
         if source_state is None:
@@ -227,6 +248,31 @@ class DeterministicIntakeApplicationService:
                     job_id=job_id,
                     actor="user",
                 )
+        if (
+            self.parse_policy == "trusted_supervised_parse"
+            and state["current_node"] == "semantic_route"
+            and state["wait_reason"] == "route_ambiguous"
+        ):
+            _require_trusted_route_resume_receipts(layout, state["job_id"])
+            paper = _paper_for_job(layout, state["job_id"])
+            if paper is None:
+                raise _receipt_error(state["job_id"], "trusted route resume paper is missing")
+            trunk = DeterministicTrunkService(layout).advance(
+                job_id=state["job_id"],
+                paper_id=paper["paper_id"],
+                requested_operation=normalized["requested_operation"],
+                adapter_name="pdfplumber-text-flow",
+                actor="user",
+                document_route=normalized["document_route"],
+                route_reason=normalized["route_reason"],
+            )
+            return _job_result(
+                layout,
+                trunk.state,
+                paper,
+                normalized,
+                trunk.persistent_writes,
+            )
         return self._continue(layout, state, source_state, normalized, 0)
 
     def cancel(
@@ -376,6 +422,15 @@ class DeterministicIntakeApplicationService:
         request: dict[str, Any],
         writes: int,
     ) -> dict[str, Any]:
+        if state["status"] in TERMINAL_STATUSES:
+            return _job_result(layout, state, _paper_for_job(layout, state["job_id"]), request, writes)
+        if _is_trusted_parse_node(state["current_node"]):
+            return _job_result(layout, state, _paper_for_job(layout, state["job_id"]), request, writes)
+        if (
+            request["parse_policy"] == "trusted_supervised_parse"
+            and state["current_node"] not in _INTAKE_PROGRESS_RANK
+        ):
+            return _job_result(layout, state, _paper_for_job(layout, state["job_id"]), request, writes)
         jobs = PipelineJobService(layout)
         state, changed = _progress(
             jobs,
@@ -397,6 +452,22 @@ class DeterministicIntakeApplicationService:
         associated, changed = _reconcile_association(layout, state["job_id"], source_state, paper)
         writes += changed
         self._hook("source_association")
+        if request["parse_policy"] == "trusted_supervised_parse":
+            mutation = jobs.transition(
+                state["job_id"],
+                expected_state_id=state["state_id"],
+                expected_state_digest=canonical_digest(state),
+                status="waiting_user",
+                current_node=_trusted_authority_node(request),
+                wait_reason="authority_required",
+                output_refs=[associated["source_asset_id"], associated["source_asset_state_id"]],
+                retry_increment=0,
+                recovery_action=None,
+                actor="cli",
+            )
+            writes += int(mutation.transaction is not None)
+            self._hook("trusted_parse_authority_wait")
+            return _job_result(layout, mutation.state, paper, request, writes)
         state, changed = _progress(
             jobs,
             state,
@@ -764,6 +835,21 @@ def _job_events(layout: WorkspaceLayout, job_id: str, operation: str) -> list[di
     ]
 
 
+def _require_trusted_route_resume_receipts(layout: WorkspaceLayout, job_id: str) -> None:
+    history = PipelineJobService(layout).show(job_id)["history"]
+    reconciled = [item for item in history if item["current_node"] == _TRUSTED_RECONCILE_NODE]
+    authority_events = _job_events(layout, job_id, "trusted_parse_authority_commit")
+    parse_events = _job_events(layout, job_id, "parse_run")
+    valid = (
+        len(reconciled) == 1
+        and len(authority_events) == 1
+        and len(parse_events) == 1
+        and parse_events[0]["input_refs"][1:] == authority_events[0]["output_refs"]
+    )
+    if not valid:
+        raise _receipt_error(job_id, "trusted route resume provenance is incomplete or ambiguous")
+
+
 def _paper_for_job(layout: WorkspaceLayout, job_id: str) -> dict[str, Any] | None:
     events = _job_events(layout, job_id, "registry_add")
     if not events:
@@ -814,13 +900,23 @@ def _pipeline_projection(state: Mapping[str, Any]) -> dict[str, Any]:
     return {
         **PipelineJobService.summary(state),
         "state_digest": canonical_digest(state),
-        "can_resume": state["status"] not in TERMINAL_STATUSES,
+        "can_resume": (
+            state["status"] not in TERMINAL_STATUSES
+            and not _is_trusted_parse_node(state["current_node"])
+        ),
         "can_cancel": state["status"] not in TERMINAL_STATUSES,
     }
 
 
 def _document_route(state: Mapping[str, Any]) -> str | None:
     node = state["current_node"]
+    if _is_trusted_parse_node(node):
+        suffix = node.rsplit("_", 1)[-1]
+        if node.endswith("_review_mixed"):
+            return "review"
+        if suffix in {"primary", "review"}:
+            return suffix
+        return None
     if node.startswith("primary_semantic_gate"):
         return "primary"
     if node.startswith("review_semantic_gate"):
@@ -829,9 +925,25 @@ def _document_route(state: Mapping[str, Any]) -> str | None:
 
 
 def _route_reason(state: Mapping[str, Any]) -> str | None:
+    if state["current_node"].endswith("_review_mixed"):
+        return "mixed_document"
     if state["current_node"] == "review_semantic_gate_mixed_document":
         return "mixed_document"
     return None
+
+
+def _trusted_authority_node(request: Mapping[str, Any]) -> str:
+    if request["route_reason"] == "mixed_document":
+        suffix = "review_mixed"
+    elif request["document_route"] in {"primary", "review"}:
+        suffix = request["document_route"]
+    else:
+        suffix = "undecided"
+    return _TRUSTED_AUTHORITY_NODE_PREFIX + suffix
+
+
+def _is_trusted_parse_node(node: object) -> bool:
+    return isinstance(node, str) and node.startswith(_TRUSTED_PARSE_NODE_PREFIX)
 
 
 def _adequacy_projection(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,8 @@ SCHEMA_FILES: dict[str, str] = {
     "definitions": "definitions.schema.json",
     "workspace": "workspace.schema.json",
     "workspace-marker": "workspace-marker.schema.json",
+    "workspace-materialization-journal": "workspace-materialization-journal.schema.json",
+    "workspace-materialization-receipt": "workspace-materialization-receipt.schema.json",
     "compatibility-difference": "compatibility-difference.schema.json",
     "compatibility-report": "compatibility-report.schema.json",
     "domain-profile": "domain-profile.schema.json",
@@ -51,6 +54,7 @@ SCHEMA_FILES: dict[str, str] = {
     "source-asset-state": "source-asset-state.schema.json",
     "registry-identity-correction": "registry-identity-correction.schema.json",
     "source-adequacy-profile": "source-adequacy-profile.schema.json",
+    "trusted-parse-authority": "trusted-parse-authority.schema.json",
     "agent-task-state": "agent-task-state.schema.json",
     "document-route-decision": "document-route-decision.schema.json",
     "primary-semantic-bundle": "primary-semantic-bundle.schema.json",
@@ -108,8 +112,17 @@ class SchemaRegistry:
     def _read_text(self, filename: str) -> str:
         if self.schema_root is not None:
             return (self.schema_root / SUPPORTED_VERSION / filename).read_text(encoding="utf-8")
-        source_root = Path(__file__).resolve().parents[3] / "schemas" / SUPPORTED_VERSION
-        if source_root.is_dir():
-            return (source_root / filename).read_text(encoding="utf-8")
-        packaged = resources.files("research_kb").joinpath("_data", "schemas", SUPPORTED_VERSION, filename)
-        return packaged.read_text(encoding="utf-8")
+        return _read_default_schema_text(filename)
+
+
+@lru_cache(maxsize=len(SCHEMA_FILES))
+def _read_default_schema_text(filename: str) -> str:
+    return _read_default_schema_text_uncached(filename)
+
+
+def _read_default_schema_text_uncached(filename: str) -> str:
+    source_root = Path(__file__).resolve().parents[3] / "schemas" / SUPPORTED_VERSION
+    if source_root.is_dir():
+        return (source_root / filename).read_text(encoding="utf-8")
+    packaged = resources.files("research_kb").joinpath("_data", "schemas", SUPPORTED_VERSION, filename)
+    return packaged.read_text(encoding="utf-8")

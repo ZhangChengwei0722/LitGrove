@@ -13,7 +13,7 @@ from research_kb.errors import (
     Diagnostic,
     ResearchKBError,
 )
-from research_kb.identifiers import Namespace, allocate_id
+from research_kb.identifiers import Namespace, allocate_id, validate_id
 from research_kb.parse.base import ParseAdapter
 from research_kb.process_events import build_process_event, timestamp
 from research_kb.services._pipeline_authority import require_job_authority
@@ -45,7 +45,24 @@ class ParseService:
         adapter: ParseAdapter,
         actor: str = "cli",
         job_id: str | None = None,
+        _trusted_provenance_refs: tuple[str, str] | None = None,
     ) -> tuple[list[dict[str, Any]], TransactionResult]:
+        input_refs = [paper_id]
+        if _trusted_provenance_refs is not None:
+            if job_id is None or actor != "user" or len(_trusted_provenance_refs) != 2:
+                raise ResearchKBError(
+                    Diagnostic(
+                        GROUNDING_MISMATCH,
+                        "parsed-page",
+                        paper_id,
+                        "/provenance",
+                        "trusted Parse provenance requires a user-owned Pipeline Job",
+                    )
+                )
+            authority_id, authority_state_id = _trusted_provenance_refs
+            validate_id(authority_id, Namespace.PARSE_AUTHORITY)
+            validate_id(authority_state_id, Namespace.PARSE_AUTHORITY_STATE)
+            input_refs.extend((authority_id, authority_state_id))
         if job_id is not None:
             require_job_authority(self.layout, job_id, "parse_run")
         current_entries = load_workspace_entries(self.layout)
@@ -80,7 +97,7 @@ class ParseService:
             self.transactions.record_failure(
                 operation="parse_run",
                 actor=actor,
-                input_refs=[paper_id],
+                input_refs=input_refs,
                 event_id=event_id,
                 job_id=job_id,
             )
@@ -108,7 +125,7 @@ class ParseService:
             operation="parse_run",
             actor=actor,
             result="success",
-            input_refs=[paper_id],
+            input_refs=input_refs,
             output_refs=[paper_id],
             created_at=created_at,
             job_id=job_id,
@@ -138,7 +155,7 @@ class ParseService:
             target_store="parsed_pages",
             operation="parse_run",
             actor=actor,
-            input_refs=[paper_id],
+            input_refs=input_refs,
             output_refs=[paper_id],
             validator=validate_temp,
             post_replace_validator=validate_source_stability,

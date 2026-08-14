@@ -1,0 +1,4 @@
+# Runtime dependency profile. Keep aligned with pyproject.toml [project].dependencies.
+filelock>=3.16,<4
+jsonschema>=4.23,<5
+PyYAML>=6.0,<7

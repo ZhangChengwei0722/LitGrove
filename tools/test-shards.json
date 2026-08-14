@@ -49,13 +49,17 @@
       "tests/unit/test_record_service.py",
       "tests/unit/test_registry_service.py",
       "tests/unit/test_versions.py",
-      "tests/unit/test_workspace.py"
+      "tests/unit/test_workspace.py",
+      "tests/unit/test_workspace_storage.py"
     ],
     "storage-recovery-b1": [
       "tests/unit/test_guardian_finding_disposition_service.py",
       "tests/unit/test_guardian.py",
       "tests/unit/test_local_source_intake_service.py",
-      "tests/unit/test_operational_maintenance_service.py"
+      "tests/unit/test_operational_maintenance_service.py",
+      "tests/unit/test_workspace_adoption_application_service.py",
+      "tests/unit/test_workspace_materialization_recovery.py",
+      "tests/unit/test_workspace_materialization_service.py"
     ],
     "storage-recovery-b2": [
       "tests/unit/test_pipeline_job_service.py",
@@ -70,11 +74,16 @@
     ],
     "application-semantic-a2": [
       "tests/unit/test_deterministic_trunk_service.py",
+      "tests/unit/test_intake_source_adequacy_resolution_application_service.py",
       "tests/unit/test_intake_inspect_service.py",
       "tests/unit/test_paper_status_service.py",
       "tests/unit/test_parse_read_service.py",
       "tests/unit/test_parse_service.py",
-      "tests/unit/test_source_adequacy_service.py"
+      "tests/unit/test_source_adequacy_resolution_application_service.py",
+      "tests/unit/test_source_adequacy_service.py",
+      "tests/unit/test_supervised_parse_application_service.py",
+      "tests/unit/test_trusted_parse_authority_service.py",
+      "tests/unit/test_trusted_parse_intake_application_service.py"
     ],
     "application-semantic-a3a-source": [
       "tests/unit/test_reading_application_service.py"
@@ -170,6 +179,7 @@
     "serial": [
       "tests/unit/test_discovery_acquisition_service.py",
       "tests/unit/test_portable_skill_sync.py",
+      "tests/unit/test_parser_worker_protocol.py",
       "tests/unit/test_tag_service.py",
       "tests/unit/test_transactions.py",
       "tests/unit/test_workspace_bootstrap.py"

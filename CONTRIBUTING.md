@@ -19,9 +19,17 @@ deterministic, privacy-safe, and reviewable.
 - Complete the pull request template, including compatibility, privacy, and validation scope.
 - Keep the branch current with `main` and resolve every review conversation.
 - Required GitHub checks must pass before merge. The repository uses merge commits.
+- The single-maintainer exception sets required approvals to `0`; it retains all required
+  checks, administrator enforcement, conversation resolution, and no-force-push/deletion
+  protections.
 
 The detailed local commands and engineering rules are in
 [`docs/contributor-guide.md`](docs/contributor-guide.md).
+
+Public support is best-effort and limited to the documented Core/CLI boundary. It does not
+promise private-workspace access, scientific conclusions, GUI/App delivery, release
+publication, or a response-time SLA. Keep security reports private as described in
+[`SECURITY.md`](SECURITY.md).
 
 ## License
 

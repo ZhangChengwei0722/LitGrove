@@ -27,7 +27,7 @@ def test_exchange_application_service_is_session_bound_and_source_free(tmp_path:
     assert limits["source_inclusion_available"] is True
     assert limits["import_available"] is True
     assert limits["safe_reader_profile"]["profile_id"] == "p10-exchange-safe-reader-v1"
-    assert preview["application_service_interface_version"] == "1.18"
+    assert preview["application_service_interface_version"] == "1.23"
     assert preview["persistent_writes"] == 0
     assert preview["canonical_scientific_write"] is False
     assert callable(service.show_import)

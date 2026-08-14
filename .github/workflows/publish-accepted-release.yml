@@ -1,0 +1,103 @@
+name: Publish accepted release (R1-B disabled)
+
+on:
+  workflow_dispatch:
+    inputs:
+      accepted_run_id:
+        description: Accepted release-candidate workflow run id
+        required: true
+        type: string
+      accepted_run_attempt:
+        description: Exact accepted release-candidate workflow run attempt
+        required: true
+        type: string
+      accepted_artifact_name:
+        description: Immutable accepted workflow artifact name
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  # This flag is deliberately false in G1. R1-B must replace this workflow
+  # through a separately reviewed activation and exact authority manifest.
+  G1_PUBLICATION_ENABLED: "false"
+
+jobs:
+  verify-accepted-bytes:
+    name: Fail closed before publication authority
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      authorized: ${{ steps.verify.outputs.authorized }}
+    steps:
+      - name: Check out verifier only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Stop before download, OIDC, or external writes
+        id: verify
+        shell: bash
+        env:
+          ACTIVATION_ENABLED: ${{ env.G1_PUBLICATION_ENABLED }}
+        run: |
+          set -euo pipefail
+          if [ "$ACTIVATION_ENABLED" != "true" ]; then
+            echo "R1-B publication authority is absent; no accepted bytes will be published."
+            echo "authorized=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "authorized=false" >> "$GITHUB_OUTPUT"
+          exit 1
+
+      - name: Download the exact accepted bytes after authority exists
+        if: ${{ false && steps.verify.outputs.authorized == 'true' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.accepted_artifact_name }}
+          run-id: ${{ inputs.accepted_run_id }}
+          github-token: ${{ github.token }}
+          path: accepted
+
+      - name: Verify accepted run, commit, digests, RECORD, and payload
+        if: ${{ false && steps.verify.outputs.authorized == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/release_governance.py verify-publication \
+            --manifest accepted/activation.json \
+            --expected accepted/authority-manifest.json \
+            --downloaded-manifest accepted/artifact-manifest.json \
+            --downloaded-artifact-dir accepted/dist
+
+  publish-pypi:
+    name: Future Trusted Publisher step (disabled)
+    needs: verify-accepted-bytes
+    if: ${{ false && needs.verify-accepted-bytes.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Future R1-B accepted-byte PyPI publication
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: accepted/dist
+
+  github-release:
+    name: Future GitHub Release step (disabled)
+    needs: verify-accepted-bytes
+    if: ${{ false && needs.verify-accepted-bytes.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Future R1-B release record
+        run: echo "GitHub Release creation requires the exact accepted tag and authority manifest."
