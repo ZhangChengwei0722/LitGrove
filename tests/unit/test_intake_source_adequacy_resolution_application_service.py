@@ -118,7 +118,7 @@ def test_intake_source_adequacy_resolution_is_a_public_core_service() -> None:
 
 
 def test_intake_resolution_identity_and_capability_fact_are_exact() -> None:
-    assert __version__ == "0.1.1.dev2026080805"
+    assert __version__ == "0.1.1"
     assert APPLICATION_SERVICE_INTERFACE_VERSION == "1.23"
     assert CapabilityService(pdfplumber_probe=lambda: None).show()["features"][
         "intake_source_adequacy_resolution"
