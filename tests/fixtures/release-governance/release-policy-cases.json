@@ -1,0 +1,195 @@
+{
+  "fixture_origin": "synthetic_from_scratch",
+  "schema_version": "ppwb.g1.release_policy_fixture.v1",
+  "candidate": {
+    "repository": "synthetic.example/LitGrove",
+    "source_commit": "1111111111111111111111111111111111111111",
+    "workflow_run_id": "71001",
+    "workflow_run_attempt": "1",
+    "version": "0.1.1",
+    "artifact_name": "release-candidate-71001-1"
+  },
+  "publication_authority": {
+    "schema_version": "ppwb.g1.publication_authority.v1",
+    "immutable": true,
+    "candidate": {
+      "repository": "synthetic.example/LitGrove",
+      "source_commit": "1111111111111111111111111111111111111111",
+      "workflow_run_id": "71001",
+      "workflow_run_attempt": "1",
+      "version": "0.1.1",
+      "artifact_name": "release-candidate-71001-1"
+    },
+    "publication": {
+      "accepted_run_id": "71001",
+      "accepted_run_attempt": "1",
+      "accepted_commit": "1111111111111111111111111111111111111111",
+      "accepted_artifact_name": "release-candidate-71001-1",
+      "accepted_version": "0.1.1",
+      "tag": "v0.1.1",
+      "environment": "pypi",
+      "trusted_publisher": {
+        "owner": "synthetic-owner",
+        "repository": "synthetic.example/LitGrove",
+        "workflow": ".github/workflows/publish-accepted-release.yml",
+        "environment": "pypi"
+      },
+      "accepted_artifact_digests": {
+        "synthetic-0.1.1-py3-none-any.whl": "3333333333333333333333333333333333333333333333333333333333333333",
+        "synthetic-0.1.1.tar.gz": "4444444444444444444444444444444444444444444444444444444444444444"
+      }
+    }
+  },
+  "publication_activation": {
+    "schema_version": "ppwb.g1.publication_activation.v1",
+    "activation": {
+      "mode": "r1_b",
+      "enabled": true,
+      "publication_authorized": true,
+      "authority_manifest_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "accepted_run_id": "71001",
+      "accepted_run_attempt": "1",
+      "accepted_commit": "1111111111111111111111111111111111111111",
+      "accepted_artifact_name": "release-candidate-71001-1",
+      "accepted_version": "0.1.1",
+      "tag": "v0.1.1",
+      "environment": "pypi",
+      "trusted_publisher": {
+        "owner": "synthetic-owner",
+        "repository": "synthetic.example/LitGrove",
+        "workflow": ".github/workflows/publish-accepted-release.yml",
+        "environment": "pypi"
+      },
+      "build_once": true,
+      "rebuild": false,
+      "source_artifact_only": true,
+      "long_lived_token": false,
+      "accepted_artifact_digests": {
+        "synthetic-0.1.1-py3-none-any.whl": "3333333333333333333333333333333333333333333333333333333333333333",
+        "synthetic-0.1.1.tar.gz": "4444444444444444444444444444444444444444444444444444444444444444"
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "positive_synthetic_contract",
+      "target": "release",
+      "expected": "ok",
+      "mutation": null
+    },
+    {
+      "id": "wrong_digest",
+      "target": "artifact",
+      "expected": "fail",
+      "mutation": "replace_first_artifact_digest"
+    },
+    {
+      "id": "wrong_commit",
+      "target": "artifact",
+      "expected": "fail",
+      "mutation": "replace_candidate_commit"
+    },
+    {
+      "id": "wrong_run",
+      "target": "artifact",
+      "expected": "fail",
+      "mutation": "replace_candidate_run"
+    },
+    {
+      "id": "wrong_run_attempt",
+      "target": "artifact",
+      "expected": "fail",
+      "mutation": "replace_candidate_attempt"
+    },
+    {
+      "id": "rebuild_attempt",
+      "target": "artifact",
+      "expected": "fail",
+      "mutation": "increment_build_attempts"
+    },
+    {
+      "id": "same_version_substituted_bytes",
+      "target": "artifact",
+      "expected": "fail",
+      "mutation": "replace_first_artifact_digest"
+    },
+    {
+      "id": "unexpected_installed_file",
+      "target": "installed",
+      "expected": "fail",
+      "mutation": "add_unrecorded_file"
+    },
+    {
+      "id": "source_tree_import",
+      "target": "installed",
+      "expected": "fail",
+      "mutation": "mark_source_tree_import"
+    },
+    {
+      "id": "cross_candidate_cache",
+      "target": "artifact",
+      "expected": "fail",
+      "mutation": "replace_cache_candidate_key"
+    },
+    {
+      "id": "cross_candidate_cache_attempt",
+      "target": "artifact",
+      "expected": "fail",
+      "mutation": "replace_cache_candidate_attempt"
+    },
+    {
+      "id": "publication_missing_authority",
+      "target": "publication",
+      "expected": "fail",
+      "mutation": "disable_publication"
+    },
+    {
+      "id": "publication_wrong_run",
+      "target": "publication",
+      "expected": "fail",
+      "mutation": "replace_accepted_run"
+    },
+    {
+      "id": "publication_wrong_run_attempt",
+      "target": "publication",
+      "expected": "fail",
+      "mutation": "replace_accepted_attempt"
+    },
+    {
+      "id": "publication_wrong_digest",
+      "target": "publication",
+      "expected": "fail",
+      "mutation": "replace_accepted_digest"
+    },
+    {
+      "id": "canonical_unicode_utf16_key_order",
+      "target": "canonical",
+      "expected": "ok",
+      "mutation": "unicode_utf16_key_order"
+    },
+    {
+      "id": "canonical_float_rejected",
+      "target": "canonical",
+      "expected": "fail",
+      "mutation": "float_value"
+    },
+    {
+      "id": "canonical_integer_out_of_range",
+      "target": "canonical",
+      "expected": "fail",
+      "mutation": "out_of_range_integer"
+    },
+    {
+      "id": "canonical_unpaired_surrogate",
+      "target": "canonical",
+      "expected": "fail",
+      "mutation": "unpaired_surrogate"
+    },
+    {
+      "id": "canonical_non_string_key",
+      "target": "canonical",
+      "expected": "fail",
+      "mutation": "non_string_key"
+    }
+  ]
+}

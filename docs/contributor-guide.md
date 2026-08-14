@@ -25,7 +25,8 @@ Release-resource smoke after `python -m build`:
 
 ## Continuous Integration
 
-Every pull request and push to `main` runs two platform gates plus dependency security:
+Every pull request and push to `main` runs two platform gates plus dependency security and
+CodeQL:
 
 - `Windows validation` aggregates exhaustive L3 shards, separate L4 scale validation,
   collection reconciliation, source compilation, distribution build, installed-wheel
@@ -42,8 +43,22 @@ The audit uploads a CycloneDX JSON SBOM for inspection. A dependency alert must 
 explicitly dismissed with a repository-visible rationale, or kept blocked; do not weaken
 the audit command or hide a vulnerable dependency to make a check pass.
 
+The advanced Python `CodeQL` workflow is an additive security check. Its actions are pinned to
+reviewed full commit SHAs, the check name is stable, and it uses minimum job permissions. Do
+not add a second default CodeQL setup or treat missing/404 analysis as a passing result.
+
+The G1 risk classifier is shadow-only. Its L0-L4 recommendation is evidence for review and
+never skips the existing validation gates. The single-maintainer exception keeps required
+approvals at `0` while retaining all required checks, administrator enforcement, and
+conversation resolution.
+
 Package versions follow `docs/release-policy.md`. Record user-visible changes, deprecations,
 security fixes, and compatibility changes in `CHANGELOG.md` under `Unreleased`.
+
+Public support is best-effort and limited to the documented Core/CLI infrastructure boundary.
+It does not include private-workspace access, scientific judgment, GUI/App delivery, release
+publication, or a response-time SLA. Keep private research material and security details out
+of public issues and review artifacts.
 
 ## Validation Levels
 

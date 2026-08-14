@@ -7,7 +7,7 @@ The repository has no tagged stable release. Security fixes target the current `
 ## Reporting A Vulnerability
 
 Do not open a public issue for a suspected vulnerability or exposed credential. Submit a
-[private vulnerability report](https://github.com/ZhangChengwei0722/Scientific-Research-Knowledge-Base/security/advisories/new)
+[private vulnerability report](https://github.com/ZhangChengwei0722/LitGrove/security/advisories/new)
 with the affected revision, reproduction steps, impact, and any suggested mitigation.
 
 Reports involving private research material should contain only the minimum redacted detail

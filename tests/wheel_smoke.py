@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
+import platform
 import subprocess
 import sys
 import tempfile
+import tomllib
 import venv
 from pathlib import Path
 
@@ -14,8 +17,250 @@ if str(ROOT) not in sys.path:
 from tests.docx_helpers import write_synthetic_docx
 
 
+def _isolated_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    for variable in (
+        "PIP_INDEX_URL",
+        "PIP_EXTRA_INDEX_URL",
+        "PIP_TRUSTED_HOST",
+        "PIP_FIND_LINKS",
+        "PIP_CERT",
+        "PIP_CLIENT_CERT",
+    ):
+        environment.pop(variable, None)
+    environment["PYTHONNOUSERSITE"] = "1"
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    environment["PIP_NO_CACHE_DIR"] = "1"
+    environment["PIP_CONFIG_FILE"] = "NUL" if os.name == "nt" else "/dev/null"
+    environment.pop("PYTHONPATH", None)
+    return environment
+
+
+def _run_isolated(*args, **kwargs):
+    kwargs["env"] = _isolated_environment()
+    return subprocess.run(*args, **kwargs)
+
+
+def _native_lock(root: Path, profile: str) -> Path:
+    if profile not in {"runtime", "pdf"}:
+        raise ValueError(f"unsupported wheel smoke profile: {profile}")
+    if sys.implementation.name != "cpython" or sys.version_info[:2] not in ((3, 11), (3, 12)):
+        raise SystemExit("wheel smoke requires CPython 3.11 or 3.12")
+    machine = platform.machine().lower()
+    if sys.platform == "win32" and machine in {"amd64", "x86_64"}:
+        platform_tag = "win_amd64"
+    elif sys.platform.startswith("linux") and machine in {"x86_64", "amd64"}:
+        platform_tag = "linux_x86_64"
+    else:
+        raise SystemExit(f"unsupported wheel smoke platform tuple: {sys.platform}/{machine}")
+    python_tag = f"py{sys.version_info.major}{sys.version_info.minor}"
+    lock = root / "requirements" / "locks" / platform_tag / python_tag / f"{profile}.txt"
+    if not lock.is_file():
+        raise SystemExit(f"native wheel smoke lock is missing: {lock}")
+    return lock
+
+
+def _project_version(root: Path) -> str:
+    with (root / "pyproject.toml").open("rb") as stream:
+        version = tomllib.load(stream)["project"]["version"]
+    if not isinstance(version, str) or not version:
+        raise SystemExit("pyproject.toml does not declare a project version")
+    return version
+
+
+def _distribution_directory(root: Path) -> Path:
+    override = os.environ.get("RESEARCH_KB_DIST_DIR")
+    if override is None:
+        return root / "dist"
+    directory = Path(override)
+    if not directory.is_absolute():
+        raise SystemExit("RESEARCH_KB_DIST_DIR must be an absolute path")
+    if not directory.is_dir():
+        raise SystemExit("RESEARCH_KB_DIST_DIR must be an existing directory")
+    if directory.is_symlink() or directory.resolve(strict=True) != directory:
+        raise SystemExit("RESEARCH_KB_DIST_DIR must not be a symlink")
+    return directory
+
+
+def _wheel_for_version(root: Path, version: str) -> Path:
+    normalized_version = version.replace("-", "_")
+    distribution_directory = _distribution_directory(root)
+    wheels = sorted(
+        distribution_directory.glob(f"research_kb_core-{normalized_version}-*.whl")
+    )
+    if not wheels:
+        raise SystemExit(f"build the expected {version} wheel before running the smoke test")
+    if len(wheels) != 1:
+        raise SystemExit(f"expected one {version} wheel, found {len(wheels)}")
+    return wheels[0]
+
+
+def _install_locked(python: Path, root: Path, wheel: Path, profile: str) -> None:
+    bootstrap = root / "tools" / "release-lock-bootstrap.txt"
+    if not bootstrap.is_file():
+        raise SystemExit(f"bootstrap lock is missing: {bootstrap}")
+    lock = _native_lock(root, profile)
+    commands = (
+        [
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            "--isolated",
+            "--index-url",
+            "https://pypi.org/simple",
+            "--no-cache-dir",
+            "--require-hashes",
+            "--no-deps",
+            "--only-binary=:all:",
+            "-r",
+            str(bootstrap),
+        ],
+        [
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            "--isolated",
+            "--index-url",
+            "https://pypi.org/simple",
+            "--no-cache-dir",
+            "--require-hashes",
+            "--no-deps",
+            "--only-binary=:all:",
+            "-r",
+            str(lock),
+        ],
+        [
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            "--no-index",
+            "--no-deps",
+            "--no-compile",
+            str(wheel),
+        ],
+    )
+    for command in commands:
+        _run_isolated(command, cwd=root, check=True)
+
+
+_INSTALLED_PAYLOAD_SCRIPT = r"""
+import base64
+import csv
+import hashlib
+import importlib.metadata
+import json
+import sys
+import sysconfig
+from pathlib import Path, PurePosixPath, PureWindowsPath
+
+root = Path(sys.argv[1]).resolve()
+expected_version = sys.argv[2]
+distribution = importlib.metadata.distribution("research-kb-core")
+if not distribution.version or distribution.version != expected_version:
+    raise SystemExit(
+        f"installed Core distribution version mismatch: {distribution.version!r}"
+    )
+import research_kb
+
+module_file = Path(research_kb.__file__).resolve()
+purelib = Path(sysconfig.get_paths()["purelib"]).resolve()
+scripts = Path(sysconfig.get_paths()["scripts"]).resolve()
+if not module_file.is_relative_to(purelib):
+    raise SystemExit(f"research_kb imported outside venv site-packages: {module_file}")
+for checkout_root in (root, root / "src"):
+    if module_file.is_relative_to(checkout_root.resolve()):
+        raise SystemExit(f"research_kb imported from the checkout: {module_file}")
+
+files = distribution.files or ()
+record_entries = [
+    PurePosixPath(item.as_posix())
+    for item in files
+    if item.as_posix().endswith(".dist-info/RECORD")
+]
+if len(record_entries) != 1:
+    raise SystemExit(f"expected one Core RECORD entry, found {len(record_entries)}")
+record_entry = record_entries[0]
+record_path = Path(distribution.locate_file(record_entry)).resolve()
+if not record_path.is_file() or not record_path.is_relative_to(purelib):
+    raise SystemExit(f"Core RECORD is outside installed site-packages: {record_path}")
+
+def is_under(path, root_path):
+    return path == root_path or root_path in path.parents
+
+
+checked = 0
+record_rows = 0
+with record_path.open("r", encoding="utf-8", newline="") as stream:
+    for row in csv.reader(stream):
+        if len(row) != 3 or not row[0]:
+            raise SystemExit(f"malformed Core RECORD row: {row!r}")
+        recorded_name = row[0]
+        posix_name = PurePosixPath(recorded_name)
+        windows_name = PureWindowsPath(recorded_name)
+        if (
+            "\\" in recorded_name
+            or posix_name.is_absolute()
+            or windows_name.is_absolute()
+            or windows_name.root
+            or windows_name.drive
+        ):
+            raise SystemExit(f"unsafe Core RECORD path: {recorded_name}")
+        candidate = Path(distribution.locate_file(posix_name)).resolve()
+        if not any(is_under(candidate, allowed) for allowed in (purelib, scripts)):
+            raise SystemExit(f"Core RECORD path escapes the installed distribution: {recorded_name}")
+        if not candidate.is_file():
+            raise SystemExit(f"Core RECORD file is missing: {recorded_name}")
+        if posix_name == record_entry:
+            record_rows += 1
+            continue
+        if not row[1] or not row[2]:
+            raise SystemExit(f"Core RECORD lacks hash or size: {recorded_name}")
+        try:
+            algorithm, expected_digest = row[1].split("=", 1)
+            actual_digest = base64.urlsafe_b64encode(
+                hashlib.new(algorithm, candidate.read_bytes()).digest()
+            ).rstrip(b"=").decode("ascii")
+            expected_size = int(row[2])
+        except (ValueError, TypeError) as error:
+            raise SystemExit(f"invalid Core RECORD digest or size: {recorded_name}") from error
+        if actual_digest != expected_digest:
+            raise SystemExit(f"Core RECORD hash mismatch: {recorded_name}")
+        if candidate.stat().st_size != expected_size:
+            raise SystemExit(f"Core RECORD size mismatch: {recorded_name}")
+        checked += 1
+if record_rows != 1:
+    raise SystemExit(f"expected one Core RECORD row, found {record_rows}")
+
+print(json.dumps({"version": distribution.version, "module_file": str(module_file), "checked_files": checked}))
+"""
+
+
+def _assert_installed_payload(
+    python: Path, cwd: Path, root: Path, expected_version: str
+) -> dict:
+    try:
+        completed = _run_isolated(
+            [str(python), "-c", _INSTALLED_PAYLOAD_SCRIPT, str(root), expected_version],
+            cwd=cwd,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+    except subprocess.CalledProcessError as error:
+        raise SystemExit(
+            "installed payload verification failed:\n"
+            f"stdout:\n{error.stdout or ''}\n"
+            f"stderr:\n{error.stderr or ''}"
+        ) from error
+    return json.loads(completed.stdout)
+
+
 def _run_json(python: Path, cwd: Path, *args: str) -> dict:
-    completed = subprocess.run(
+    completed = _run_isolated(
         [str(python), "-m", "research_kb", *args],
         cwd=cwd,
         check=True,
@@ -27,7 +272,7 @@ def _run_json(python: Path, cwd: Path, *args: str) -> dict:
 
 
 def _run_json_stdin(python: Path, cwd: Path, value: dict, *args: str) -> dict:
-    completed = subprocess.run(
+    completed = _run_isolated(
         [str(python), "-m", "research_kb", *args],
         cwd=cwd,
         check=True,
@@ -99,15 +344,16 @@ def _synthetic_discovery_selection() -> dict:
 
 def main() -> int:
     root = ROOT
-    wheels = sorted((root / "dist").glob("research_kb_core-*.whl"))
-    if not wheels:
-        raise SystemExit("build a wheel before running the smoke test")
+    expected_version = _project_version(root)
+    wheel = _wheel_for_version(root, expected_version)
+    _native_lock(root, "runtime")
     with tempfile.TemporaryDirectory(prefix="research-kb-wheel-smoke-") as temporary:
         environment = Path(temporary) / "venv"
         venv.EnvBuilder(with_pip=True).create(environment)
         python = environment / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
-        subprocess.run([str(python), "-m", "pip", "install", str(wheels[-1])], check=True)
-        subprocess.run([str(python), "-m", "research_kb", "--version"], cwd=temporary, check=True)
+        _install_locked(python, root, wheel, "runtime")
+        _assert_installed_payload(python, Path(temporary), root, expected_version)
+        _run_isolated([str(python), "-m", "research_kb", "--version"], cwd=temporary, check=True)
         capability = _run_json(python, Path(temporary), "capability", "show")
         pdf_capability = next(item for item in capability["parse_adapters"] if item["adapter"] == "pdfplumber")
         if pdf_capability != {
@@ -159,7 +405,7 @@ def main() -> int:
             )
         ):
             raise SystemExit("base wheel capability report lacks P10 Exchange")
-        subprocess.run(
+        _run_isolated(
             [
                 str(python), "-c",
                 "from research_kb.compatibility import CompatibilitySourceRef, LegacyReaderAdapter; "
@@ -217,31 +463,31 @@ def main() -> int:
             cwd=temporary,
             check=True,
         )
-        subprocess.run(
+        _run_isolated(
             [str(python), "-m", "research_kb", "discovery", "search", "--help"],
             cwd=temporary,
             check=True,
             capture_output=True,
         )
-        subprocess.run(
+        _run_isolated(
             [str(python), "-m", "research_kb", "discovery", "resolve", "--help"],
             cwd=temporary,
             check=True,
             capture_output=True,
         )
-        subprocess.run(
+        _run_isolated(
             [str(python), "-m", "research_kb", "discovery", "acquire", "--help"],
             cwd=temporary,
             check=True,
             capture_output=True,
         )
-        subprocess.run(
+        _run_isolated(
             [str(python), "-m", "research_kb", "intake", "inspect-acquired", "--help"],
             cwd=temporary,
             check=True,
             capture_output=True,
         )
-        subprocess.run(
+        _run_isolated(
             [str(python), "-m", "research_kb", "job", "create", "--help"],
             cwd=temporary,
             check=True,
@@ -261,13 +507,13 @@ def main() -> int:
             ("identity", "list"),
             ("identity", "correct"),
         ):
-            subprocess.run(
+            _run_isolated(
                 [str(python), "-m", "research_kb", group, command, "--help"],
                 cwd=temporary,
                 check=True,
                 capture_output=True,
             )
-        subprocess.run(
+        _run_isolated(
             [str(python), "-m", "research_kb", "manuscript", "inspect", "--help"],
             cwd=temporary,
             check=True,
@@ -327,7 +573,7 @@ def main() -> int:
         config_path.write_text(json.dumps(workspace, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
         outputs = []
         for extra in (["--dry-run"], [], []):
-            completed = subprocess.run(
+            completed = _run_isolated(
                 [
                     str(python), "-m", "research_kb", "workspace", "init",
                     "--workspace", str(config_path), *extra,
@@ -345,7 +591,7 @@ def main() -> int:
         if marker["layout_contract_version"] != "p7d-1":
             raise SystemExit("wheel workspace did not initialize at p7d-1")
         adoption_before = _tree_snapshot(workspace_root)
-        subprocess.run(
+        _run_isolated(
             [
                 str(python),
                 "-c",
@@ -424,7 +670,7 @@ def main() -> int:
             raise SystemExit("base wheel DOCX manuscript parser identity is incorrect")
         if manuscript["document"]["unit_count"] != 2 or manuscript["persistent_writes"] != 0:
             raise SystemExit("base wheel DOCX manuscript projection is incomplete")
-        unavailable_manuscript = subprocess.run(
+        unavailable_manuscript = _run_isolated(
             [
                 str(python), "-m", "research_kb", "manuscript", "inspect",
                 "--workspace", str(config_path), "--source", str(manuscript_pdf),
@@ -532,7 +778,7 @@ def main() -> int:
         }:
             raise SystemExit("base wheel intake did not recover the registered paper")
         source_before_parse = source.read_bytes()
-        unavailable = subprocess.run(
+        unavailable = _run_isolated(
             [
                 str(python), "-m", "research_kb", "parse", "run",
                 "--workspace", str(config_path),
@@ -806,7 +1052,7 @@ def main() -> int:
             raise SystemExit("base wheel deterministic reads changed managed workspace files")
         if _tree_snapshot(sources) != before_sources:
             raise SystemExit("base wheel deterministic reads changed source files")
-        rendered = subprocess.run(
+        rendered = _run_isolated(
             [
                 str(python),
                 "-m",
@@ -856,7 +1102,7 @@ def main() -> int:
         )
         if step7_context["summary"]["total"] != 1 or step7_context["candidates"][0]["candidate"]["candidate_id"] != insight_id:
             raise SystemExit("base wheel Step 7 context did not recover the candidate")
-        step7_rendered = subprocess.run(
+        step7_rendered = _run_isolated(
             [
                 str(python),
                 "-m",
@@ -999,7 +1245,7 @@ def main() -> int:
         )
         if guardian["status"] != "success":
             raise SystemExit("base wheel Guardian rejected valid Review Memory")
-        subprocess.run(
+        _run_isolated(
             [
                 str(python), "-m", "research_kb", "contract", "validate",
                 "--kind", "workspace", "--input", str(root / "templates" / "workspace.example.yaml"),
@@ -1007,7 +1253,7 @@ def main() -> int:
             cwd=temporary,
             check=True,
         )
-        subprocess.run(
+        _run_isolated(
             [
                 str(python),
                 "-c",
@@ -1072,7 +1318,7 @@ def main() -> int:
             bytes((37, 80, 68, 70, 45))
             + b"1.7\nThe invented Primary bundle response increased.\n%%EOF\n"
         )
-        subprocess.run(
+        _run_isolated(
             [
                 str(python),
                 "-c",
@@ -1151,7 +1397,7 @@ def main() -> int:
             encoding="utf-8",
             newline="\n",
         )
-        subprocess.run(
+        _run_isolated(
             [
                 str(python),
                 "-c",

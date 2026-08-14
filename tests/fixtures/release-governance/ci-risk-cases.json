@@ -1,0 +1,411 @@
+{
+  "schema_version": "ci-risk-cases@1",
+  "fixture_version": 1,
+  "fixture_origin": "synthetic_from_scratch",
+  "rule_version": "g1-risk-v1",
+  "cases": [
+    {
+      "id": "docs_add",
+      "case_version": 1,
+      "description": "Add an allowlisted synthetic guide.",
+      "event": "pull_request",
+      "base": {},
+      "head": {"docs/guide.md": "synthetic_from_scratch guide v1\n"},
+      "expected": {"levels": ["L0"], "reason_codes": ["docs_only_allowlist"]}
+    },
+    {
+      "id": "docs_modify",
+      "case_version": 1,
+      "description": "Modify an allowlisted synthetic guide.",
+      "event": "pull_request",
+      "base": {"docs/guide.md": "synthetic_from_scratch guide v1\n"},
+      "head": {"docs/guide.md": "synthetic_from_scratch guide v2\n"},
+      "expected": {"levels": ["L0"], "reason_codes": ["docs_only_allowlist"]}
+    },
+    {
+      "id": "readme_modify",
+      "case_version": 1,
+      "description": "Keep the top-level README in the docs-only candidate class.",
+      "event": "pull_request",
+      "base": {"README.md": "synthetic_from_scratch README v1\n"},
+      "head": {"README.md": "synthetic_from_scratch README v2\n"},
+      "expected": {"levels": ["L0"], "reason_codes": ["docs_only_allowlist"]}
+    },
+    {
+      "id": "ordinary_docs_modify",
+      "case_version": 1,
+      "description": "Keep an ordinary non-policy docs page in the docs-only candidate class.",
+      "event": "pull_request",
+      "base": {"docs/reference.md": "synthetic_from_scratch reference v1\n"},
+      "head": {"docs/reference.md": "synthetic_from_scratch reference v2\n"},
+      "expected": {"levels": ["L0"], "reason_codes": ["docs_only_allowlist"]}
+    },
+    {
+      "id": "agents_governance_modify",
+      "case_version": 1,
+      "description": "Modify the repository authority and governance instructions.",
+      "event": "pull_request",
+      "base": {"AGENTS.md": "synthetic_from_scratch governance v1\n"},
+      "head": {"AGENTS.md": "synthetic_from_scratch governance v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["governance_change"]}
+    },
+    {
+      "id": "changelog_release_modify",
+      "case_version": 1,
+      "description": "Modify the release changelog.",
+      "event": "pull_request",
+      "base": {"CHANGELOG.md": "synthetic_from_scratch changelog v1\n"},
+      "head": {"CHANGELOG.md": "synthetic_from_scratch changelog v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["release_change"]}
+    },
+    {
+      "id": "contributing_governance_modify",
+      "case_version": 1,
+      "description": "Modify contributor governance instructions.",
+      "event": "pull_request",
+      "base": {"CONTRIBUTING.md": "synthetic_from_scratch contributing v1\n"},
+      "head": {"CONTRIBUTING.md": "synthetic_from_scratch contributing v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["governance_change"]}
+    },
+    {
+      "id": "contributor_guide_governance_modify",
+      "case_version": 1,
+      "description": "Modify the detailed contributor governance guide.",
+      "event": "pull_request",
+      "base": {"docs/contributor-guide.md": "synthetic_from_scratch contributor guide v1\n"},
+      "head": {"docs/contributor-guide.md": "synthetic_from_scratch contributor guide v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["governance_change"]}
+    },
+    {
+      "id": "validation_policy_modify",
+      "case_version": 1,
+      "description": "Modify the validation governance policy.",
+      "event": "pull_request",
+      "base": {"docs/test-validation.md": "synthetic_from_scratch validation policy v1\n"},
+      "head": {"docs/test-validation.md": "synthetic_from_scratch validation policy v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["validation_governance_change"]}
+    },
+    {
+      "id": "validation_runner_modify",
+      "case_version": 1,
+      "description": "Modify the validation runner.",
+      "event": "pull_request",
+      "base": {"tools/run_validation.py": "synthetic_from_scratch validation runner v1\n"},
+      "head": {"tools/run_validation.py": "synthetic_from_scratch validation runner v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["validation_governance_change"]}
+    },
+    {
+      "id": "validation_shards_modify",
+      "case_version": 1,
+      "description": "Modify the validation shard manifest.",
+      "event": "pull_request",
+      "base": {"tools/test-shards.json": "synthetic_from_scratch shard manifest v1\n"},
+      "head": {"tools/test-shards.json": "synthetic_from_scratch shard manifest v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["validation_governance_change"]}
+    },
+    {
+      "id": "docs_delete",
+      "case_version": 1,
+      "description": "Delete an allowlisted synthetic note.",
+      "event": "pull_request",
+      "base": {"docs/obsolete.md": "synthetic_from_scratch obsolete note\n"},
+      "head": {},
+      "expected": {"levels": ["L0"], "reason_codes": ["docs_only_allowlist"]}
+    },
+    {
+      "id": "safe_docs_rename",
+      "case_version": 1,
+      "description": "Rename one allowlisted synthetic document to another.",
+      "event": "pull_request",
+      "base": {"docs/old-guide.md": "synthetic_from_scratch rename payload\n"},
+      "head": {"docs/new-guide.md": "synthetic_from_scratch rename payload\n"},
+      "expected": {"levels": ["L0"], "reason_codes": ["safe_rename", "docs_only_allowlist"]}
+    },
+    {
+      "id": "safe_code_rename",
+      "case_version": 1,
+      "description": "Rename one ordinary synthetic module within the code surface.",
+      "event": "pull_request",
+      "base": {"src/sample/old.py": "synthetic_from_scratch module\n"},
+      "head": {"src/sample/new.py": "synthetic_from_scratch module\n"},
+      "expected": {"levels": ["L2"], "reason_codes": ["safe_rename", "ordinary_code_change"]}
+    },
+    {
+      "id": "ordinary_code_add",
+      "case_version": 1,
+      "description": "Add an ordinary synthetic source module.",
+      "event": "pull_request",
+      "base": {},
+      "head": {"src/sample/module.py": "synthetic_from_scratch module\n"},
+      "expected": {"levels": ["L2"], "reason_codes": ["ordinary_code_change"]}
+    },
+    {
+      "id": "ordinary_code_delete",
+      "case_version": 1,
+      "description": "Delete an ordinary synthetic source module.",
+      "event": "pull_request",
+      "base": {"src/sample/module.py": "synthetic_from_scratch module\n"},
+      "head": {},
+      "expected": {"levels": ["L2"], "reason_codes": ["ordinary_code_change"]}
+    },
+    {
+      "id": "ordinary_test_modify",
+      "case_version": 1,
+      "description": "Modify an ordinary synthetic contract test.",
+      "event": "pull_request",
+      "base": {"tests/contract/test_sample.py": "synthetic_from_scratch test v1\n"},
+      "head": {"tests/contract/test_sample.py": "synthetic_from_scratch test v2\n"},
+      "expected": {"levels": ["L2"], "reason_codes": ["ordinary_code_change"]}
+    },
+    {
+      "id": "ordinary_tool_modify",
+      "case_version": 1,
+      "description": "Modify an ordinary synthetic helper outside risk namespaces.",
+      "event": "pull_request",
+      "base": {"tools/helper.py": "synthetic_from_scratch helper v1\n"},
+      "head": {"tools/helper.py": "synthetic_from_scratch helper v2\n"},
+      "expected": {"levels": ["L2"], "reason_codes": ["ordinary_code_change"]}
+    },
+    {
+      "id": "unknown_path_add",
+      "case_version": 1,
+      "description": "Add a path outside every declared class.",
+      "event": "pull_request",
+      "base": {},
+      "head": {"misc/unknown.txt": "synthetic_from_scratch unknown path\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["unknown_path"]}
+    },
+    {
+      "id": "unknown_path_delete",
+      "case_version": 1,
+      "description": "Delete a path outside every declared class.",
+      "event": "pull_request",
+      "base": {"misc/unknown.txt": "synthetic_from_scratch unknown path\n"},
+      "head": {},
+      "expected": {"levels": ["L3"], "reason_codes": ["unknown_path"]}
+    },
+    {
+      "id": "unknown_rename_pair",
+      "case_version": 1,
+      "description": "Rename between two unknown synthetic paths.",
+      "event": "pull_request",
+      "base": {"misc/old.txt": "synthetic_from_scratch unknown rename\n"},
+      "head": {"other/new.txt": "synthetic_from_scratch unknown rename\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["unknown_path", "unknown_rename"]}
+    },
+    {
+      "id": "unsafe_docs_to_unknown_rename",
+      "case_version": 1,
+      "description": "Rename an allowlisted document into an unknown path.",
+      "event": "pull_request",
+      "base": {"docs/old-note.md": "synthetic_from_scratch unsafe rename\n"},
+      "head": {"misc/new-note.txt": "synthetic_from_scratch unsafe rename\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["docs_only_allowlist", "unknown_path", "unknown_rename"]}
+    },
+    {
+      "id": "unsafe_docs_to_metadata_rename",
+      "case_version": 1,
+      "description": "Rename an allowlisted document onto project metadata.",
+      "event": "pull_request",
+      "base": {"docs/old-metadata.md": "synthetic_from_scratch unsafe rename\n"},
+      "head": {"pyproject.toml": "synthetic_from_scratch unsafe rename\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["docs_only_allowlist", "python_project_metadata", "unsafe_rename"]}
+    },
+    {
+      "id": "workflow_add",
+      "case_version": 1,
+      "description": "Add a workflow file and require governance validation.",
+      "event": "pull_request",
+      "base": {},
+      "head": {".github/workflows/synthetic.yml": "synthetic_from_scratch workflow\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["workflow_change"]}
+    },
+    {
+      "id": "classifier_self_modify",
+      "case_version": 1,
+      "description": "Modify the classifier implementation itself.",
+      "event": "pull_request",
+      "base": {"tools/ci_risk_classifier.py": "synthetic_from_scratch classifier v1\n"},
+      "head": {"tools/ci_risk_classifier.py": "synthetic_from_scratch classifier v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["classifier_or_rule_change"]}
+    },
+    {
+      "id": "project_metadata_modify",
+      "case_version": 1,
+      "description": "Modify project metadata.",
+      "event": "pull_request",
+      "base": {"pyproject.toml": "synthetic_from_scratch metadata v1\n"},
+      "head": {"pyproject.toml": "synthetic_from_scratch metadata v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["python_project_metadata"]}
+    },
+    {
+      "id": "lock_modify",
+      "case_version": 1,
+      "description": "Modify a synthetic dependency lock.",
+      "event": "pull_request",
+      "base": {"requirements/locks/win_amd64/py312/test.txt": "synthetic_from_scratch lock v1\n"},
+      "head": {"requirements/locks/win_amd64/py312/test.txt": "synthetic_from_scratch lock v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["lock_change"]}
+    },
+    {
+      "id": "release_policy_modify",
+      "case_version": 1,
+      "description": "Modify release policy.",
+      "event": "pull_request",
+      "base": {"docs/release-policy.md": "synthetic_from_scratch release policy v1\n"},
+      "head": {"docs/release-policy.md": "synthetic_from_scratch release policy v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["release_change"]}
+    },
+    {
+      "id": "security_modify",
+      "case_version": 1,
+      "description": "Modify the security policy.",
+      "event": "pull_request",
+      "base": {"SECURITY.md": "synthetic_from_scratch security v1\n"},
+      "head": {"SECURITY.md": "synthetic_from_scratch security v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["security_change"]}
+    },
+    {
+      "id": "privacy_modify",
+      "case_version": 1,
+      "description": "Modify the privacy boundary policy.",
+      "event": "pull_request",
+      "base": {"docs/privacy-boundary.md": "synthetic_from_scratch privacy v1\n"},
+      "head": {"docs/privacy-boundary.md": "synthetic_from_scratch privacy v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["privacy_change"]}
+    },
+    {
+      "id": "schema_modify",
+      "case_version": 1,
+      "description": "Modify a synthetic schema.",
+      "event": "pull_request",
+      "base": {"schemas/1.0/synthetic.schema.json": "synthetic_from_scratch schema v1\n"},
+      "head": {"schemas/1.0/synthetic.schema.json": "synthetic_from_scratch schema v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["schema_change"]}
+    },
+    {
+      "id": "storage_modify",
+      "case_version": 1,
+      "description": "Modify a synthetic storage implementation.",
+      "event": "pull_request",
+      "base": {"src/sample/storage/service.py": "synthetic_from_scratch storage v1\n"},
+      "head": {"src/sample/storage/service.py": "synthetic_from_scratch storage v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["storage_change"]}
+    },
+    {
+      "id": "transaction_modify",
+      "case_version": 1,
+      "description": "Modify a synthetic transaction implementation.",
+      "event": "pull_request",
+      "base": {"src/sample/transaction/service.py": "synthetic_from_scratch transaction v1\n"},
+      "head": {"src/sample/transaction/service.py": "synthetic_from_scratch transaction v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["transaction_change"]}
+    },
+    {
+      "id": "recovery_modify",
+      "case_version": 1,
+      "description": "Modify a synthetic recovery implementation.",
+      "event": "pull_request",
+      "base": {"src/sample/recovery/service.py": "synthetic_from_scratch recovery v1\n"},
+      "head": {"src/sample/recovery/service.py": "synthetic_from_scratch recovery v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["recovery_change"]}
+    },
+    {
+      "id": "authority_modify",
+      "case_version": 1,
+      "description": "Modify a synthetic authority boundary.",
+      "event": "pull_request",
+      "base": {"src/sample/authority/guard.py": "synthetic_from_scratch authority v1\n"},
+      "head": {"src/sample/authority/guard.py": "synthetic_from_scratch authority v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["authority_change"]}
+    },
+    {
+      "id": "provenance_modify",
+      "case_version": 1,
+      "description": "Modify a synthetic provenance boundary.",
+      "event": "pull_request",
+      "base": {"src/sample/provenance/record.py": "synthetic_from_scratch provenance v1\n"},
+      "head": {"src/sample/provenance/record.py": "synthetic_from_scratch provenance v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["provenance_change"]}
+    },
+    {
+      "id": "benchmark_modify",
+      "case_version": 1,
+      "description": "Modify a synthetic benchmark.",
+      "event": "pull_request",
+      "base": {"tests/benchmark/test_density.py": "synthetic_from_scratch benchmark v1\n"},
+      "head": {"tests/benchmark/test_density.py": "synthetic_from_scratch benchmark v2\n"},
+      "expected": {"levels": ["L3", "L4"], "reason_codes": ["scale_or_benchmark"]}
+    },
+    {
+      "id": "scale_add",
+      "case_version": 1,
+      "description": "Add a synthetic scale harness.",
+      "event": "pull_request",
+      "base": {},
+      "head": {"scale/catalog.py": "synthetic_from_scratch scale harness\n"},
+      "expected": {"levels": ["L3", "L4"], "reason_codes": ["scale_or_benchmark"]}
+    },
+    {
+      "id": "mixed_docs_and_code",
+      "case_version": 1,
+      "description": "Mix an allowlisted document with ordinary source code.",
+      "event": "pull_request",
+      "base": {"docs/guide.md": "synthetic_from_scratch guide v1\n"},
+      "head": {
+        "docs/guide.md": "synthetic_from_scratch guide v2\n",
+        "src/sample/mixed.py": "synthetic_from_scratch mixed code\n"
+      },
+      "expected": {"levels": ["L2"], "reason_codes": ["docs_only_allowlist", "ordinary_code_change"]}
+    },
+    {
+      "id": "mixed_code_and_workflow",
+      "case_version": 1,
+      "description": "Mix ordinary source code with a workflow change.",
+      "event": "pull_request",
+      "base": {},
+      "head": {
+        "src/sample/mixed.py": "synthetic_from_scratch mixed code\n",
+        ".github/workflows/mixed.yml": "synthetic_from_scratch workflow\n"
+      },
+      "expected": {"levels": ["L3"], "reason_codes": ["ordinary_code_change", "workflow_change"]}
+    },
+    {
+      "id": "main_event",
+      "case_version": 1,
+      "description": "A main-branch event always selects full L3.",
+      "event": "main",
+      "branch": "main",
+      "base": {"src/sample/main.py": "synthetic_from_scratch main v1\n"},
+      "head": {"src/sample/main.py": "synthetic_from_scratch main v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["ordinary_code_change", "full_l3_event"]}
+    },
+    {
+      "id": "schedule_event",
+      "case_version": 1,
+      "description": "A schedule event selects full L3 even with no tree changes.",
+      "event": "schedule",
+      "base": {},
+      "head": {},
+      "expected": {"levels": ["L3"], "reason_codes": ["no_changed_paths", "full_l3_event"]}
+    },
+    {
+      "id": "release_candidate_event",
+      "case_version": 1,
+      "description": "A release-candidate event selects full L3.",
+      "event": "release-candidate",
+      "base": {"docs/release-notes.md": "synthetic_from_scratch notes v1\n"},
+      "head": {"docs/release-notes.md": "synthetic_from_scratch notes v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["docs_only_allowlist", "full_l3_event"]}
+    },
+    {
+      "id": "workflow_dispatch_event",
+      "case_version": 1,
+      "description": "Manual governance dispatch remains full L3.",
+      "event": "workflow_dispatch",
+      "base": {"src/sample/manual.py": "synthetic_from_scratch manual v1\n"},
+      "head": {"src/sample/manual.py": "synthetic_from_scratch manual v2\n"},
+      "expected": {"levels": ["L3"], "reason_codes": ["ordinary_code_change", "full_l3_event"]}
+    }
+  ]
+}

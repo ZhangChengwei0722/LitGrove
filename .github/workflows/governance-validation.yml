@@ -1,0 +1,344 @@
+name: Governance validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "17 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: governance-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUTF8: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_NO_CACHE_DIR: "1"
+  PYTHONNOUSERSITE: "1"
+
+jobs:
+  linux-lock-generation:
+    name: Linux lock generation (${{ matrix.python_version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python_version: "3.11"
+            tuple_key: py311
+          - python_version: "3.12"
+            tuple_key: py312
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up native Python ${{ matrix.python_version }}
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python_version }}
+
+      - name: Install the exact lock bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PIP_CONFIG_FILE=/dev/null
+          python -m pip install --isolated --index-url https://pypi.org/simple --no-cache-dir --require-hashes --no-deps --only-binary=:all: \
+            -r tools/release-lock-bootstrap.txt
+          python - <<'PY'
+          import importlib.metadata
+
+          expected = {"pip": "26.2.1", "pip-tools": "7.6.1"}
+          actual = {name: importlib.metadata.version(name) for name in expected}
+          if actual != expected:
+              raise SystemExit(f"lock bootstrap identity mismatch: {actual!r}")
+          PY
+
+      - name: Generate and independently regenerate native Linux locks
+        shell: bash
+        env:
+          TUPLE_KEY: ${{ matrix.tuple_key }}
+          PYTHON_VERSION: ${{ matrix.python_version }}
+          GENERATED_ROOT: ${{ runner.temp }}/linux-locks/${{ matrix.tuple_key }}
+          REGENERATED_ROOT: ${{ runner.temp }}/linux-locks-regenerated/${{ matrix.tuple_key }}
+        run: |
+          set -euo pipefail
+          export PIP_CONFIG_FILE=/dev/null
+          python - <<'PY'
+          import os
+          import platform
+          import sys
+
+          requested = tuple(int(part) for part in os.environ["PYTHON_VERSION"].split("."))
+          if sys.platform != "linux" or platform.machine() != "x86_64":
+              raise SystemExit("native tuple mismatch")
+          if platform.python_implementation() != "CPython" or sys.version_info[:2] != requested:
+              raise SystemExit("native interpreter mismatch")
+          PY
+          rm -rf "$GENERATED_ROOT" "$REGENERATED_ROOT"
+          mkdir -p "$GENERATED_ROOT" "$REGENERATED_ROOT"
+          for profile in runtime pdf build test audit; do
+            extra=()
+            if [ "$profile" = "audit" ]; then
+              extra+=(--allow-unsafe)
+            fi
+            python -m piptools compile \
+              --resolver=backtracking \
+              --generate-hashes \
+              --strip-extras \
+              --no-header \
+              --no-annotate \
+              --index-url https://pypi.org/simple \
+              --no-emit-index-url \
+              --no-emit-trusted-host \
+              --newline=lf \
+              --rebuild \
+              --pip-args="--isolated --index-url https://pypi.org/simple --no-cache-dir --only-binary=:all:" \
+              "${extra[@]}" \
+              --output-file "$GENERATED_ROOT/$profile.txt" \
+              "requirements/lock-inputs/$profile.in"
+            python -m piptools compile \
+              --resolver=backtracking \
+              --generate-hashes \
+              --strip-extras \
+              --no-header \
+              --no-annotate \
+              --index-url https://pypi.org/simple \
+              --no-emit-index-url \
+              --no-emit-trusted-host \
+              --newline=lf \
+              --rebuild \
+              --pip-args="--isolated --index-url https://pypi.org/simple --no-cache-dir --only-binary=:all:" \
+              "${extra[@]}" \
+              --output-file "$REGENERATED_ROOT/$profile.txt" \
+              "requirements/lock-inputs/$profile.in"
+            cmp "$GENERATED_ROOT/$profile.txt" "$REGENERATED_ROOT/$profile.txt"
+          done
+          TUPLE_KEY="$TUPLE_KEY" PYTHON_VERSION="$PYTHON_VERSION" GENERATED_ROOT="$GENERATED_ROOT" \
+            python - <<'PY'
+          import hashlib
+          import importlib.metadata
+          import json
+          import os
+          import platform
+          import sys
+          from pathlib import Path
+
+          generated = Path(os.environ["GENERATED_ROOT"])
+          regenerated = generated.parents[1] / "linux-locks-regenerated" / os.environ["TUPLE_KEY"]
+          root = Path.cwd()
+
+          def digest(path: Path) -> str:
+              return hashlib.sha256(path.read_bytes()).hexdigest()
+
+          profiles = ["runtime", "pdf", "build", "test", "audit"]
+          report = {
+              "schema_version": "ppwb.g1.native_lock_report.v1",
+              "tuple": f"linux_x86_64-{os.environ['TUPLE_KEY']}",
+              "python_requested": os.environ["PYTHON_VERSION"],
+              "python_runtime": platform.python_version(),
+              "implementation": platform.python_implementation(),
+              "machine": platform.machine(),
+              "platform": sys.platform,
+              "resolver": {
+                  "pip": importlib.metadata.version("pip"),
+                  "pip-tools": importlib.metadata.version("pip-tools"),
+                  "index_origin": "https://pypi.org/simple",
+                  "only_binary": ":all:",
+                  "strip_extras": True,
+                  "allow_unsafe_profiles": ["audit"],
+              },
+              "bootstrap": {
+                  "sha256": digest(root / "tools" / "release-lock-bootstrap.txt"),
+              },
+              "inputs": {
+                  name: digest(root / "requirements" / "lock-inputs" / f"{name}.in")
+                  for name in profiles
+              },
+              "locks": {
+                  name: {
+                      "sha256": digest(generated / f"{name}.txt"),
+                      "bytes": (generated / f"{name}.txt").stat().st_size,
+                      "regenerated_sha256": digest(regenerated / f"{name}.txt"),
+                      "regenerated_byte_identical": (
+                          digest(generated / f"{name}.txt")
+                          == digest(regenerated / f"{name}.txt")
+                      ),
+                  }
+                  for name in profiles
+              },
+          }
+          payload = json.dumps(report, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+          report["digest"] = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+          (generated / "native-lock-report.json").write_text(
+              json.dumps(report, ensure_ascii=True, sort_keys=True, separators=(",", ":")) + "\n",
+              encoding="utf-8",
+              newline="\n",
+          )
+          PY
+
+      - name: Upload native Linux lock evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-locks-${{ matrix.tuple_key }}-${{ github.sha }}
+          path: ${{ runner.temp }}/linux-locks/${{ matrix.tuple_key }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Require tracked locks to match native generation
+        shell: bash
+        env:
+          TUPLE_KEY: ${{ matrix.tuple_key }}
+          GENERATED_ROOT: ${{ runner.temp }}/linux-locks/${{ matrix.tuple_key }}
+        run: |
+          set -euo pipefail
+          for profile in runtime pdf build test audit; do
+            tracked="requirements/locks/linux_x86_64/$TUPLE_KEY/$profile.txt"
+            test -f "$tracked"
+            cmp "$tracked" "$GENERATED_ROOT/$profile.txt"
+          done
+
+  classifier-shadow:
+    name: Classifier shadow
+    needs: linux-lock-generation
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Download native Python 3.12 lock evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-locks-py312-${{ github.sha }}
+          path: ${{ runner.temp }}/linux-locks/py312
+
+      - name: Install exact classifier dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PIP_CONFIG_FILE=/dev/null
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "linux-locks" / "py312"
+          report = json.loads((root / "native-lock-report.json").read_text(encoding="utf-8"))
+          digest = report.pop("digest")
+          payload = json.dumps(report, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+          if hashlib.sha256(payload.encode("utf-8")).hexdigest() != digest:
+              raise SystemExit("native lock report digest mismatch")
+          if report.get("tuple") != "linux_x86_64-py312":
+              raise SystemExit("native lock tuple mismatch")
+          if report.get("resolver") != {
+              "pip": "26.2.1",
+              "pip-tools": "7.6.1",
+              "index_origin": "https://pypi.org/simple",
+              "only_binary": ":all:",
+              "strip_extras": True,
+              "allow_unsafe_profiles": ["audit"],
+          }:
+              raise SystemExit("native lock resolver identity mismatch")
+          bootstrap = Path("tools/release-lock-bootstrap.txt")
+          if report.get("bootstrap", {}).get("sha256") != hashlib.sha256(
+              bootstrap.read_bytes()
+          ).hexdigest():
+              raise SystemExit("native lock bootstrap digest mismatch")
+          for profile in ("runtime", "pdf", "build", "test", "audit"):
+              path = root / f"{profile}.txt"
+              actual = hashlib.sha256(path.read_bytes()).hexdigest()
+              if report["locks"][profile]["sha256"] != actual:
+                  raise SystemExit(f"native lock digest mismatch: {profile}")
+              if report["locks"][profile].get("regenerated_sha256") != actual:
+                  raise SystemExit(f"native lock regeneration digest mismatch: {profile}")
+              if report["locks"][profile].get("regenerated_byte_identical") is not True:
+                  raise SystemExit(f"native lock regeneration was not byte-identical: {profile}")
+          PY
+          python -m pip install --isolated --index-url https://pypi.org/simple --no-cache-dir --require-hashes --no-deps --only-binary=:all: \
+            -r tools/release-lock-bootstrap.txt
+          python -m pip install --isolated --index-url https://pypi.org/simple --no-cache-dir --require-hashes --no-deps --only-binary=:all: \
+            -r "${RUNNER_TEMP}/linux-locks/py312/build.txt" \
+            -r "${RUNNER_TEMP}/linux-locks/py312/test.txt"
+          python -m pip install --isolated --no-cache-dir --no-deps --no-build-isolation .
+
+      - name: Run focused governance contract checks
+        run: >-
+          python -m pytest -q
+          tests/contract/test_ci_risk_classifier.py
+          tests/contract/test_release_governance.py
+
+      - name: Classify current change in shadow mode
+        if: always()
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          BRANCH_NAME: ${{ github.base_ref || github.ref_name }}
+        run: |
+          mkdir -p .validation
+          python tools/ci_risk_classifier.py \
+            --base "$BASE_SHA" \
+            --head "$HEAD_SHA" \
+            --event "$EVENT_NAME" \
+            --branch "$BRANCH_NAME" \
+            --output .validation/ci-risk-classification.json
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path(".validation/ci-risk-classification.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("digest")
+          canonical = json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+          expected = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+          if digest != expected:
+              raise SystemExit("classifier digest drift")
+          if value["status"] != "classified":
+              raise SystemExit("classifier did not produce classified evidence")
+          PY
+
+      - name: Upload canonical classifier evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-risk-classification-${{ github.sha }}
+          path: .validation/ci-risk-classification.json
+          if-no-files-found: error
+          retention-days: 30
+
+  governance-validation:
+    name: Governance validation
+    if: always()
+    needs:
+      - linux-lock-generation
+      - classifier-shadow
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require native locks and classifier evidence
+        env:
+          LOCKS_RESULT: ${{ needs.linux-lock-generation.result }}
+          CLASSIFIER_RESULT: ${{ needs.classifier-shadow.result }}
+        run: |
+          test "$LOCKS_RESULT" = "success"
+          test "$CLASSIFIER_RESULT" = "success"

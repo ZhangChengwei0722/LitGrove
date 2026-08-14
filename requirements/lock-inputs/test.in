@@ -1,0 +1,4 @@
+-r pdf.in
+build>=1.2,<2
+pytest>=8.3,<10
+reportlab>=4.2,<6

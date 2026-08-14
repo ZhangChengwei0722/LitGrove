@@ -1,0 +1,202 @@
+{
+  "schema_version": "ci-risk-rules@1",
+  "rule_version": "g1-risk-v1",
+  "docs_only_allowlist": [
+    "README.md",
+    "docs/**"
+  ],
+  "ordinary_code_globs": [
+    "src/**",
+    "tests/**",
+    "tools/**",
+    "scripts/**"
+  ],
+  "ordinary_affected_tests": [
+    "tests/contract"
+  ],
+  "event_full_l3": [
+    "main",
+    "schedule",
+    "release",
+    "release-candidate",
+    "release_candidate",
+    "workflow_dispatch"
+  ],
+  "risk_classes": [
+    {
+      "code": "scale_or_benchmark",
+      "priority": 10,
+      "levels": ["L3", "L4"],
+      "globs": [
+        "benchmark/**",
+        "benchmarks/**",
+        "scale/**",
+        "performance/**",
+        "perf/**",
+        "tests/benchmark/**",
+        "tests/benchmarks/**",
+        "tests/*benchmark*",
+        "tests/*scale*",
+        "tests/*performance*",
+        "tools/benchmark/**",
+        "tools/benchmarks/**",
+        "**/*benchmark*",
+        "**/*scale*",
+        "**/*performance*",
+        "docs/*benchmark*",
+        "docs/*scale*",
+        "docs/*performance*"
+      ]
+    },
+    {
+      "code": "classifier_or_rule_change",
+      "priority": 20,
+      "levels": ["L3"],
+      "globs": [
+        "tools/ci_risk_classifier.py",
+        "tools/ci-risk-rules.json",
+        "tests/contract/test_ci_risk_classifier.py",
+        "tests/fixtures/release-governance/ci-risk-cases.json"
+      ]
+    },
+    {
+      "code": "workflow_change",
+      "priority": 30,
+      "levels": ["L3"],
+      "globs": [".github/workflows/**"]
+    },
+    {
+      "code": "python_project_metadata",
+      "priority": 40,
+      "levels": ["L3"],
+      "globs": ["pyproject.toml"]
+    },
+    {
+      "code": "lock_change",
+      "priority": 50,
+      "levels": ["L3"],
+      "globs": [
+        "*.lock",
+        "**/*.lock",
+        "requirements/**",
+        "Pipfile.lock",
+        "poetry.lock",
+        "uv.lock"
+      ]
+    },
+    {
+      "code": "release_change",
+      "priority": 60,
+      "levels": ["L3"],
+      "globs": [
+        "release/**",
+        "tools/release*",
+        "CHANGELOG.md",
+        "docs/release-policy.md",
+        "tests/contract/test_release_governance.py",
+        "tests/fixtures/release-governance/**"
+      ]
+    },
+    {
+      "code": "governance_change",
+      "priority": 65,
+      "levels": ["L3"],
+      "globs": [
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "docs/contributor-guide.md"
+      ]
+    },
+    {
+      "code": "validation_governance_change",
+      "priority": 66,
+      "levels": ["L3"],
+      "globs": [
+        "docs/test-validation.md",
+        "tools/run_validation.py",
+        "tools/test-shards.json"
+      ]
+    },
+    {
+      "code": "security_change",
+      "priority": 70,
+      "levels": ["L3"],
+      "globs": [
+        "SECURITY.md",
+        ".github/dependabot.yml",
+        "security/**",
+        "**/*security*"
+      ]
+    },
+    {
+      "code": "privacy_change",
+      "priority": 80,
+      "levels": ["L3"],
+      "globs": [
+        "privacy/**",
+        "docs/privacy-boundary.md",
+        "tests/privacy/**",
+        "tests/fixtures/privacy_allowlist.json",
+        "**/*privacy*"
+      ]
+    },
+    {
+      "code": "schema_change",
+      "priority": 90,
+      "levels": ["L3"],
+      "globs": [
+        "schemas/**",
+        "**/*.schema.json",
+        "schema/**",
+        "**/*schema*"
+      ]
+    },
+    {
+      "code": "storage_change",
+      "priority": 100,
+      "levels": ["L3"],
+      "globs": [
+        "storage/**",
+        "**/storage/**",
+        "**/*storage*"
+      ]
+    },
+    {
+      "code": "transaction_change",
+      "priority": 110,
+      "levels": ["L3"],
+      "globs": [
+        "transaction/**",
+        "transactions/**",
+        "**/*transaction*"
+      ]
+    },
+    {
+      "code": "recovery_change",
+      "priority": 120,
+      "levels": ["L3"],
+      "globs": [
+        "recovery/**",
+        "**/*recovery*"
+      ]
+    },
+    {
+      "code": "authority_change",
+      "priority": 130,
+      "levels": ["L3"],
+      "globs": [
+        "authority/**",
+        "**/*authority*"
+      ]
+    },
+    {
+      "code": "provenance_change",
+      "priority": 140,
+      "levels": ["L3"],
+      "globs": [
+        "provenance/**",
+        "**/*provenance*"
+      ]
+    }
+  ]
+}

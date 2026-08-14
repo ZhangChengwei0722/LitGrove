@@ -18,6 +18,8 @@ concurrency:
 
 env:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_NO_CACHE_DIR: "1"
+  PYTHONNOUSERSITE: "1"
   PYTHONUTF8: "1"
 
 jobs:
@@ -42,15 +44,15 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            pyproject.toml
-            tools/requirements-audit.txt
-      - name: Install package and audit tooling
+      - name: Install exact package and audit tooling
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install ".[pdf]"
-          python -m pip install -r tools/requirements-audit.txt
+          set -euo pipefail
+          export PIP_CONFIG_FILE=/dev/null
+          python -m pip install --isolated --index-url https://pypi.org/simple --no-cache-dir --require-hashes --no-deps --only-binary=:all: -r tools/release-lock-bootstrap.txt
+          python -m pip install --isolated --index-url https://pypi.org/simple --no-cache-dir --require-hashes --no-deps --only-binary=:all: \
+            -r requirements/locks/linux_x86_64/py312/build.txt \
+            -r requirements/locks/linux_x86_64/py312/audit.txt
+          python -m pip install --isolated --no-cache-dir --no-deps --no-build-isolation .
       - name: Audit installed dependencies and create SBOM
         run: python -m pip_audit --local --skip-editable --format cyclonedx-json --output sbom.cdx.json
       - name: Upload CycloneDX SBOM

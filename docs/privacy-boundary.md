@@ -26,3 +26,15 @@ workspace policy, task definition, executor and current user approval all allow
 `review_background`. Source paths, fingerprints, credentials, unbounded source documents
 and unrelated workspace content are never included. PDF text and Agent output remain
 untrusted data and cannot expand Task authority.
+
+## History, License And NOTICE
+
+- Reachable Git history, the selected release tree, package inputs, and generated release
+  metadata are subject to the same privacy and private-path review. A finding in history is
+  not cleared merely because the current tree is clean.
+- This repository is distributed under the Apache License 2.0. Contributions and generated
+  attribution records must remain compatible with that license and must not introduce
+  institution-restricted or private material.
+- `NOTICE` is conditional: it is added only when a recorded attribution review shows that an
+  additional notice is required. The absence of `NOTICE` means only that the reviewed inputs
+  did not require one; it is not permission to copy third-party or private content.
