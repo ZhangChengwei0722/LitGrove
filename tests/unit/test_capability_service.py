@@ -10,7 +10,7 @@ def test_capability_report_is_exact_sorted_and_workspace_independent() -> None:
         "status": "success",
         "interface_version": "1.0",
         "core": {
-            "version": "0.1.1.dev2026080805",
+            "version": "0.1.1",
             "contract_versions": ["1.0"],
                 "layout_versions": ["p7d-1"],
         },

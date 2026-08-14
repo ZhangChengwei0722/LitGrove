@@ -14,12 +14,13 @@ The verifier binds five identities:
 - installed distribution metadata, `RECORD`, payload, measured CPython runtime, Requires-Dist,
   isolated install-root, and capability output;
 - a future R1-B publication tuple containing an external immutable authority manifest, accepted run
-  and attempt, exact artifact name, commit, final-version tag, digests, protected `pypi` environment,
-  and exact Trusted Publisher workflow.
+  and attempt, exact artifact ID and name, commit, final-version tag, digests, protected `pypi`
+  environment, and exact Trusted Publisher workflow.
 
-Publication verification is intentionally not a `publication_complete` state machine in G1. The
-current workflow is structurally inert; a later R1 successor must separately activate any partial-
-publication transitions and supply the external authority manifest before download, OIDC, or writes.
+The R1 publication workflow accepts only a canonical authority manifest supplied by the authenticated
+dispatch and verifies it before artifact download, OIDC, or writes. A downloaded candidate may create
+an activation only after its bytes agree with that external authority; it cannot create its own
+authority. Partial or unknown public states remain fail closed until same-byte recovery succeeds.
 
 The read-only `scan-history` contract walks reachable refs, commits, tree blobs, and blob bytes with
 Git read commands only. It reports only `{path, type, blob}` findings and never matched content. Its

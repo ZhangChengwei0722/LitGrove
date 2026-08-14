@@ -1,4 +1,4 @@
-name: Publish accepted release (R1-B disabled)
+name: Publish accepted release
 
 on:
   workflow_dispatch:
@@ -15,89 +15,679 @@ on:
         description: Immutable accepted workflow artifact name
         required: true
         type: string
+      accepted_artifact_id:
+        description: Immutable accepted GitHub artifact id
+        required: true
+        type: string
+      accepted_artifact_digest:
+        description: GitHub artifact SHA-256 without the sha256 prefix
+        required: true
+        type: string
+      authority_manifest_b64:
+        description: Base64 of the canonical external R1-B authority manifest
+        required: true
+        type: string
+      authority_manifest_sha256:
+        description: SHA-256 of the decoded canonical authority manifest
+        required: true
+        type: string
+      tag:
+        description: Existing immutable vMAJOR.MINOR.PATCH tag
+        required: true
+        type: string
 
 permissions:
   contents: read
 
+concurrency:
+  group: publish-accepted-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
 env:
-  # This flag is deliberately false in G1. R1-B must replace this workflow
-  # through a separately reviewed activation and exact authority manifest.
-  G1_PUBLICATION_ENABLED: "false"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONNOUSERSITE: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUTF8: "1"
+  AUTHORIZED_RELEASE_ACTOR_ID: "237524179"
+  TRUSTED_PUBLISHER_OWNER: "ZhangChengwei0722"
+  TRUSTED_PUBLISHER_REPOSITORY: "LitGrove"
+  TRUSTED_PUBLISHER_WORKFLOW: "publish-accepted-release.yml"
+  TRUSTED_PUBLISHER_ENVIRONMENT: "pypi"
+  REQUIRED_CHECKS_JSON: '["Windows validation","Linux validation","Dependency review","Python dependency audit","Governance validation","CodeQL"]'
 
 jobs:
   verify-accepted-bytes:
-    name: Fail closed before publication authority
+    name: Verify authenticated authority and accepted bytes
+    if: >-
+      github.repository == 'ZhangChengwei0722/LitGrove' &&
+      github.actor_id == '237524179' &&
+      github.ref_type == 'tag'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       actions: read
+      checks: read
       contents: read
     outputs:
-      authorized: ${{ steps.verify.outputs.authorized }}
+      payload_name: ${{ steps.identity.outputs.payload_name }}
+      payload_id: ${{ steps.payload.outputs.artifact-id }}
+      payload_digest: ${{ steps.payload.outputs.artifact-digest }}
+      version: ${{ steps.identity.outputs.version }}
+      source_commit: ${{ steps.identity.outputs.source_commit }}
     steps:
-      - name: Check out verifier only
+      - name: Check out verifier at the immutable release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.tag }}
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Stop before download, OIDC, or external writes
-        id: verify
+      - name: Verify external authority before any artifact download
         shell: bash
         env:
-          ACTIVATION_ENABLED: ${{ env.G1_PUBLICATION_ENABLED }}
+          ACCEPTED_RUN_ID: ${{ inputs.accepted_run_id }}
+          ACCEPTED_RUN_ATTEMPT: ${{ inputs.accepted_run_attempt }}
+          ACCEPTED_ARTIFACT_NAME: ${{ inputs.accepted_artifact_name }}
+          ACCEPTED_ARTIFACT_ID: ${{ inputs.accepted_artifact_id }}
+          ACCEPTED_ARTIFACT_DIGEST: ${{ inputs.accepted_artifact_digest }}
+          AUTHORITY_MANIFEST_B64: ${{ inputs.authority_manifest_b64 }}
+          AUTHORITY_MANIFEST_SHA256: ${{ inputs.authority_manifest_sha256 }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          if [ "$ACTIVATION_ENABLED" != "true" ]; then
-            echo "R1-B publication authority is absent; no accepted bytes will be published."
-            echo "authorized=false" >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
-          echo "authorized=false" >> "$GITHUB_OUTPUT"
-          exit 1
+          [[ "$AUTHORITY_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$ACCEPTED_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          authority="$RUNNER_TEMP/authority-manifest.json"
+          printf '%s' "$AUTHORITY_MANIFEST_B64" | base64 --decode > "$authority"
+          test "$(sha256sum "$authority" | cut -d' ' -f1)" = "$AUTHORITY_MANIFEST_SHA256"
+          python - "$authority" <<'PY'
+          import sys
+          from pathlib import Path
 
-      - name: Download the exact accepted bytes after authority exists
-        if: ${{ false && steps.verify.outputs.authorized == 'true' }}
+          from tools.release_governance import canonical_json_bytes
+
+          path = Path(sys.argv[1])
+          raw = path.read_bytes()
+          value = __import__("json").loads(raw)
+          if raw != canonical_json_bytes(value):
+              raise SystemExit("external authority manifest is not canonical JSON")
+          PY
+          python tools/release_governance.py verify-publication-authority \
+            --manifest "$authority" \
+            --repository "$GITHUB_REPOSITORY" \
+            --actor-id "$GITHUB_ACTOR_ID" \
+            --accepted-run-id "$ACCEPTED_RUN_ID" \
+            --accepted-run-attempt "$ACCEPTED_RUN_ATTEMPT" \
+            --accepted-commit "$GITHUB_SHA" \
+            --accepted-artifact-name "$ACCEPTED_ARTIFACT_NAME" \
+            --accepted-artifact-id "$ACCEPTED_ARTIFACT_ID" \
+            --accepted-artifact-service-digest "$ACCEPTED_ARTIFACT_DIGEST" \
+            --tag "$RELEASE_TAG" \
+            --workflow-ref "$GITHUB_REF" \
+            --environment "$TRUSTED_PUBLISHER_ENVIRONMENT" \
+            --trusted-owner "$TRUSTED_PUBLISHER_OWNER" \
+            --trusted-repository "$TRUSTED_PUBLISHER_REPOSITORY" \
+            --trusted-workflow "$TRUSTED_PUBLISHER_WORKFLOW" \
+            --trusted-environment "$TRUSTED_PUBLISHER_ENVIRONMENT"
+
+      - name: Verify dispatch, tag, run attempt, and artifact service identity
+        id: service
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACCEPTED_RUN_ID: ${{ inputs.accepted_run_id }}
+          ACCEPTED_RUN_ATTEMPT: ${{ inputs.accepted_run_attempt }}
+          ACCEPTED_ARTIFACT_NAME: ${{ inputs.accepted_artifact_name }}
+          ACCEPTED_ARTIFACT_ID: ${{ inputs.accepted_artifact_id }}
+          ACCEPTED_ARTIFACT_DIGEST: ${{ inputs.accepted_artifact_digest }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTOR_ID" = "$AUTHORIZED_RELEASE_ACTOR_ID"
+          test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"
+          test "$GITHUB_REF_NAME" = "$RELEASE_TAG"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$ACCEPTED_ARTIFACT_NAME" = "accepted-release-candidate-${ACCEPTED_RUN_ID}-${ACCEPTED_RUN_ATTEMPT}-${GITHUB_SHA}"
+          [[ "$ACCEPTED_ARTIFACT_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ACCEPTED_RUN_ID}/attempts/${ACCEPTED_RUN_ATTEMPT}" > "$RUNNER_TEMP/accepted-run.json"
+          test "$(jq -r '.id | tostring' "$RUNNER_TEMP/accepted-run.json")" = "$ACCEPTED_RUN_ID"
+          test "$(jq -r '.run_attempt | tostring' "$RUNNER_TEMP/accepted-run.json")" = "$ACCEPTED_RUN_ATTEMPT"
+          test "$(jq -r '.head_sha' "$RUNNER_TEMP/accepted-run.json")" = "$GITHUB_SHA"
+          test "$(jq -r '.head_branch' "$RUNNER_TEMP/accepted-run.json")" = "main"
+          test "$(jq -r '.event' "$RUNNER_TEMP/accepted-run.json")" = "push"
+          test "$(jq -r '.status' "$RUNNER_TEMP/accepted-run.json")" = "completed"
+          test "$(jq -r '.conclusion' "$RUNNER_TEMP/accepted-run.json")" = "success"
+          test "$(jq -r '.path' "$RUNNER_TEMP/accepted-run.json")" = ".github/workflows/release-candidate.yml"
+
+          gh api "repos/${GITHUB_REPOSITORY}/branches/main/protection/required_status_checks" > "$RUNNER_TEMP/required-status-checks.json"
+          jq -e --argjson expected "$REQUIRED_CHECKS_JSON" \
+            '.strict == true and ((.contexts | sort) == ($expected | sort))' \
+            "$RUNNER_TEMP/required-status-checks.json" >/dev/null
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?filter=latest&per_page=100" > "$RUNNER_TEMP/check-runs.json"
+          jq -e --argjson expected "$REQUIRED_CHECKS_JSON" \
+            '([.check_runs[] | select(.name as $name | $expected | index($name)) | select(.status == "completed" and .conclusion == "success") | .name] | unique | sort) == ($expected | sort)' \
+            "$RUNNER_TEMP/check-runs.json" >/dev/null
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ACCEPTED_RUN_ID}/artifacts?per_page=100" > "$RUNNER_TEMP/accepted-artifacts.json"
+          test "$(jq --arg name "$ACCEPTED_ARTIFACT_NAME" '[.artifacts[] | select(.name == $name)] | length' "$RUNNER_TEMP/accepted-artifacts.json")" = "1"
+          jq --arg name "$ACCEPTED_ARTIFACT_NAME" --argjson id "$ACCEPTED_ARTIFACT_ID" \
+            '.artifacts[] | select(.name == $name and .id == $id)' \
+            "$RUNNER_TEMP/accepted-artifacts.json" > "$RUNNER_TEMP/accepted-artifact.json"
+          test "$(jq -r '.id | tostring' "$RUNNER_TEMP/accepted-artifact.json")" = "$ACCEPTED_ARTIFACT_ID"
+          test "$(jq -r '.expired' "$RUNNER_TEMP/accepted-artifact.json")" = "false"
+          service_digest="$(jq -r '.digest // empty' "$RUNNER_TEMP/accepted-artifact.json")"
+          service_digest="${service_digest#sha256:}"
+          test "$service_digest" = "$ACCEPTED_ARTIFACT_DIGEST"
+          echo "artifact_id=$ACCEPTED_ARTIFACT_ID" >> "$GITHUB_OUTPUT"
+          echo "artifact_service_digest=$service_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Download the exact accepted candidate artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: ${{ inputs.accepted_artifact_name }}
+          artifact-ids: ${{ steps.service.outputs.artifact_id }}
           run-id: ${{ inputs.accepted_run_id }}
           github-token: ${{ github.token }}
-          path: accepted
+          digest-mismatch: error
+          path: ${{ runner.temp }}/publication
 
-      - name: Verify accepted run, commit, digests, RECORD, and payload
-        if: ${{ false && steps.verify.outputs.authorized == 'true' }}
+      - name: Activate downloaded bytes against the external authority
         shell: bash
         run: |
           set -euo pipefail
+          publication_root="$RUNNER_TEMP/publication"
+          cp "$RUNNER_TEMP/authority-manifest.json" "$publication_root/authority-manifest.json"
+          test -d "$publication_root/accepted/dist"
+          test -f "$publication_root/accepted/manifests/artifact-manifest.json"
+          test "$(find "$publication_root/accepted/dist" -maxdepth 1 -type f -name '*.whl' | wc -l)" = "1"
+          test "$(find "$publication_root/accepted/dist" -maxdepth 1 -type f -name '*.tar.gz' | wc -l)" = "1"
+          python tools/release_governance.py publication-activation \
+            --expected-authority "$publication_root/authority-manifest.json" \
+            --candidate-manifest "$publication_root/accepted/manifests/artifact-manifest.json" \
+            --artifact-dir "$publication_root/accepted/dist" \
+            --activation-output "$publication_root/activation.json"
           python tools/release_governance.py verify-publication \
-            --manifest accepted/activation.json \
-            --expected accepted/authority-manifest.json \
-            --downloaded-manifest accepted/artifact-manifest.json \
-            --downloaded-artifact-dir accepted/dist
+            --manifest "$publication_root/activation.json" \
+            --expected "$publication_root/authority-manifest.json" \
+            --downloaded-manifest "$publication_root/accepted/manifests/artifact-manifest.json" \
+            --downloaded-artifact-dir "$publication_root/accepted/dist"
+
+      - name: Freeze release asset identities
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          publication_root="$RUNNER_TEMP/publication"
+          python - "$publication_root" <<'PY'
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          from tools.release_governance import canonical_json, sha256_file
+
+          root = Path(sys.argv[1])
+          files = [
+              *sorted((root / "accepted" / "dist").iterdir()),
+              *sorted((root / "accepted" / "manifests").iterdir()),
+              root / "authority-manifest.json",
+              root / "activation.json",
+          ]
+          regular = [path for path in files if path.is_file() and not path.is_symlink()]
+          names = [path.name for path in regular]
+          if len(names) != len(set(names)):
+              raise SystemExit("release assets must have unique basenames")
+          if any(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]*", name) is None for name in names):
+              raise SystemExit("release assets must use safe basenames")
+          identities = {path.name: sha256_file(path) for path in regular}
+          (root / "expected-release-assets.json").write_text(
+              canonical_json(identities),
+              encoding="utf-8",
+              newline="\n",
+          )
+          authority = json.loads((root / "authority-manifest.json").read_text(encoding="utf-8"))
+          publication = authority["publication"]
+          output = Path(__import__("os").environ["GITHUB_OUTPUT"])
+          with output.open("a", encoding="utf-8", newline="\n") as stream:
+              stream.write(f"version={publication['accepted_version']}\n")
+              stream.write(f"source_commit={publication['accepted_commit']}\n")
+              stream.write(
+                  "payload_name="
+                  f"verified-publication-payload-{__import__('os').environ['GITHUB_RUN_ID']}-"
+                  f"{__import__('os').environ['GITHUB_RUN_ATTEMPT']}-"
+                  f"{publication['accepted_commit']}\n"
+              )
+          PY
+
+      - name: Upload verified publication payload
+        id: payload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.identity.outputs.payload_name }}
+          path: ${{ runner.temp }}/publication
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 30
+
+  github-release:
+    name: Create or recover the same-byte GitHub Release
+    needs: verify-accepted-bytes
+    if: needs.verify-accepted-bytes.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Check out the exact accepted commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify-accepted-bytes.outputs.source_commit }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Download verified publication payload
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.verify-accepted-bytes.outputs.payload_id }}
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+          digest-mismatch: error
+          path: ${{ runner.temp }}/publication
+
+      - name: Reverify accepted bytes before GitHub write
+        shell: bash
+        run: |
+          set -euo pipefail
+          publication_root="$RUNNER_TEMP/publication"
+          test "$(git rev-parse HEAD)" = "${{ needs.verify-accepted-bytes.outputs.source_commit }}"
+          python tools/release_governance.py verify-publication \
+            --manifest "$publication_root/activation.json" \
+            --expected "$publication_root/authority-manifest.json" \
+            --downloaded-manifest "$publication_root/accepted/manifests/artifact-manifest.json" \
+            --downloaded-artifact-dir "$publication_root/accepted/dist"
+
+      - name: Create or recover exact GitHub Release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          publication_root="$RUNNER_TEMP/publication"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TAG}" --jq '.sha')" = "${{ needs.verify-accepted-bytes.outputs.source_commit }}"
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "research-kb-core ${RELEASE_TAG#v}" \
+              --notes-file CHANGELOG.md
+          fi
+
+          existing_names="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          while IFS= read -r name; do
+            if printf '%s\n' "$existing_names" | grep -Fxq "$name"; then
+              continue
+            fi
+            path="$(find "$publication_root" -type f -name "$name" -print -quit)"
+            test -n "$path"
+            gh release upload "$RELEASE_TAG" "$path" --repo "$GITHUB_REPOSITORY"
+          done < <(jq -r 'keys[]' "$publication_root/expected-release-assets.json")
+
+          rm -rf "$publication_root/release-download"
+          mkdir -p "$publication_root/release-download"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$publication_root/release-download"
+          python - "$publication_root/expected-release-assets.json" "$publication_root/release-download" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          from tools.release_governance import sha256_file
+
+          expected = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          root = Path(sys.argv[2])
+          actual = {
+              path.name: sha256_file(path)
+              for path in root.iterdir()
+              if path.is_file() and not path.is_symlink()
+          }
+          if actual != expected:
+              raise SystemExit(f"GitHub Release asset identity mismatch: {sorted(actual)}")
+          PY
 
   publish-pypi:
-    name: Future Trusted Publisher step (disabled)
-    needs: verify-accepted-bytes
-    if: ${{ false && needs.verify-accepted-bytes.result == 'success' }}
+    name: Publish or recover the same bytes through Trusted Publishing
+    needs:
+      - verify-accepted-bytes
+      - github-release
+    if: >-
+      needs.verify-accepted-bytes.result == 'success' &&
+      needs.github-release.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: pypi
     permissions:
+      actions: read
       contents: read
       id-token: write
     steps:
-      - name: Future R1-B accepted-byte PyPI publication
+      - name: Check out verifier at the exact accepted commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify-accepted-bytes.outputs.source_commit }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Download verified publication payload
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.verify-accepted-bytes.outputs.payload_id }}
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+          digest-mismatch: error
+          path: ${{ runner.temp }}/publication
+
+      - name: Reverify accepted bytes before OIDC
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          publication_root="$RUNNER_TEMP/publication"
+          test "$(git rev-parse HEAD)" = "${{ needs.verify-accepted-bytes.outputs.source_commit }}"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TAG}" --jq '.sha')" = "${{ needs.verify-accepted-bytes.outputs.source_commit }}"
+          python tools/release_governance.py verify-publication \
+            --manifest "$publication_root/activation.json" \
+            --expected "$publication_root/authority-manifest.json" \
+            --downloaded-manifest "$publication_root/accepted/manifests/artifact-manifest.json" \
+            --downloaded-artifact-dir "$publication_root/accepted/dist"
+
+      - name: Determine whether exact PyPI files already exist
+        id: pypi
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/publication/authority-manifest.json" <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          authority = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          publication = authority["publication"]
+          expected = publication["accepted_artifact_digests"]
+          version = publication["accepted_version"]
+          url = "https://pypi.org/pypi/research-kb-core/json"
+          try:
+              with urllib.request.urlopen(url, timeout=30) as response:
+                  payload = json.load(response)
+          except urllib.error.HTTPError as error:
+              if error.code != 404:
+                  raise
+              upload_needed = True
+          else:
+              files = payload.get("releases", {}).get(version, [])
+              if not files:
+                  upload_needed = True
+              else:
+                  if any(item.get("yanked") is True for item in files):
+                      raise SystemExit("existing PyPI version contains yanked files")
+                  actual = {
+                      item["filename"]: item.get("digests", {}).get("sha256")
+                      for item in files
+                  }
+                  if actual != expected:
+                      raise SystemExit("existing PyPI version does not match accepted bytes")
+                  upload_needed = False
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8", newline="\n") as stream:
+              stream.write(f"upload_needed={str(upload_needed).lower()}\n")
+          PY
+
+      - name: Publish exact accepted bytes to PyPI
+        if: steps.pypi.outputs.upload_needed == 'true'
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
-          packages-dir: accepted/dist
+          packages-dir: ${{ runner.temp }}/publication/accepted/dist
+          verbose: false
 
-  github-release:
-    name: Future GitHub Release step (disabled)
-    needs: verify-accepted-bytes
-    if: ${{ false && needs.verify-accepted-bytes.result == 'success' }}
+  reconcile-publication:
+    name: Reconcile every external publication state
+    needs:
+      - verify-accepted-bytes
+      - github-release
+      - publish-pypi
+    if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
-      contents: write
+      actions: read
+      contents: read
     steps:
-      - name: Future R1-B release record
-        run: echo "GitHub Release creation requires the exact accepted tag and authority manifest."
+      - name: Check out deterministic reconciler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify-accepted-bytes.outputs.source_commit || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Download verified payload when authority verification succeeded
+        if: needs.verify-accepted-bytes.result == 'success'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.verify-accepted-bytes.outputs.payload_id }}
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+          digest-mismatch: error
+          path: ${{ runner.temp }}/publication
+
+      - name: Classify tag, Release, and PyPI state
+        id: reconcile
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          VERIFY_RESULT: ${{ needs.verify-accepted-bytes.result }}
+          GITHUB_RELEASE_RESULT: ${{ needs.github-release.result }}
+          PYPI_RESULT: ${{ needs.publish-pypi.result }}
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/publication" "$RUNNER_TEMP/publication-reconciliation.json" <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          from tools.release_governance import canonical_json
+
+          publication_root = Path(sys.argv[1])
+          output = Path(sys.argv[2])
+          repository = os.environ["GITHUB_REPOSITORY"]
+          tag = os.environ["RELEASE_TAG"]
+          headers = {
+              "Accept": "application/vnd.github+json",
+              "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+          observation_errors = []
+
+          def get_json(url: str, *, label: str, github: bool = False):
+              request = urllib.request.Request(url, headers=headers if github else {})
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      return response.status, json.load(response)
+              except urllib.error.HTTPError as error:
+                  if error.code == 404:
+                      return 404, None
+                  observation_errors.append(f"{label}_http_{error.code}")
+                  return None, None
+              except (OSError, TimeoutError, json.JSONDecodeError) as error:
+                  observation_errors.append(f"{label}_{type(error).__name__}")
+                  return None, None
+
+          authority_path = publication_root / "authority-manifest.json"
+          expected_available = authority_path.is_file()
+          expected_commit = None
+          expected_version = tag.removeprefix("v")
+          expected_dist = {}
+          expected_release_assets = {}
+          if expected_available:
+              authority = json.loads(authority_path.read_text(encoding="utf-8"))
+              publication = authority["publication"]
+              expected_commit = publication["accepted_commit"]
+              expected_version = publication["accepted_version"]
+              expected_dist = publication["accepted_artifact_digests"]
+              expected_release_assets = json.loads(
+                  (publication_root / "expected-release-assets.json").read_text(encoding="utf-8")
+              )
+
+          quoted_tag = urllib.parse.quote(tag, safe="")
+          status, tag_payload = get_json(
+              f"https://api.github.com/repos/{repository}/git/ref/tags/{quoted_tag}",
+              label="tag",
+              github=True,
+          )
+          tag_present = status == 200
+          tag_target = None
+          tag_object_type = None
+          if tag_present:
+              tag_object = tag_payload.get("object", {})
+              tag_target = tag_object.get("sha")
+              tag_object_type = tag_object.get("type")
+              visited = set()
+              while tag_object_type == "tag" and tag_target not in visited:
+                  visited.add(tag_target)
+                  nested_status, nested_payload = get_json(
+                      f"https://api.github.com/repos/{repository}/git/tags/{tag_target}",
+                      label="annotated_tag",
+                      github=True,
+                  )
+                  if nested_status != 200:
+                      break
+                  nested_object = nested_payload.get("object", {})
+                  tag_target = nested_object.get("sha")
+                  tag_object_type = nested_object.get("type")
+              if tag_object_type != "commit":
+                  observation_errors.append("tag_does_not_resolve_to_commit")
+          tag_ok = expected_available and tag_present and tag_target == expected_commit
+
+          status, release_payload = get_json(
+              f"https://api.github.com/repos/{repository}/releases/tags/{quoted_tag}",
+              label="release",
+              github=True,
+          )
+          release_present = status == 200
+          actual_release_assets = {}
+          if release_present and expected_available:
+              for asset in release_payload.get("assets", []):
+                  name = asset.get("name")
+                  digest = asset.get("digest")
+                  if isinstance(digest, str) and digest.startswith("sha256:"):
+                      actual_release_assets[name] = digest.removeprefix("sha256:")
+                      continue
+                  request = urllib.request.Request(asset["browser_download_url"], headers=headers)
+                  try:
+                      with urllib.request.urlopen(request, timeout=60) as response:
+                          actual_release_assets[name] = hashlib.sha256(response.read()).hexdigest()
+                  except (OSError, TimeoutError) as error:
+                      observation_errors.append(f"release_asset_{type(error).__name__}")
+          release_ok = (
+              expected_available
+              and release_present
+              and actual_release_assets == expected_release_assets
+          )
+
+          pypi_files = []
+          status = None
+          for attempt in range(6):
+              status, pypi_payload = get_json(
+                  "https://pypi.org/pypi/research-kb-core/json",
+                  label=f"pypi_attempt_{attempt + 1}",
+                  github=False,
+              )
+              if status == 200:
+                  pypi_files = pypi_payload.get("releases", {}).get(expected_version, [])
+              if pypi_files or os.environ["PYPI_RESULT"] != "success" or attempt == 5:
+                  break
+              time.sleep(10)
+          pypi_present = bool(pypi_files)
+          actual_pypi = {
+              item["filename"]: item.get("digests", {}).get("sha256")
+              for item in pypi_files
+          }
+          pypi_yanked = any(item.get("yanked") is True for item in pypi_files)
+          pypi_ok = expected_available and not pypi_yanked and actual_pypi == expected_dist
+
+          if observation_errors:
+              state = "unknown_fail_closed"
+          elif not expected_available:
+              state = "unknown_fail_closed" if (tag_present or release_present or pypi_present) else "not_authorized"
+          elif tag_ok and release_ok and pypi_ok:
+              state = "publication_complete_pending_public_route"
+          elif tag_ok and not release_present and not pypi_present:
+              state = "partial_publication_tag_only"
+          elif tag_ok and release_ok and not pypi_present:
+              state = "partial_publication_release_only"
+          elif tag_ok and not release_present and pypi_ok:
+              state = "partial_publication_pypi_only"
+          elif not tag_present and not release_present and not pypi_present:
+              state = "verified_no_external_write"
+          else:
+              state = "unknown_fail_closed"
+
+          report = {
+              "schema": "ppwb.r1.publication_reconciliation.v1",
+              "state": state,
+              "tag": {
+                  "present": tag_present,
+                  "object_type": tag_object_type,
+                  "target": tag_target,
+                  "ok": tag_ok,
+              },
+              "github_release": {
+                  "present": release_present,
+                  "ok": release_ok,
+                  "asset_names": sorted(actual_release_assets),
+              },
+              "pypi": {
+                  "present": pypi_present,
+                  "ok": pypi_ok,
+                  "yanked": pypi_yanked,
+                  "filenames": sorted(actual_pypi),
+              },
+              "observation_errors": observation_errors,
+              "job_results": {
+                  "verify": os.environ["VERIFY_RESULT"],
+                  "github_release": os.environ["GITHUB_RELEASE_RESULT"],
+                  "pypi": os.environ["PYPI_RESULT"],
+              },
+          }
+          output.write_text(canonical_json(report), encoding="utf-8", newline="\n")
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8", newline="\n") as stream:
+              stream.write(f"state={state}\n")
+          PY
+
+      - name: Upload append-only reconciliation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: publication-reconciliation-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          path: ${{ runner.temp }}/publication-reconciliation.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 90
+
+      - name: Require same-byte publication before public-route smoke
+        shell: bash
+        env:
+          PUBLICATION_STATE: ${{ steps.reconcile.outputs.state }}
+        run: |
+          set -euo pipefail
+          test "$PUBLICATION_STATE" = "publication_complete_pending_public_route"

@@ -12,8 +12,8 @@ Core owns deterministic contracts, validation, path and ID handling, structured 
 
 This is a cumulative architecture record. Historical M2/M3/Px section names identify the
 slice that introduced a contract; they are not the current project gate. P0-P11 is
-delivered, and the current B1 bootstrap/security successor uses Application Service
-interface `1.20` with layout `p7d-1`. Core now owns
+delivered, and the accepted post-B1 Core uses Application Service interface `1.23` with
+layout `p7d-1`. Core now owns
 source-watermarked generated Markdown, one-way Obsidian projection, conflict-safe Exchange
 and P11 operational recovery, plus two-phase workspace materialization, trusted Parse
 authority and supervised PDF parsing. Arbitrary Markdown import, reverse vault sync and

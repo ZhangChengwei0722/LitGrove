@@ -25,6 +25,8 @@ from tools.release_governance import (
     build_operation_manifest,
     build_artifact_manifest,
     build_installed_manifest,
+    build_publication_activation,
+    build_publication_manifests,
     canonical_digest,
     canonical_json,
     canonical_json_bytes,
@@ -33,6 +35,7 @@ from tools.release_governance import (
     verify_artifact_manifest,
     verify_canonical_value,
     verify_installed_manifest,
+    verify_publication_authority,
     verify_operation_manifest,
     verify_publication_activation,
     verify_reachable_history,
@@ -466,6 +469,192 @@ def test_publication_activation_requires_exact_future_tuple(tmp_path: Path) -> N
     assert "wrong_artifact_digest" in result.codes
 
 
+def test_publication_manifests_bind_actor_service_digest_and_exact_tag(tmp_path: Path) -> None:
+    artifact, _, _, _, _, _ = _materialize(tmp_path)
+    authority, activation = build_publication_manifests(
+        artifact,
+        artifact_dir=tmp_path / "dist",
+        actor_id="237524179",
+        authorized_actor_id="237524179",
+        artifact_id="99001",
+        artifact_service_digest="5" * 64,
+        tag="v0.1.1",
+        environment="pypi",
+        trusted_owner="synthetic.example",
+        trusted_repository="LitGrove",
+        trusted_workflow="publish-accepted-release.yml",
+        trusted_environment="pypi",
+    )
+    result = verify_publication_activation(
+        activation,
+        expected=authority,
+        downloaded_manifest=artifact,
+        downloaded_artifact_dir=tmp_path / "dist",
+    )
+    assert result.ok, result.to_dict()
+    assert authority["publication"]["authorized_actor_id"] == "237524179"
+    assert authority["publication"]["accepted_artifact_id"] == "99001"
+    assert authority["publication"]["accepted_artifact_service_digest"] == "5" * 64
+    assert authority["publication"]["workflow_ref"] == "refs/tags/v0.1.1"
+
+    with pytest.raises(GovernanceInputError, match="authenticated actor"):
+        build_publication_manifests(
+            artifact,
+            artifact_dir=tmp_path / "dist",
+            actor_id="1",
+            authorized_actor_id="237524179",
+            artifact_id="99001",
+            artifact_service_digest="5" * 64,
+            tag="v0.1.1",
+            environment="pypi",
+            trusted_owner="synthetic.example",
+            trusted_repository="LitGrove",
+            trusted_workflow="publish-accepted-release.yml",
+            trusted_environment="pypi",
+        )
+
+
+def test_publication_manifests_cli_writes_canonical_verified_outputs(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    artifact, _, _, _, _, _ = _materialize(tmp_path)
+    candidate_path = tmp_path / "candidate.json"
+    authority_path = tmp_path / "authority.json"
+    activation_path = tmp_path / "activation.json"
+    candidate_path.write_text(canonical_json(artifact), encoding="utf-8", newline="\n")
+
+    assert main(
+        [
+            "publication-manifests",
+            "--candidate-manifest",
+            str(candidate_path),
+            "--artifact-dir",
+            str(tmp_path / "dist"),
+            "--actor-id",
+            "237524179",
+            "--authorized-actor-id",
+            "237524179",
+            "--artifact-id",
+            "99001",
+            "--artifact-service-digest",
+            "5" * 64,
+            "--tag",
+            "v0.1.1",
+            "--environment",
+            "pypi",
+            "--trusted-owner",
+            "synthetic.example",
+            "--trusted-repository",
+            "LitGrove",
+            "--trusted-workflow",
+            "publish-accepted-release.yml",
+            "--trusted-environment",
+            "pypi",
+            "--authority-output",
+            str(authority_path),
+            "--activation-output",
+            str(activation_path),
+        ]
+    ) == 0
+    assert json.loads(capsys.readouterr().out)["ok"] is True
+    authority = json.loads(authority_path.read_text(encoding="utf-8"))
+    activation = json.loads(activation_path.read_text(encoding="utf-8"))
+    assert authority_path.read_text(encoding="utf-8") == canonical_json(authority)
+    assert activation_path.read_text(encoding="utf-8") == canonical_json(activation)
+
+    context = authority["publication"]
+    result = verify_publication_authority(
+        authority,
+        repository=authority["candidate"]["repository"],
+        actor_id=context["authorized_actor_id"],
+        accepted_run_id=context["accepted_run_id"],
+        accepted_run_attempt=context["accepted_run_attempt"],
+        accepted_commit=context["accepted_commit"],
+        accepted_artifact_name=context["accepted_artifact_name"],
+        accepted_artifact_id=context["accepted_artifact_id"],
+        accepted_artifact_service_digest=context["accepted_artifact_service_digest"],
+        tag=context["tag"],
+        workflow_ref=context["workflow_ref"],
+        environment=context["environment"],
+        trusted_owner=context["trusted_publisher"]["owner"],
+        trusted_repository=context["trusted_publisher"]["repository"],
+        trusted_workflow=context["trusted_publisher"]["workflow"],
+        trusted_environment=context["trusted_publisher"]["environment"],
+    )
+    assert result.ok, result.to_dict()
+
+    activation_from_external = build_publication_activation(
+        authority,
+        artifact_manifest=artifact,
+        artifact_dir=tmp_path / "dist",
+    )
+    assert activation_from_external == activation
+
+
+def test_publication_authority_rejects_context_drift_and_unsafe_asset_names(tmp_path: Path) -> None:
+    artifact, _, _, _, _, authority = _materialize(tmp_path)
+    context = authority["publication"]
+    result = verify_publication_authority(
+        authority,
+        repository=authority["candidate"]["repository"],
+        actor_id=context["authorized_actor_id"],
+        accepted_run_id=context["accepted_run_id"],
+        accepted_run_attempt=context["accepted_run_attempt"],
+        accepted_commit=context["accepted_commit"],
+        accepted_artifact_name=context["accepted_artifact_name"],
+        accepted_artifact_id="99999",
+        accepted_artifact_service_digest=context["accepted_artifact_service_digest"],
+        tag=context["tag"],
+        workflow_ref=context["workflow_ref"],
+        environment=context["environment"],
+        trusted_owner=context["trusted_publisher"]["owner"],
+        trusted_repository=context["trusted_publisher"]["repository"],
+        trusted_workflow=context["trusted_publisher"]["workflow"],
+        trusted_environment=context["trusted_publisher"]["environment"],
+    )
+    assert not result.ok
+    assert "authority_context_mismatch" in result.codes
+
+    unsafe = copy.deepcopy(authority)
+    digest = next(iter(unsafe["publication"]["accepted_artifact_digests"].values()))
+    unsafe["publication"]["accepted_artifact_digests"] = {
+        "bad\n--clobber.whl": digest,
+        "synthetic-0.1.1.tar.gz": "4" * 64,
+    }
+    with pytest.raises(GovernanceInputError, match="external publication authority is invalid"):
+        build_publication_activation(
+            unsafe,
+            artifact_manifest=artifact,
+            artifact_dir=tmp_path / "dist",
+        )
+
+
+def test_publication_authority_and_activation_reject_unknown_fields(tmp_path: Path) -> None:
+    artifact, _, _, _, activation, authority = _materialize(tmp_path)
+    authority_with_unknown = copy.deepcopy(authority)
+    authority_with_unknown["unexpected"] = "not allowed"
+    result = verify_publication_activation(
+        activation,
+        expected=authority_with_unknown,
+        downloaded_manifest=artifact,
+        downloaded_artifact_dir=tmp_path / "dist",
+    )
+    assert not result.ok
+    assert "noncanonical_fields" in result.codes
+
+    activation_with_unknown = copy.deepcopy(activation)
+    activation_with_unknown["activation"]["unexpected"] = "not allowed"
+    result = verify_publication_activation(
+        activation_with_unknown,
+        expected=authority,
+        downloaded_manifest=artifact,
+        downloaded_artifact_dir=tmp_path / "dist",
+    )
+    assert not result.ok
+    assert "noncanonical_fields" in result.codes
+
+
 def test_publication_rejects_malformed_external_authority_before_digest_check(tmp_path: Path) -> None:
     artifact, _, _, _, activation, authority = _materialize(tmp_path)
 
@@ -675,7 +864,7 @@ def _uses_references(text: str) -> list[str]:
     return re.findall(r"^\s*uses:\s*([^\s#]+)", text, flags=re.MULTILINE)
 
 
-def test_workflows_are_pinned_and_publication_is_inert() -> None:
+def test_workflows_are_pinned_and_release_candidate_artifacts_are_separated() -> None:
     candidate = (REPOSITORY_ROOT / ".github" / "workflows" / "release-candidate.yml").read_text(encoding="utf-8")
     publication = (REPOSITORY_ROOT / ".github" / "workflows" / "publish-accepted-release.yml").read_text(encoding="utf-8")
     full_sha = re.compile(r"^[^@]+@[0-9a-f]{40}$")
@@ -693,7 +882,16 @@ def test_workflows_are_pinned_and_publication_is_inert() -> None:
     assert "tools/release-lock-bootstrap.txt" in candidate
     assert candidate.index("tools/release-lock-bootstrap.txt") < candidate.index("requirements/locks/linux_x86_64/py312/build.txt")
     assert "--run-attempt" in candidate
-    assert "release-candidate-${{ github.run_id }}-${{ github.run_attempt }}" in candidate
+    assert "accepted-release-candidate-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}" in candidate
+    assert "release-candidate-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}" in candidate
+    assert "Upload accepted release-candidate bytes and manifests\n        if: success()" in candidate
+    assert "Stage only accepted bytes and durable manifests" in candidate
+    assert 'rm -rf "$GOVERNANCE_ROOT/venv" "$GOVERNANCE_ROOT/install-root" "$GOVERNANCE_ROOT/smoke"' in candidate
+    assert '"accepted "' in candidate
+    assert "path: ${{ runner.temp }}/release-candidate" in candidate
+    assert "Upload failure diagnostics without package bytes\n        if: failure()" in candidate
+    assert "path: ${{ runner.temp }}/release-candidate/diagnostics" in candidate
+    assert "if: always()" not in candidate
     assert "pip_audit" in candidate
     assert "requirements/locks/linux_x86_64/py312/audit.txt" in candidate
     assert "operation-manifest" in candidate
@@ -702,6 +900,8 @@ def test_workflows_are_pinned_and_publication_is_inert() -> None:
     assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in candidate
     assert "GITHUB_SHA" in candidate
     assert "git rev-parse HEAD" in candidate
+    assert "git status --porcelain=v1 --untracked-files=all" in candidate
+    assert 'test -z "$status"' in candidate
     assert "pypa/gh-action-pypi-publish" not in candidate
     assert "gh release" not in candidate.lower()
     assert "id-token: write" not in candidate
@@ -709,12 +909,47 @@ def test_workflows_are_pinned_and_publication_is_inert() -> None:
 
     assert "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" in publication
     assert "pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33" in publication
-    assert "if: ${{ false" in publication
+    assert "if: ${{ false" not in publication
     assert "python -m build" not in publication
     assert "twine" not in publication.lower()
     assert publication.count("id-token: write") == 1
     assert publication.count("contents: write") == 1
-    assert "G1_PUBLICATION_ENABLED: \"false\"" in publication
+    assert "G1_PUBLICATION_ENABLED" not in publication
+    assert "github.actor_id == '237524179'" in publication
+    assert "github.ref_type == 'tag'" in publication
+    assert "authority_manifest_b64" in publication
+    assert "authority_manifest_sha256" in publication
+    assert "verify-publication-authority" in publication
+    assert publication.index("verify-publication-authority") < publication.index("Download the exact accepted candidate artifact")
+    assert "publication-activation" in publication
+    assert "Generate canonical authority and activation from authenticated context" not in publication
+    assert "--accepted-artifact-service-digest" in publication
+    assert "accepted_artifact_id" in publication
+    assert "artifact-ids:" in publication
+    assert "digest-mismatch: error" in publication
+    assert "steps.payload.outputs.artifact-id" in publication
+    assert "steps.payload.outputs.artifact-digest" in publication
+    assert "needs.verify-accepted-bytes.outputs.source_commit" in publication
+    assert '/git/tags/{tag_target}' in publication
+    assert "tag_does_not_resolve_to_commit" in publication
+    assert "REQUIRED_CHECKS_JSON" in publication
+    assert "/branches/main/protection/required_status_checks" in publication
+    assert "/check-runs?filter=latest&per_page=100" in publication
+    assert publication.count("/commits/${RELEASE_TAG}") == 2
     assert "accepted_run_attempt" in publication
-    assert "--expected accepted/authority-manifest.json" in publication
-    assert "--downloaded-artifact-dir accepted/dist" in publication
+    assert '--expected "$publication_root/authority-manifest.json"' in publication
+    assert '--downloaded-artifact-dir "$publication_root/accepted/dist"' in publication
+    assert "packages-dir: ${{ runner.temp }}/publication/accepted/dist" in publication
+    assert "gh release create" in publication
+    assert "gh release upload" in publication
+    assert "--clobber" not in publication
+    assert re.search(r"\+\s+--", publication) is None
+    assert "partial_publication_tag_only" in publication
+    assert "partial_publication_release_only" in publication
+    assert "partial_publication_pypi_only" in publication
+    assert "publication_complete_pending_public_route" in publication
+    assert "unknown_fail_closed" in publication
+    assert "if: always()" in publication
+    assert 'test "$PUBLICATION_STATE" = "publication_complete_pending_public_route"' in publication
+    assert "existing PyPI version contains yanked files" in publication
+    assert '"observation_errors": observation_errors' in publication

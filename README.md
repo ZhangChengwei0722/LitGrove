@@ -29,7 +29,7 @@ Core 本身不调用 LLM、不作科研判断，也不包含任何真实论文�
 
 ## 当前状态
 
-P0-P11 路线图已经交付，当前开发 package version 为 `0.1.1.dev2026080805`，公共
+P0-P11 路线图已经交付，当前 Core release version 为 `0.1.1`，公共
 Application Service interface 为 `1.23`，workspace layout 为 `p7d-1`。已验证能力覆盖论文导入、解析、Source Adequacy、Primary/Review
 语义提交、阅读与 Evidence 回源、发现、研究组织、Research Synthesis、Obsidian
 generated views、Exchange、备份恢复和 operational maintenance。
@@ -122,6 +122,18 @@ Core 不启动 Agent、不管理模型凭证，也不允许 Agent payload 中的
 ## 快速开始
 
 要求 Python 3.11 或 3.12。
+
+### 安装发布版
+
+```powershell
+py -m pip install "research-kb-core[pdf]==0.1.1"
+research-kb --version
+```
+
+`pdf` extra 用于受信任本地 PDF 的解析。只需要 deterministic metadata、workspace
+或非 PDF CLI 时，可以安装 `research-kb-core==0.1.1`。
+
+以下命令用于从仓库进行开发安装。
 
 ### Windows
 
@@ -261,11 +273,11 @@ diff review。验证层级、分片和 receipt 规则见 [Test Validation](docs/
 - 提交 issue 或 pull request 前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 和
   [Contributor Guide](docs/contributor-guide.md)。
 - 使用问题与维护边界见 [SUPPORT.md](SUPPORT.md)；Core 支持是公开、尽力而为的维护支持，
-  不承诺私有工作区接入、科研结论、GUI/App 发布、PyPI 发布或响应时间；疑似漏洞或凭证泄露必须按
+  不承诺私有工作区接入、科研结论、GUI/App 功能或响应时间；疑似漏洞或凭证泄露必须按
   [SECURITY.md](SECURITY.md) 私密报告，不要创建公开 issue。
 - 版本、兼容性、弃用和制品要求见 [Release Policy](docs/release-policy.md) 与
-  [CHANGELOG.md](CHANGELOG.md)。当前没有已发布的稳定版本、tag、GitHub Release、PyPI
-  publication 或 Trusted Publisher 配置。
+  [CHANGELOG.md](CHANGELOG.md)。正式版本以不可变 GitHub Release、PyPI metadata 与
+  release manifest 的同字节核验结果为准。
 
 ## 许可证
 

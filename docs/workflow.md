@@ -15,8 +15,8 @@ candidate input
 Milestone 1B established this deterministic storage lifecycle, and later M3/P0-P11 slices
 extended it through the current R3 product contract. Historical milestone labels below
 identify where a behavior entered the cumulative workflow; they are not active gates.
-P0-P11 is delivered, and the B1 bootstrap/security successor advances the current
-Application Service interface to `1.20` while semantic judgment remains outside Core.
+P0-P11 is delivered, and the accepted post-B1 workflow uses the current Application
+Service interface `1.23` while semantic judgment remains outside Core.
 
 Before the ordinary intake sequence, a new product workspace may now follow this bounded
 deterministic path:
