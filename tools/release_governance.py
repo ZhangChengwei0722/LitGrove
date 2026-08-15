@@ -34,6 +34,7 @@ INSTALLED_SCHEMA_VERSION = "ppwb.g1.installed_manifest.v1"
 MEMBER_SCHEMA_VERSION = "ppwb.g1.archive_member_manifest.v1"
 PUBLICATION_SCHEMA_VERSION = "ppwb.g1.publication_activation.v1"
 PUBLICATION_AUTHORITY_SCHEMA_VERSION = "ppwb.g1.publication_authority.v1"
+PUBLICATION_AUTHORITY_SCHEMA_V2 = "ppwb.g1.publication_authority.v2"
 OPERATION_SCHEMA_VERSION = "ppwb.g1.operation_manifest.v1"
 PROVENANCE_SCHEMA_VERSION = "ppwb.g1.provenance_inputs.v1"
 MAX_SAFE_INTEGER = (2**53) - 1
@@ -1160,7 +1161,8 @@ def _publication_authority_parts(
         "expected",
         errors,
     )
-    if expected.get("schema_version") != PUBLICATION_AUTHORITY_SCHEMA_VERSION:
+    schema_version = expected.get("schema_version")
+    if schema_version not in {PUBLICATION_AUTHORITY_SCHEMA_VERSION, PUBLICATION_AUTHORITY_SCHEMA_V2}:
         _finding(errors, "invalid_expected_authority", "expected.schema_version", "expected must be an immutable publication authority manifest")
     if expected.get("immutable") is not True:
         _finding(errors, "invalid_expected_authority", "expected.immutable", "expected authority must be immutable")
@@ -1199,7 +1201,7 @@ def _publication_authority_parts(
         and exact_root
         and exact_candidate
         and exact_publication
-        and expected.get("schema_version") == PUBLICATION_AUTHORITY_SCHEMA_VERSION
+        and schema_version in {PUBLICATION_AUTHORITY_SCHEMA_VERSION, PUBLICATION_AUTHORITY_SCHEMA_V2}
         and expected.get("immutable") is True
     )
     for field in ("repository", "source_commit", "workflow_run_id", "workflow_run_attempt", "version", "artifact_name"):
@@ -1262,12 +1264,18 @@ def _publication_authority_parts(
     if publication.get("environment") != "pypi":
         _finding(errors, "invalid_expected_authority", "expected.publication.environment", "authority environment must be pypi")
         valid = False
-    if publication.get("workflow_ref") != f"refs/tags/{publication.get('tag')}":
+    if schema_version == PUBLICATION_AUTHORITY_SCHEMA_V2:
+        required_workflow_ref = "refs/heads/main"
+        workflow_ref_message = "authority workflow ref must be refs/heads/main for heads/main dispatch"
+    else:
+        required_workflow_ref = f"refs/tags/{publication.get('tag')}"
+        workflow_ref_message = "authority workflow ref must be the exact immutable release tag"
+    if publication.get("workflow_ref") != required_workflow_ref:
         _finding(
             errors,
             "invalid_expected_authority",
             "expected.publication.workflow_ref",
-            "authority workflow ref must be the exact immutable release tag",
+            workflow_ref_message,
         )
         valid = False
     trusted = publication.get("trusted_publisher")
@@ -1350,6 +1358,7 @@ def build_publication_manifests(
     artifact_id: str,
     artifact_service_digest: str,
     tag: str,
+    workflow_ref: str | None = None,
     environment: str,
     trusted_owner: str,
     trusted_repository: str,
@@ -1373,6 +1382,10 @@ def build_publication_manifests(
     version = candidate.get("version")
     if not isinstance(version, str) or ".dev" in version or tag != f"v{version}":
         raise GovernanceInputError("release tag must match a final candidate version")
+    if workflow_ref is None:
+        workflow_ref = f"refs/tags/{tag}"
+    if workflow_ref not in {f"refs/tags/{tag}", "refs/heads/main"}:
+        raise GovernanceInputError("workflow ref must be the exact immutable release tag or refs/heads/main")
     if environment != "pypi" or trusted_environment != environment:
         raise GovernanceInputError("publication environment must match the protected pypi environment")
     if trusted_workflow != "publish-accepted-release.yml":
@@ -1397,13 +1410,17 @@ def build_publication_manifests(
         "accepted_version": version,
         "authorized_actor_id": actor_id,
         "tag": tag,
-        "workflow_ref": f"refs/tags/{tag}",
+        "workflow_ref": workflow_ref,
         "environment": environment,
         "trusted_publisher": trusted_publisher,
         "accepted_artifact_digests": digests,
     }
     authority = {
-        "schema_version": PUBLICATION_AUTHORITY_SCHEMA_VERSION,
+        "schema_version": (
+            PUBLICATION_AUTHORITY_SCHEMA_V2
+            if workflow_ref == "refs/heads/main"
+            else PUBLICATION_AUTHORITY_SCHEMA_VERSION
+        ),
         "immutable": True,
         "candidate": dict(candidate),
         "publication": publication,
@@ -1648,8 +1665,15 @@ def verify_publication_activation(
         _finding(errors, "mutable_tag", "activation.activation.tag", "publication tag must be an immutable semantic version tag")
     if body.get("environment") != "pypi":
         _finding(errors, "wrong_environment", "activation.activation.environment", "publication must use the protected pypi environment")
-    if body.get("workflow_ref") != f"refs/tags/{body.get('tag')}":
-        _finding(errors, "wrong_workflow_ref", "activation.activation.workflow_ref", "publication must run from the exact release tag")
+    expected_authority_schema = expected.get("schema_version") if isinstance(expected, Mapping) else None
+    if expected_authority_schema == PUBLICATION_AUTHORITY_SCHEMA_V2:
+        required_workflow_ref = "refs/heads/main"
+        workflow_ref_message = "publication must run from refs/heads/main"
+    else:
+        required_workflow_ref = f"refs/tags/{body.get('tag')}"
+        workflow_ref_message = "publication must run from the exact release tag"
+    if body.get("workflow_ref") != required_workflow_ref:
+        _finding(errors, "wrong_workflow_ref", "activation.activation.workflow_ref", workflow_ref_message)
     trusted = _require_mapping(body.get("trusted_publisher"), "activation.activation.trusted_publisher", errors)
     if trusted is None:
         trusted = {}
@@ -2178,6 +2202,7 @@ def _build_parser() -> argparse.ArgumentParser:
     publication_manifests.add_argument("--artifact-id", required=True)
     publication_manifests.add_argument("--artifact-service-digest", required=True)
     publication_manifests.add_argument("--tag", required=True)
+    publication_manifests.add_argument("--workflow-ref", required=True)
     publication_manifests.add_argument("--environment", required=True)
     publication_manifests.add_argument("--trusted-owner", required=True)
     publication_manifests.add_argument("--trusted-repository", required=True)
@@ -2311,6 +2336,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 artifact_id=args.artifact_id,
                 artifact_service_digest=args.artifact_service_digest,
                 tag=args.tag,
+                workflow_ref=args.workflow_ref,
                 environment=args.environment,
                 trusted_owner=args.trusted_owner,
                 trusted_repository=args.trusted_repository,
@@ -2392,6 +2418,7 @@ __all__ = [
     "MEMBER_SCHEMA_VERSION",
     "PUBLICATION_SCHEMA_VERSION",
     "PUBLICATION_AUTHORITY_SCHEMA_VERSION",
+    "PUBLICATION_AUTHORITY_SCHEMA_V2",
     "HISTORY_EXPECTATION_SCHEMA_VERSION",
     "OPERATION_SCHEMA_VERSION",
     "PROVENANCE_SCHEMA_VERSION",

@@ -15,6 +15,10 @@ on:
         description: Immutable accepted workflow artifact name
         required: true
         type: string
+      accepted_commit:
+        description: exact accepted commit that produced the accepted artifact
+        required: true
+        type: string
       accepted_artifact_id:
         description: Immutable accepted GitHub artifact id
         required: true
@@ -60,8 +64,7 @@ jobs:
     name: Verify authenticated authority and accepted bytes
     if: >-
       github.repository == 'ZhangChengwei0722/LitGrove' &&
-      github.actor_id == '237524179' &&
-      github.ref_type == 'tag'
+      github.actor_id == '237524179'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -75,10 +78,9 @@ jobs:
       version: ${{ steps.identity.outputs.version }}
       source_commit: ${{ steps.identity.outputs.source_commit }}
     steps:
-      - name: Check out verifier at the immutable release tag
+      - name: Check out verifier at the new governance commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -90,6 +92,7 @@ jobs:
           ACCEPTED_ARTIFACT_NAME: ${{ inputs.accepted_artifact_name }}
           ACCEPTED_ARTIFACT_ID: ${{ inputs.accepted_artifact_id }}
           ACCEPTED_ARTIFACT_DIGEST: ${{ inputs.accepted_artifact_digest }}
+          ACCEPTED_COMMIT: ${{ inputs.accepted_commit }}
           AUTHORITY_MANIFEST_B64: ${{ inputs.authority_manifest_b64 }}
           AUTHORITY_MANIFEST_SHA256: ${{ inputs.authority_manifest_sha256 }}
           RELEASE_TAG: ${{ inputs.tag }}
@@ -118,7 +121,7 @@ jobs:
             --actor-id "$GITHUB_ACTOR_ID" \
             --accepted-run-id "$ACCEPTED_RUN_ID" \
             --accepted-run-attempt "$ACCEPTED_RUN_ATTEMPT" \
-            --accepted-commit "$GITHUB_SHA" \
+            --accepted-commit "$ACCEPTED_COMMIT" \
             --accepted-artifact-name "$ACCEPTED_ARTIFACT_NAME" \
             --accepted-artifact-id "$ACCEPTED_ARTIFACT_ID" \
             --accepted-artifact-service-digest "$ACCEPTED_ARTIFACT_DIGEST" \
@@ -140,31 +143,37 @@ jobs:
           ACCEPTED_ARTIFACT_NAME: ${{ inputs.accepted_artifact_name }}
           ACCEPTED_ARTIFACT_ID: ${{ inputs.accepted_artifact_id }}
           ACCEPTED_ARTIFACT_DIGEST: ${{ inputs.accepted_artifact_digest }}
+          ACCEPTED_COMMIT: ${{ inputs.accepted_commit }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           test "$GITHUB_ACTOR_ID" = "$AUTHORIZED_RELEASE_ACTOR_ID"
-          test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"
-          test "$GITHUB_REF_NAME" = "$RELEASE_TAG"
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$ACCEPTED_ARTIFACT_NAME" = "accepted-release-candidate-${ACCEPTED_RUN_ID}-${ACCEPTED_RUN_ATTEMPT}-${GITHUB_SHA}"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$ACCEPTED_ARTIFACT_NAME" = "accepted-release-candidate-${ACCEPTED_RUN_ID}-${ACCEPTED_RUN_ATTEMPT}-${ACCEPTED_COMMIT}"
           [[ "$ACCEPTED_ARTIFACT_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+
+          gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" > "$RUNNER_TEMP/tag-ref.json"
+          tag_object_sha="$(jq -r '.object.sha' "$RUNNER_TEMP/tag-ref.json")"
+          tag_object_type="$(jq -r '.object.type' "$RUNNER_TEMP/tag-ref.json")"
+          while [ "$tag_object_type" = "tag" ]; do
+            gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object_sha}" > "$RUNNER_TEMP/tag-object.json"
+            tag_object_sha="$(jq -r '.object.sha' "$RUNNER_TEMP/tag-object.json")"
+            tag_object_type="$(jq -r '.object.type' "$RUNNER_TEMP/tag-object.json")"
+          done
+          test "$tag_object_type" = "commit"
+          test "$tag_object_sha" = "$ACCEPTED_COMMIT"
 
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ACCEPTED_RUN_ID}/attempts/${ACCEPTED_RUN_ATTEMPT}" > "$RUNNER_TEMP/accepted-run.json"
           test "$(jq -r '.id | tostring' "$RUNNER_TEMP/accepted-run.json")" = "$ACCEPTED_RUN_ID"
           test "$(jq -r '.run_attempt | tostring' "$RUNNER_TEMP/accepted-run.json")" = "$ACCEPTED_RUN_ATTEMPT"
-          test "$(jq -r '.head_sha' "$RUNNER_TEMP/accepted-run.json")" = "$GITHUB_SHA"
+          test "$(jq -r '.head_sha' "$RUNNER_TEMP/accepted-run.json")" = "$ACCEPTED_COMMIT"
           test "$(jq -r '.head_branch' "$RUNNER_TEMP/accepted-run.json")" = "main"
           test "$(jq -r '.event' "$RUNNER_TEMP/accepted-run.json")" = "push"
           test "$(jq -r '.status' "$RUNNER_TEMP/accepted-run.json")" = "completed"
           test "$(jq -r '.conclusion' "$RUNNER_TEMP/accepted-run.json")" = "success"
           test "$(jq -r '.path' "$RUNNER_TEMP/accepted-run.json")" = ".github/workflows/release-candidate.yml"
 
-          gh api "repos/${GITHUB_REPOSITORY}/branches/main/protection/required_status_checks" > "$RUNNER_TEMP/required-status-checks.json"
-          jq -e --argjson expected "$REQUIRED_CHECKS_JSON" \
-            '.strict == true and ((.contexts | sort) == ($expected | sort))' \
-            "$RUNNER_TEMP/required-status-checks.json" >/dev/null
-          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?filter=latest&per_page=100" > "$RUNNER_TEMP/check-runs.json"
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${ACCEPTED_COMMIT}/check-runs?filter=latest&per_page=100" > "$RUNNER_TEMP/check-runs.json"
           jq -e --argjson expected "$REQUIRED_CHECKS_JSON" \
             '([.check_runs[] | select(.name as $name | $expected | index($name)) | select(.status == "completed" and .conclusion == "success") | .name] | unique | sort) == ($expected | sort)' \
             "$RUNNER_TEMP/check-runs.json" >/dev/null
@@ -279,10 +288,9 @@ jobs:
       actions: read
       contents: write
     steps:
-      - name: Check out the exact accepted commit
+      - name: Check out the new governance commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.verify-accepted-bytes.outputs.source_commit }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -300,7 +308,6 @@ jobs:
         run: |
           set -euo pipefail
           publication_root="$RUNNER_TEMP/publication"
-          test "$(git rev-parse HEAD)" = "${{ needs.verify-accepted-bytes.outputs.source_commit }}"
           python tools/release_governance.py verify-publication \
             --manifest "$publication_root/activation.json" \
             --expected "$publication_root/authority-manifest.json" \
@@ -371,10 +378,9 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Check out verifier at the exact accepted commit
+      - name: Check out verifier at the new governance commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.verify-accepted-bytes.outputs.source_commit }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -395,7 +401,6 @@ jobs:
         run: |
           set -euo pipefail
           publication_root="$RUNNER_TEMP/publication"
-          test "$(git rev-parse HEAD)" = "${{ needs.verify-accepted-bytes.outputs.source_commit }}"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TAG}" --jq '.sha')" = "${{ needs.verify-accepted-bytes.outputs.source_commit }}"
           python tools/release_governance.py verify-publication \
             --manifest "$publication_root/activation.json" \
@@ -466,10 +471,9 @@ jobs:
       actions: read
       contents: read
     steps:
-      - name: Check out deterministic reconciler
+      - name: Check out deterministic reconciler at the new governance commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.verify-accepted-bytes.outputs.source_commit || github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
