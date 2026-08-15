@@ -541,6 +541,8 @@ def test_publication_manifests_cli_writes_canonical_verified_outputs(
             "5" * 64,
             "--tag",
             "v0.1.1",
+            "--workflow-ref",
+            "refs/tags/v0.1.1",
             "--environment",
             "pypi",
             "--trusted-owner",
@@ -916,7 +918,10 @@ def test_workflows_are_pinned_and_release_candidate_artifacts_are_separated() ->
     assert publication.count("contents: write") == 1
     assert "G1_PUBLICATION_ENABLED" not in publication
     assert "github.actor_id == '237524179'" in publication
-    assert "github.ref_type == 'tag'" in publication
+    assert "refs/heads/main" in publication
+    assert "github.ref_type" not in publication
+    assert "required_status_checks" not in publication
+    assert "accepted_commit" in publication
     assert "authority_manifest_b64" in publication
     assert "authority_manifest_sha256" in publication
     assert "verify-publication-authority" in publication
@@ -933,7 +938,8 @@ def test_workflows_are_pinned_and_release_candidate_artifacts_are_separated() ->
     assert '/git/tags/{tag_target}' in publication
     assert "tag_does_not_resolve_to_commit" in publication
     assert "REQUIRED_CHECKS_JSON" in publication
-    assert "/branches/main/protection/required_status_checks" in publication
+    assert "/branches/main/protection/required_status_checks" not in publication
+    assert "git/ref/tags/${RELEASE_TAG}" in publication
     assert "/check-runs?filter=latest&per_page=100" in publication
     assert publication.count("/commits/${RELEASE_TAG}") == 2
     assert "accepted_run_attempt" in publication
