@@ -2391,7 +2391,7 @@ def _get_github_json(url: str, token: str | None) -> Any:
         "User-Agent": "release-governance",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    if token:
+    if token is not None:
         headers["Authorization"] = "Bearer " + token
     request = urllib.request.Request(url, headers=headers)
     try:
@@ -3486,12 +3486,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 check_policy_json=args.check_policy_json,
             )
         elif args.command == "publication-check-evidence":
-            evidence = collect_publication_check_evidence(
-                repository=args.repository,
-                github_token=os.environ.get(args.github_token_env),
-                accepted_commit=args.accepted_commit,
-                evidence_root=args.evidence_root,
-            )
+            evidence_kwargs = {
+                "repository": args.repository,
+                "github_token": os.environ.get(args.github_token_env),
+                "accepted_commit": args.accepted_commit,
+                "evidence_root": args.evidence_root,
+            }
+            evidence = collect_publication_check_evidence(**evidence_kwargs)
             _write_json(args.output, evidence)
             result = VerificationResult(
                 True,
