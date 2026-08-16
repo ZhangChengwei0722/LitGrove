@@ -65,7 +65,7 @@ env:
   TRUSTED_PUBLISHER_REPOSITORY: "LitGrove"
   TRUSTED_PUBLISHER_WORKFLOW: "publish-accepted-release.yml"
   TRUSTED_PUBLISHER_ENVIRONMENT: "pypi"
-  REQUIRED_CHECKS_JSON: '["Windows validation","Linux validation","Dependency review","Python dependency audit","Governance validation","CodeQL"]'
+  EVENT_AWARE_CHECK_POLICY_JSON: '{"dependency_security_workflow_path":".github/workflows/dependency-security.yml","originating_pr_base_ref":"main","pr_head_dependency_review_job_name":"Dependency review","pr_head_dependency_review_event":"pull_request","pr_head_dependency_review_app":"github-actions","merge_push_dependency_audit_job_name":"Python dependency audit","merge_push_dependency_review_job_name":"Dependency review","merge_push_dependency_security_event":"push","merge_push_dependency_security_app":"github-actions","merge_push_required_checks":["CodeQL","Governance validation","Linux validation","Python dependency audit","Windows validation"]}'
 
 jobs:
   verify-accepted-bytes:
@@ -95,6 +95,7 @@ jobs:
       - name: Verify external authority before any artifact download
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           ACCEPTED_RUN_ID: ${{ inputs.accepted_run_id }}
           ACCEPTED_RUN_ATTEMPT: ${{ inputs.accepted_run_attempt }}
           ACCEPTED_ARTIFACT_NAME: ${{ inputs.accepted_artifact_name }}
@@ -114,7 +115,7 @@ jobs:
           printf '%s' "$AUTHORITY_MANIFEST_B64" | base64 --decode > "$authority"
           test "$(sha256sum "$authority" | cut -d' ' -f1)" = "$AUTHORITY_MANIFEST_SHA256"
           workflow_file_sha256="$(sha256sum .github/workflows/publish-accepted-release.yml | cut -d' ' -f1)"
-          required_checks_digest="$(printf '%s' "$REQUIRED_CHECKS_JSON" | sha256sum | cut -d' ' -f1)"
+          required_checks_digest="$(printf '%s' "$EVENT_AWARE_CHECK_POLICY_JSON" | sha256sum | cut -d' ' -f1)"
           python - "$authority" <<'PY'
           import sys
           from pathlib import Path
@@ -127,6 +128,11 @@ jobs:
           if raw != canonical_json_bytes(value):
               raise SystemExit("external authority manifest is not canonical JSON")
           PY
+          python tools/release_governance.py publication-check-evidence \
+            --repository "$GITHUB_REPOSITORY" \
+            --accepted-commit "$ACCEPTED_COMMIT" \
+            --github-token-env GH_TOKEN \
+            --output "$RUNNER_TEMP/publication-check-evidence.json"
           python tools/release_governance.py verify-publication-authority \
             --manifest "$authority" \
             --repository "$GITHUB_REPOSITORY" \
@@ -147,9 +153,10 @@ jobs:
             --workflow-execution-commit "$GITHUB_SHA" \
             --workflow-file-sha256 "$workflow_file_sha256" \
             --branch-protection-preflight-receipt-sha256 "$BRANCH_PROTECTION_PREFLIGHT_RECEIPT_SHA256" \
-            --required-checks-policy-digest "$required_checks_digest" \
             --observed-branch "main" \
-            --observed-at "$PREFLIGHT_OBSERVED_AT"
+            --observed-at "$PREFLIGHT_OBSERVED_AT" \
+            --event-evidence "$RUNNER_TEMP/publication-check-evidence.json" \
+            --check-policy-json "$EVENT_AWARE_CHECK_POLICY_JSON"
 
       - name: Verify dispatch, tag, run attempt, and artifact service identity
         id: service
@@ -191,10 +198,9 @@ jobs:
           test "$(jq -r '.conclusion' "$RUNNER_TEMP/accepted-run.json")" = "success"
           test "$(jq -r '.path' "$RUNNER_TEMP/accepted-run.json")" = ".github/workflows/release-candidate.yml"
 
-          gh api "repos/${GITHUB_REPOSITORY}/commits/${ACCEPTED_COMMIT}/check-runs?filter=latest&per_page=100" > "$RUNNER_TEMP/check-runs.json"
-          jq -e --argjson expected "$REQUIRED_CHECKS_JSON" \
-            '([.check_runs[] | select(.name as $name | $expected | index($name)) | select(.status == "completed" and .conclusion == "success") | .name] | unique | sort) == ($expected | sort)' \
-            "$RUNNER_TEMP/check-runs.json" >/dev/null
+          # Event-aware merge-push required checks were already enforced by
+          # verify-publication-authority against independently collected
+          # GitHub evidence; this step only binds the accepted run identity.
 
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ACCEPTED_RUN_ID}/artifacts?per_page=100" > "$RUNNER_TEMP/accepted-artifacts.json"
           test "$(jq --arg name "$ACCEPTED_ARTIFACT_NAME" '[.artifacts[] | select(.name == $name)] | length' "$RUNNER_TEMP/accepted-artifacts.json")" = "1"

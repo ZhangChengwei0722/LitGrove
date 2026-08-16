@@ -21,6 +21,9 @@ import site
 import subprocess
 import sys
 import tarfile
+import urllib.error
+import urllib.parse
+import urllib.request
 import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -35,6 +38,21 @@ MEMBER_SCHEMA_VERSION = "ppwb.g1.archive_member_manifest.v1"
 PUBLICATION_SCHEMA_VERSION = "ppwb.g1.publication_activation.v1"
 PUBLICATION_AUTHORITY_SCHEMA_VERSION = "ppwb.g1.publication_authority.v1"
 PUBLICATION_AUTHORITY_SCHEMA_V2 = "ppwb.g1.publication_authority.v2"
+PUBLICATION_AUTHORITY_SCHEMA_V3 = "ppwb.g1.publication_authority.v3"
+PUBLICATION_CHECK_EVIDENCE_SCHEMA_VERSION = "ppwb.g1.publication_check_evidence.v1"
+DEPENDENCY_SECURITY_WORKFLOW_PATH = ".github/workflows/dependency-security.yml"
+EVENT_AWARE_CHECK_POLICY_FIELDS = {
+    "dependency_security_workflow_path",
+    "originating_pr_base_ref",
+    "pr_head_dependency_review_job_name",
+    "pr_head_dependency_review_event",
+    "pr_head_dependency_review_app",
+    "merge_push_dependency_audit_job_name",
+    "merge_push_dependency_review_job_name",
+    "merge_push_dependency_security_event",
+    "merge_push_dependency_security_app",
+    "merge_push_required_checks",
+}
 OPERATION_SCHEMA_VERSION = "ppwb.g1.operation_manifest.v1"
 PROVENANCE_SCHEMA_VERSION = "ppwb.g1.provenance_inputs.v1"
 MAX_SAFE_INTEGER = (2**53) - 1
@@ -1162,8 +1180,13 @@ def _publication_authority_parts(
         errors,
     )
     schema_version = expected.get("schema_version")
-    if schema_version not in {PUBLICATION_AUTHORITY_SCHEMA_VERSION, PUBLICATION_AUTHORITY_SCHEMA_V2}:
-        _finding(errors, "invalid_expected_authority", "expected.schema_version", "expected must be an immutable publication authority manifest")
+    if schema_version not in {PUBLICATION_AUTHORITY_SCHEMA_VERSION, PUBLICATION_AUTHORITY_SCHEMA_V3}:
+        _finding(
+            errors,
+            "unsupported_publication_authority_schema",
+            "expected.schema_version",
+            "expected must be an immutable publication authority manifest in schema v1 or v3",
+        )
     if expected.get("immutable") is not True:
         _finding(errors, "invalid_expected_authority", "expected.immutable", "expected authority must be immutable")
     candidate = _require_mapping(expected.get("candidate"), "expected.candidate", errors)
@@ -1191,7 +1214,7 @@ def _publication_authority_parts(
         "trusted_publisher",
         "accepted_artifact_digests",
     }
-    if schema_version == PUBLICATION_AUTHORITY_SCHEMA_V2:
+    if schema_version == PUBLICATION_AUTHORITY_SCHEMA_V3:
         publication_required |= {
             "workflow_execution_commit",
             "workflow_file_sha256",
@@ -1199,6 +1222,8 @@ def _publication_authority_parts(
             "required_checks_policy_digest",
             "observed_branch",
             "observed_at",
+            "originating_pr",
+            "check_policy",
         }
     exact_publication = _require_exact_fields(
         publication,
@@ -1211,7 +1236,7 @@ def _publication_authority_parts(
         and exact_root
         and exact_candidate
         and exact_publication
-        and schema_version in {PUBLICATION_AUTHORITY_SCHEMA_VERSION, PUBLICATION_AUTHORITY_SCHEMA_V2}
+        and schema_version in {PUBLICATION_AUTHORITY_SCHEMA_VERSION, PUBLICATION_AUTHORITY_SCHEMA_V3}
         and expected.get("immutable") is True
     )
     for field in ("repository", "source_commit", "workflow_run_id", "workflow_run_attempt", "version", "artifact_name"):
@@ -1274,7 +1299,7 @@ def _publication_authority_parts(
     if publication.get("environment") != "pypi":
         _finding(errors, "invalid_expected_authority", "expected.publication.environment", "authority environment must be pypi")
         valid = False
-    if schema_version == PUBLICATION_AUTHORITY_SCHEMA_V2:
+    if schema_version == PUBLICATION_AUTHORITY_SCHEMA_V3:
         required_workflow_ref = "refs/heads/main"
         workflow_ref_message = "authority workflow ref must be refs/heads/main for heads/main dispatch"
     else:
@@ -1288,7 +1313,7 @@ def _publication_authority_parts(
             workflow_ref_message,
         )
         valid = False
-    if schema_version == PUBLICATION_AUTHORITY_SCHEMA_V2:
+    if schema_version == PUBLICATION_AUTHORITY_SCHEMA_V3:
         valid = _require_commit(
             publication.get("workflow_execution_commit"),
             "expected.publication.workflow_execution_commit",
@@ -1378,6 +1403,124 @@ def _publication_authority_parts(
                 "authority artifact name must bind run id, run attempt, and source commit",
             )
             valid = False
+    if schema_version == PUBLICATION_AUTHORITY_SCHEMA_V3:
+        originating_pr = _require_mapping(
+            publication.get("originating_pr"), "expected.publication.originating_pr", errors
+        )
+        if originating_pr is None:
+            valid = False
+        else:
+            if not _require_exact_fields(
+                originating_pr,
+                {"number", "head_sha", "base_sha", "merge_commit_sha", "merge_tree_sha"},
+                "expected.publication.originating_pr",
+                errors,
+            ):
+                valid = False
+            valid = _require_run_id(
+                originating_pr.get("number"), "expected.publication.originating_pr.number", errors
+            ) and valid
+            for field in ("head_sha", "base_sha", "merge_commit_sha", "merge_tree_sha"):
+                valid = _require_commit(
+                    originating_pr.get(field), f"expected.publication.originating_pr.{field}", errors
+                ) and valid
+        check_policy = _require_mapping(
+            publication.get("check_policy"), "expected.publication.check_policy", errors
+        )
+        if check_policy is None:
+            valid = False
+        else:
+            if not _require_exact_fields(
+                check_policy,
+                {"pr_head_dependency_review", "merge_push_required_checks", "merge_push_dependency_security"},
+                "expected.publication.check_policy",
+                errors,
+            ):
+                valid = False
+            pr_review = _require_mapping(
+                check_policy.get("pr_head_dependency_review"),
+                "expected.publication.check_policy.pr_head_dependency_review",
+                errors,
+            )
+            if pr_review is None:
+                valid = False
+            else:
+                if not _require_exact_fields(
+                    pr_review,
+                    {"run_id", "job_id", "event", "app"},
+                    "expected.publication.check_policy.pr_head_dependency_review",
+                    errors,
+                ):
+                    valid = False
+                valid = _require_run_id(
+                    pr_review.get("run_id"),
+                    "expected.publication.check_policy.pr_head_dependency_review.run_id",
+                    errors,
+                ) and valid
+                valid = _require_run_id(
+                    pr_review.get("job_id"),
+                    "expected.publication.check_policy.pr_head_dependency_review.job_id",
+                    errors,
+                ) and valid
+                for field in ("event", "app"):
+                    if not isinstance(pr_review.get(field), str) or not pr_review.get(field):
+                        _finding(
+                            errors,
+                            "invalid_check_policy",
+                            f"expected.publication.check_policy.pr_head_dependency_review.{field}",
+                            "event-aware policy event/app are required",
+                        )
+                        valid = False
+            merge_security = _require_mapping(
+                check_policy.get("merge_push_dependency_security"),
+                "expected.publication.check_policy.merge_push_dependency_security",
+                errors,
+            )
+            if merge_security is None:
+                valid = False
+            else:
+                if not _require_exact_fields(
+                    merge_security,
+                    {"run_id", "event", "app"},
+                    "expected.publication.check_policy.merge_push_dependency_security",
+                    errors,
+                ):
+                    valid = False
+                valid = _require_run_id(
+                    merge_security.get("run_id"),
+                    "expected.publication.check_policy.merge_push_dependency_security.run_id",
+                    errors,
+                ) and valid
+                for field in ("event", "app"):
+                    if not isinstance(merge_security.get(field), str) or not merge_security.get(field):
+                        _finding(
+                            errors,
+                            "invalid_check_policy",
+                            f"expected.publication.check_policy.merge_push_dependency_security.{field}",
+                            "event-aware policy event/app are required",
+                        )
+                        valid = False
+            required_checks = check_policy.get("merge_push_required_checks")
+            if (
+                not isinstance(required_checks, list)
+                or not required_checks
+                or any(not isinstance(name, str) or not name for name in required_checks)
+            ):
+                _finding(
+                    errors,
+                    "invalid_check_policy",
+                    "expected.publication.check_policy.merge_push_required_checks",
+                    "merge-push required checks must be a non-empty string array",
+                )
+                valid = False
+            elif required_checks != sorted(required_checks) or len(set(required_checks)) != len(required_checks):
+                _finding(
+                    errors,
+                    "invalid_check_policy",
+                    "expected.publication.check_policy.merge_push_required_checks",
+                    "merge-push required checks must be sorted and unique",
+                )
+                valid = False
     return candidate, publication, valid
 
 
@@ -1399,7 +1542,15 @@ def build_publication_manifests(
     workflow_execution_commit: str | None = None,
     workflow_file_sha256: str | None = None,
     branch_protection_preflight_receipt_sha256: str | None = None,
-    required_checks_policy_digest: str | None = None,
+    check_policy_json: str | None = None,
+    originating_pr_number: str | int | None = None,
+    originating_pr_head_sha: str | None = None,
+    originating_pr_base_sha: str | None = None,
+    originating_pr_merge_commit_sha: str | None = None,
+    originating_pr_merge_tree_sha: str | None = None,
+    pr_head_dependency_review_run_id: str | int | None = None,
+    pr_head_dependency_review_job_id: str | int | None = None,
+    merge_push_dependency_security_run_id: str | int | None = None,
     observed_branch: str | None = None,
     observed_at: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1429,12 +1580,34 @@ def build_publication_manifests(
             raise GovernanceInputError("workflow file digest is required for heads/main dispatch")
         if not SHA256_PATTERN.fullmatch(branch_protection_preflight_receipt_sha256 or ""):
             raise GovernanceInputError("branch protection preflight receipt digest is required for heads/main dispatch")
-        if not SHA256_PATTERN.fullmatch(required_checks_policy_digest or ""):
-            raise GovernanceInputError("required checks policy digest is required for heads/main dispatch")
         if not COMMIT_PATTERN.fullmatch(workflow_execution_commit or ""):
             raise GovernanceInputError("workflow execution commit must be a full commit sha")
         if observed_branch != "main" or not isinstance(observed_at, str) or not observed_at:
             raise GovernanceInputError("observed branch/timestamp are required for heads/main dispatch")
+        policy = parse_check_policy_document(check_policy_json)
+        required_checks_policy_digest = sha256_bytes(check_policy_json.encode("utf-8"))
+        normalized_pr_number = _as_run_id(originating_pr_number)
+        normalized_pr_review_run_id = _as_run_id(pr_head_dependency_review_run_id)
+        normalized_pr_review_job_id = _as_run_id(pr_head_dependency_review_job_id)
+        normalized_merge_security_run_id = _as_run_id(merge_push_dependency_security_run_id)
+        for label, value in (
+            ("originating PR number", normalized_pr_number),
+            ("PR-head dependency review run id", normalized_pr_review_run_id),
+            ("PR-head dependency review job id", normalized_pr_review_job_id),
+            ("merge-push dependency security run id", normalized_merge_security_run_id),
+        ):
+            if not isinstance(value, str) or not RUN_ID_PATTERN.fullmatch(value):
+                raise GovernanceInputError(f"{label} must be a positive decimal id")
+        for label, value in (
+            ("originating PR head sha", originating_pr_head_sha),
+            ("originating PR base sha", originating_pr_base_sha),
+            ("originating PR merge commit sha", originating_pr_merge_commit_sha),
+            ("originating PR merge tree sha", originating_pr_merge_tree_sha),
+        ):
+            if not COMMIT_PATTERN.fullmatch(value or ""):
+                raise GovernanceInputError(f"{label} must be a full commit sha")
+        if originating_pr_merge_commit_sha != candidate.get("source_commit"):
+            raise GovernanceInputError("originating PR merge commit differs from the candidate source commit")
     if environment != "pypi" or trusted_environment != environment:
         raise GovernanceInputError("publication environment must match the protected pypi environment")
     if trusted_workflow != "publish-accepted-release.yml":
@@ -1473,11 +1646,32 @@ def build_publication_manifests(
                 "required_checks_policy_digest": required_checks_policy_digest,
                 "observed_branch": observed_branch,
                 "observed_at": observed_at,
+                "originating_pr": {
+                    "number": normalized_pr_number,
+                    "head_sha": originating_pr_head_sha,
+                    "base_sha": originating_pr_base_sha,
+                    "merge_commit_sha": originating_pr_merge_commit_sha,
+                    "merge_tree_sha": originating_pr_merge_tree_sha,
+                },
+                "check_policy": {
+                    "pr_head_dependency_review": {
+                        "run_id": normalized_pr_review_run_id,
+                        "job_id": normalized_pr_review_job_id,
+                        "event": policy["pr_head_dependency_review_event"],
+                        "app": policy["pr_head_dependency_review_app"],
+                    },
+                    "merge_push_required_checks": list(policy["merge_push_required_checks"]),
+                    "merge_push_dependency_security": {
+                        "run_id": normalized_merge_security_run_id,
+                        "event": policy["merge_push_dependency_security_event"],
+                        "app": policy["merge_push_dependency_security_app"],
+                    },
+                },
             }
         )
     authority = {
         "schema_version": (
-            PUBLICATION_AUTHORITY_SCHEMA_V2
+            PUBLICATION_AUTHORITY_SCHEMA_V3
             if workflow_ref == "refs/heads/main"
             else PUBLICATION_AUTHORITY_SCHEMA_VERSION
         ),
@@ -1534,9 +1728,10 @@ def verify_publication_authority(
     workflow_execution_commit: str | None = None,
     workflow_file_sha256: str | None = None,
     branch_protection_preflight_receipt_sha256: str | None = None,
-    required_checks_policy_digest: str | None = None,
     observed_branch: str | None = None,
     observed_at: str | None = None,
+    event_evidence: Mapping[str, Any] | None = None,
+    check_policy_json: str | None = None,
 ) -> VerificationResult:
     """Verify a caller-supplied immutable authority before artifact download."""
 
@@ -1572,7 +1767,12 @@ def verify_publication_authority(
         "publication.workflow_ref": (publication.get("workflow_ref"), workflow_ref),
         "publication.environment": (publication.get("environment"), environment),
     }
-    if expected.get("schema_version") == PUBLICATION_AUTHORITY_SCHEMA_V2:
+    if expected.get("schema_version") == PUBLICATION_AUTHORITY_SCHEMA_V3:
+        policy_digest = (
+            sha256_bytes(check_policy_json.encode("utf-8"))
+            if isinstance(check_policy_json, str) and check_policy_json
+            else None
+        )
         expected_values.update(
             {
                 "publication.workflow_execution_commit": (
@@ -1589,7 +1789,7 @@ def verify_publication_authority(
                 ),
                 "publication.required_checks_policy_digest": (
                     publication.get("required_checks_policy_digest"),
-                    required_checks_policy_digest,
+                    policy_digest,
                 ),
                 "publication.observed_branch": (publication.get("observed_branch"), observed_branch),
                 "publication.observed_at": (publication.get("observed_at"), observed_at),
@@ -1614,6 +1814,99 @@ def verify_publication_authority(
                 ),
             }
         )
+    if expected.get("schema_version") == PUBLICATION_AUTHORITY_SCHEMA_V3:
+        if event_evidence is None:
+            _finding(
+                errors,
+                "missing_event_evidence",
+                "event_evidence",
+                "event-aware v3 verification requires independently collected GitHub evidence",
+            )
+            authority_valid = False
+        elif not isinstance(event_evidence, Mapping):
+            _finding(errors, "invalid_event_evidence", "event_evidence", "event-aware evidence must be a JSON object")
+            authority_valid = False
+        policy = None
+        if check_policy_json is None:
+            _finding(
+                errors,
+                "missing_check_policy",
+                "check_policy",
+                "event-aware v3 verification requires the frozen check policy document",
+            )
+            authority_valid = False
+        else:
+            if (
+                not isinstance(check_policy_json, str)
+                or sha256_bytes(check_policy_json.encode("utf-8")) != publication.get("required_checks_policy_digest")
+            ):
+                _finding(
+                    errors,
+                    "check_policy_digest_mismatch",
+                    "check_policy",
+                    "check policy digest does not match the external authority",
+                )
+                authority_valid = False
+            try:
+                policy = parse_check_policy_document(check_policy_json)
+            except GovernanceInputError as error:
+                _finding(errors, "invalid_check_policy", "check_policy", str(error))
+                authority_valid = False
+        evidence = None
+        if isinstance(event_evidence, Mapping):
+            evidence = _validated_publication_check_evidence(event_evidence, errors)
+            if evidence is None:
+                authority_valid = False
+            elif evidence.get("repository") != repository or evidence.get("accepted_commit") != publication.get("accepted_commit"):
+                _finding(
+                    errors,
+                    "event_evidence_context_mismatch",
+                    "event_evidence",
+                    "evidence repository or accepted commit differs from the authenticated context",
+                )
+                authority_valid = False
+        if policy is not None and evidence is not None:
+            check_policy = publication.get("check_policy")
+            if isinstance(check_policy, Mapping):
+                pr_bound = check_policy.get("pr_head_dependency_review")
+                merge_bound = check_policy.get("merge_push_dependency_security")
+                if (
+                    isinstance(pr_bound, Mapping)
+                    and (
+                        pr_bound.get("event") != policy.get("pr_head_dependency_review_event")
+                        or pr_bound.get("app") != policy.get("pr_head_dependency_review_app")
+                    )
+                ):
+                    _finding(
+                        errors,
+                        "check_policy_mismatch",
+                        "expected.publication.check_policy.pr_head_dependency_review",
+                        "authority PR-head event/app differ from the frozen check policy document",
+                    )
+                    authority_valid = False
+                if (
+                    isinstance(merge_bound, Mapping)
+                    and (
+                        merge_bound.get("event") != policy.get("merge_push_dependency_security_event")
+                        or merge_bound.get("app") != policy.get("merge_push_dependency_security_app")
+                    )
+                ):
+                    _finding(
+                        errors,
+                        "check_policy_mismatch",
+                        "expected.publication.check_policy.merge_push_dependency_security",
+                        "authority merge-push event/app differ from the frozen check policy document",
+                    )
+                    authority_valid = False
+                if check_policy.get("merge_push_required_checks") != policy.get("merge_push_required_checks"):
+                    _finding(
+                        errors,
+                        "check_policy_mismatch",
+                        "expected.publication.check_policy.merge_push_required_checks",
+                        "authority required checks differ from the frozen check policy document",
+                    )
+                    authority_valid = False
+            _verify_event_aware_checks(publication, policy, evidence, errors)
     for path, (actual, required) in expected_values.items():
         if actual != required:
             _finding(errors, "authority_context_mismatch", f"expected.{path}", "authority differs from authenticated dispatch context")
@@ -1720,7 +2013,7 @@ def verify_publication_activation(
             "long_lived_token",
             "accepted_artifact_digests",
         }
-        if expected is not None and expected.get("schema_version") == PUBLICATION_AUTHORITY_SCHEMA_V2:
+        if expected is not None and expected.get("schema_version") == PUBLICATION_AUTHORITY_SCHEMA_V3:
             activation_required |= {
                 "workflow_execution_commit",
                 "workflow_file_sha256",
@@ -1728,6 +2021,8 @@ def verify_publication_activation(
                 "required_checks_policy_digest",
                 "observed_branch",
                 "observed_at",
+                "originating_pr",
+                "check_policy",
             }
         _require_exact_fields(
             body,
@@ -1765,7 +2060,7 @@ def verify_publication_activation(
     if body.get("environment") != "pypi":
         _finding(errors, "wrong_environment", "activation.activation.environment", "publication must use the protected pypi environment")
     expected_authority_schema = expected.get("schema_version") if isinstance(expected, Mapping) else None
-    if expected_authority_schema == PUBLICATION_AUTHORITY_SCHEMA_V2:
+    if expected_authority_schema == PUBLICATION_AUTHORITY_SCHEMA_V3:
         required_workflow_ref = "refs/heads/main"
         workflow_ref_message = "publication must run from refs/heads/main"
     else:
@@ -1844,6 +2139,17 @@ def verify_publication_activation(
     expected_trusted = expected_publication.get("trusted_publisher")
     if isinstance(expected_trusted, Mapping) and dict(trusted) != dict(expected_trusted):
         _finding(errors, "wrong_trusted_publisher", "activation.activation.trusted_publisher", "Trusted Publisher tuple differs from the accepted tuple")
+    if expected_authority_schema == PUBLICATION_AUTHORITY_SCHEMA_V3:
+        for field in ("originating_pr", "check_policy"):
+            expected_value = expected_publication.get(field)
+            actual_value = body.get(field)
+            if isinstance(expected_value, Mapping) and actual_value != expected_value:
+                _finding(
+                    errors,
+                    f"wrong_{field}",
+                    f"activation.activation.{field}",
+                    "activation does not match the accepted event-aware policy",
+                )
     expected_version = expected_candidate.get("version")
     if isinstance(expected_version, str) and ".dev" in expected_version:
         _finding(errors, "dev_version_for_publication", "expected.candidate.version", "development versions cannot activate a public tag")
@@ -1887,6 +2193,724 @@ def verify_publication_activation(
         "write_authority_checked": write_authority_checked,
     }
     return _finish(errors, evidence)
+
+
+PUBLICATION_CHECK_EVIDENCE_FIELDS = {
+    "schema",
+    "repository",
+    "accepted_commit",
+    "merge_commit_tree_sha",
+    "candidate_pull_requests",
+    "pr_head_workflow_runs_total",
+    "pr_head_workflow_runs",
+    "pr_head_workflow_jobs",
+    "pr_head_check_runs_total",
+    "pr_head_check_runs",
+    "merge_push_workflow_runs_total",
+    "merge_push_workflow_runs",
+    "merge_push_workflow_jobs",
+    "merge_push_check_runs_total",
+    "merge_push_check_runs",
+}
+PR_EVIDENCE_FIELDS = {
+    "number",
+    "state",
+    "merged",
+    "base_ref",
+    "head_sha",
+    "base_sha",
+    "merge_commit_sha",
+    "merged_at",
+}
+RUN_EVIDENCE_FIELDS = {
+    "id",
+    "name",
+    "path",
+    "event",
+    "status",
+    "conclusion",
+    "head_sha",
+    "head_branch",
+}
+JOB_EVIDENCE_FIELDS = {"id", "run_id", "name", "status", "conclusion"}
+CHECK_RUN_EVIDENCE_FIELDS = {"id", "name", "status", "conclusion", "head_sha", "app"}
+
+
+def parse_check_policy_document(policy_json: str) -> dict[str, Any]:
+    """Parse and validate the frozen event-aware check policy document."""
+
+    if not isinstance(policy_json, str) or not policy_json:
+        raise GovernanceInputError("event-aware check policy document is required")
+    try:
+        value = _load_json_bytes(policy_json.encode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError, GovernanceInputError) as error:
+        raise GovernanceInputError(f"event-aware check policy document is malformed: {error}") from error
+    if not isinstance(value, Mapping):
+        raise GovernanceInputError("event-aware check policy document must be a JSON object")
+    if set(value) != EVENT_AWARE_CHECK_POLICY_FIELDS:
+        raise GovernanceInputError("event-aware check policy document fields are not canonical")
+    string_fields = EVENT_AWARE_CHECK_POLICY_FIELDS - {"merge_push_required_checks"}
+    for field in string_fields:
+        item = value.get(field)
+        if not isinstance(item, str) or not item:
+            raise GovernanceInputError(f"event-aware check policy field is invalid: {field}")
+    if value.get("dependency_security_workflow_path") != DEPENDENCY_SECURITY_WORKFLOW_PATH:
+        raise GovernanceInputError("event-aware check policy binds an unreviewed dependency workflow path")
+    if value.get("originating_pr_base_ref") != "main":
+        raise GovernanceInputError("event-aware check policy must bind the main base branch")
+    if (
+        value.get("pr_head_dependency_review_event") != "pull_request"
+        or value.get("pr_head_dependency_review_app") != "github-actions"
+    ):
+        raise GovernanceInputError("PR-head dependency review must bind pull_request and github-actions")
+    if (
+        value.get("merge_push_dependency_security_event") != "push"
+        or value.get("merge_push_dependency_security_app") != "github-actions"
+    ):
+        raise GovernanceInputError("merge-push dependency security must bind push and github-actions")
+    checks = value.get("merge_push_required_checks")
+    if not isinstance(checks, list) or not checks or any(not isinstance(name, str) or not name for name in checks):
+        raise GovernanceInputError("merge-push required checks must be a non-empty string array")
+    if checks != sorted(checks) or len(set(checks)) != len(checks):
+        raise GovernanceInputError("merge-push required checks must be sorted and unique")
+    return value
+
+
+def _evidence_run_id(value: Any, path: str) -> str:
+    normalized = _as_run_id(value)
+    if not isinstance(normalized, str) or not RUN_ID_PATTERN.fullmatch(normalized):
+        raise GovernanceInputError(f"GitHub evidence field is not a positive id: {path}")
+    return normalized
+
+
+def _evidence_commit(value: Any, path: str) -> str:
+    if not isinstance(value, str) or not COMMIT_PATTERN.fullmatch(value):
+        raise GovernanceInputError(f"GitHub evidence field is not a full commit sha: {path}")
+    return value
+
+
+def _evidence_string(value: Any, path: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise GovernanceInputError(f"GitHub evidence field is missing or invalid: {path}")
+    return value
+
+
+def _evidence_optional_string(value: Any, path: str) -> str:
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise GovernanceInputError(f"GitHub evidence field is not a string: {path}")
+    return value
+
+
+def _normalize_evidence_pull(item: Any, path: str) -> dict[str, Any]:
+    if not isinstance(item, Mapping):
+        raise GovernanceInputError(f"GitHub evidence entry is not an object: {path}")
+    base = item.get("base")
+    head = item.get("head")
+    if not isinstance(base, Mapping) or not isinstance(head, Mapping):
+        raise GovernanceInputError(f"GitHub pull evidence lacks head/base objects: {path}")
+    raw_merged = item.get("merged")
+    if isinstance(raw_merged, bool):
+        merged = raw_merged
+    else:
+        # The commits/{sha}/pulls endpoint omits the PR-detail-only `merged`
+        # boolean; derive it from the real closed state plus a real merge
+        # commit sha.  The verifier still cross-checks merge_commit_sha
+        # against the bound accepted commit.
+        merged = item.get("state") == "closed" and isinstance(item.get("merge_commit_sha"), str) and bool(item.get("merge_commit_sha"))
+    return {
+        "number": _evidence_run_id(item.get("number"), f"{path}.number"),
+        "state": _evidence_string(item.get("state"), f"{path}.state"),
+        "merged": merged,
+        "base_ref": _evidence_string(base.get("ref"), f"{path}.base.ref"),
+        "head_sha": _evidence_commit(head.get("sha"), f"{path}.head.sha"),
+        "base_sha": _evidence_commit(base.get("sha"), f"{path}.base.sha"),
+        "merge_commit_sha": _evidence_commit(item.get("merge_commit_sha"), f"{path}.merge_commit_sha"),
+        "merged_at": _evidence_string(item.get("merged_at"), f"{path}.merged_at"),
+    }
+
+
+def _normalize_evidence_run(item: Any, path: str) -> dict[str, Any]:
+    if not isinstance(item, Mapping):
+        raise GovernanceInputError(f"GitHub evidence entry is not an object: {path}")
+    return {
+        "id": _evidence_run_id(item.get("id"), f"{path}.id"),
+        "name": _evidence_string(item.get("name"), f"{path}.name"),
+        "path": _evidence_string(item.get("path"), f"{path}.path"),
+        "event": _evidence_string(item.get("event"), f"{path}.event"),
+        "status": _evidence_string(item.get("status"), f"{path}.status"),
+        "conclusion": _evidence_optional_string(item.get("conclusion"), f"{path}.conclusion"),
+        "head_sha": _evidence_commit(item.get("head_sha"), f"{path}.head_sha"),
+        "head_branch": _evidence_string(item.get("head_branch"), f"{path}.head_branch"),
+    }
+
+
+def _normalize_evidence_job(item: Any, path: str) -> dict[str, Any]:
+    if not isinstance(item, Mapping):
+        raise GovernanceInputError(f"GitHub evidence entry is not an object: {path}")
+    return {
+        "id": _evidence_run_id(item.get("id"), f"{path}.id"),
+        "run_id": _evidence_run_id(item.get("run_id"), f"{path}.run_id"),
+        "name": _evidence_string(item.get("name"), f"{path}.name"),
+        "status": _evidence_string(item.get("status"), f"{path}.status"),
+        "conclusion": _evidence_optional_string(item.get("conclusion"), f"{path}.conclusion"),
+    }
+
+
+def _normalize_evidence_check_run(item: Any, path: str) -> dict[str, Any]:
+    if not isinstance(item, Mapping):
+        raise GovernanceInputError(f"GitHub evidence entry is not an object: {path}")
+    app = item.get("app")
+    app_slug = "" if app is None else app.get("slug") if isinstance(app, Mapping) else None
+    if not isinstance(app_slug, str):
+        raise GovernanceInputError(f"GitHub check-run evidence lacks an app slug: {path}")
+    return {
+        "id": _evidence_run_id(item.get("id"), f"{path}.id"),
+        "name": _evidence_string(item.get("name"), f"{path}.name"),
+        "status": _evidence_string(item.get("status"), f"{path}.status"),
+        "conclusion": _evidence_optional_string(item.get("conclusion"), f"{path}.conclusion"),
+        "head_sha": _evidence_commit(item.get("head_sha"), f"{path}.head_sha"),
+        "app": app_slug,
+    }
+
+
+def _read_evidence_file(root: Path, name: str) -> Any:
+    path = root / name
+    if not path.is_file() or path.is_symlink():
+        raise GovernanceInputError(f"unresolvable GitHub evidence file: {name}")
+    try:
+        return _load_json_bytes(path.read_bytes())
+    except (OSError, UnicodeError, json.JSONDecodeError, GovernanceInputError) as error:
+        raise GovernanceInputError(f"malformed GitHub evidence file {name}: {error}") from error
+
+
+def _get_github_json(url: str, token: str | None) -> Any:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "release-governance",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token is not None:
+        headers["Authorization"] = "Bearer " + token
+    request = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            raw = response.read()
+    except urllib.error.HTTPError as error:
+        raise GovernanceInputError(f"unresolvable GitHub evidence endpoint (HTTP {error.code}): {url}") from error
+    except (OSError, TimeoutError) as error:
+        raise GovernanceInputError(f"unresolvable GitHub evidence endpoint: {url}") from error
+    try:
+        return _load_json_bytes(raw)
+    except (UnicodeError, json.JSONDecodeError, GovernanceInputError) as error:
+        raise GovernanceInputError(f"malformed GitHub evidence response: {url}") from error
+
+
+def collect_publication_check_evidence(
+    repository: str,
+    *,
+    github_token: str | None,
+    accepted_commit: str,
+    evidence_root: Path | None = None,
+) -> dict[str, Any]:
+    """Collect the independent GitHub evidence required by schema v3.
+
+    Live mode queries api.github.com with the caller token.  ``evidence_root``
+    switches to an offline reader over raw GitHub API JSON captures with the
+    exact same response shapes; it never fabricates or mocks values.
+    """
+
+    if not isinstance(repository, str) or re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) is None:
+        raise GovernanceInputError("evidence repository identity is invalid")
+    if not COMMIT_PATTERN.fullmatch(accepted_commit):
+        raise GovernanceInputError("evidence accepted commit must be a full commit sha")
+    if github_token is None and evidence_root is None:
+        raise GovernanceInputError("live evidence collection requires a GitHub token")
+
+    def load(endpoint: str, offline_name: str, *, key: str | None) -> tuple[list[Any], int]:
+        if evidence_root is not None:
+            payload = _read_evidence_file(evidence_root, offline_name)
+            if key is None:
+                if not isinstance(payload, list):
+                    raise GovernanceInputError(f"GitHub evidence endpoint returned a non-array: {offline_name}")
+                return payload, len(payload)
+            if not isinstance(payload, Mapping):
+                raise GovernanceInputError(f"GitHub evidence endpoint returned a non-object: {offline_name}")
+            items = payload.get(key)
+            total = payload.get("total_count")
+            if not isinstance(items, list) or not isinstance(total, int) or isinstance(total, bool) or total < 0:
+                raise GovernanceInputError(f"GitHub evidence endpoint is malformed: {offline_name}")
+            if len(items) != total:
+                raise GovernanceInputError(f"GitHub evidence page truncation: {offline_name} {len(items)}/{total}")
+            return items, total
+
+        separator = "&" if "?" in endpoint else "?"
+        base = f"https://api.github.com/repos/{repository}/{endpoint}{separator}per_page=100"
+        if key is None:
+            collected: list[Any] = []
+            for page in range(1, 101):
+                payload = _get_github_json(f"{base}&page={page}", github_token)
+                if not isinstance(payload, list):
+                    raise GovernanceInputError(f"GitHub evidence endpoint returned a non-array: {offline_name}")
+                collected.extend(payload)
+                if len(payload) < 100:
+                    break
+            else:
+                raise GovernanceInputError(f"GitHub evidence pagination overflow: {offline_name}")
+            return collected, len(collected)
+        collected = []
+        total: int | None = None
+        for page in range(1, 101):
+            payload = _get_github_json(f"{base}&page={page}", github_token)
+            if not isinstance(payload, Mapping):
+                raise GovernanceInputError(f"GitHub evidence endpoint returned a non-object: {offline_name}")
+            batch = payload.get(key)
+            reported = payload.get("total_count")
+            if not isinstance(batch, list) or not isinstance(reported, int) or isinstance(reported, bool) or reported < 0:
+                raise GovernanceInputError(f"GitHub evidence endpoint is malformed: {offline_name}")
+            if total is not None and reported != total:
+                raise GovernanceInputError(f"GitHub evidence total changed between pages: {offline_name}")
+            total = reported
+            collected.extend(batch)
+            if len(collected) >= total or not batch:
+                break
+        if total is None or len(collected) != total:
+            raise GovernanceInputError(f"GitHub evidence page truncation: {offline_name} {len(collected)}/{total}")
+        return collected, total
+
+    pulls_raw, _ = load(f"commits/{accepted_commit}/pulls", "commits-pulls.json", key=None)
+    pulls = [_normalize_evidence_pull(item, f"pulls[{index}]") for index, item in enumerate(pulls_raw)]
+
+    if evidence_root is not None:
+        commit_raw = _read_evidence_file(evidence_root, "commit-merge.json")
+    else:
+        commit_raw = _get_github_json(
+            f"https://api.github.com/repos/{repository}/commits/{accepted_commit}", github_token
+        )
+    if not isinstance(commit_raw, Mapping) or commit_raw.get("sha") != accepted_commit:
+        raise GovernanceInputError("GitHub commit evidence does not name the accepted commit")
+    commit_value = commit_raw.get("commit")
+    tree = commit_value.get("tree") if isinstance(commit_value, Mapping) else None
+    tree_sha = tree.get("sha") if isinstance(tree, Mapping) else None
+    if not isinstance(tree_sha, str) or not COMMIT_PATTERN.fullmatch(tree_sha):
+        raise GovernanceInputError("GitHub commit evidence lacks the accepted commit tree sha")
+
+    if len(pulls) == 1:
+        pr_head = pulls[0]["head_sha"]
+        pr_runs_raw, pr_runs_total = load(
+            f"actions/runs?head_sha={pr_head}&event=pull_request", "runs-pr-head.json", key="workflow_runs"
+        )
+        pr_checks_raw, pr_checks_total = load(
+            f"commits/{pr_head}/check-runs", "check-runs-pr-head.json", key="check_runs"
+        )
+    else:
+        pr_runs_raw, pr_runs_total = [], 0
+        pr_checks_raw, pr_checks_total = [], 0
+    pr_runs = [_normalize_evidence_run(item, f"pr-head-runs[{index}]") for index, item in enumerate(pr_runs_raw)]
+    pr_checks = [_normalize_evidence_check_run(item, f"pr-head-check-runs[{index}]") for index, item in enumerate(pr_checks_raw)]
+
+    merge_runs_raw, merge_runs_total = load(
+        f"actions/runs?head_sha={accepted_commit}&event=push", "runs-merge-push.json", key="workflow_runs"
+    )
+    merge_checks_raw, merge_checks_total = load(
+        f"commits/{accepted_commit}/check-runs", "check-runs-merge.json", key="check_runs"
+    )
+    merge_runs = [_normalize_evidence_run(item, f"merge-push-runs[{index}]") for index, item in enumerate(merge_runs_raw)]
+    merge_checks = [
+        _normalize_evidence_check_run(item, f"merge-push-check-runs[{index}]") for index, item in enumerate(merge_checks_raw)
+    ]
+
+    pr_jobs: dict[str, list[dict[str, Any]]] = {}
+    for run in pr_runs:
+        if run["path"] != DEPENDENCY_SECURITY_WORKFLOW_PATH:
+            continue
+        jobs_raw, _ = load(f"actions/runs/{run['id']}/jobs", f"jobs-{run['id']}.json", key="jobs")
+        if run["id"] in pr_jobs:
+            raise GovernanceInputError(f"duplicate PR-head dependency-security run evidence: {run['id']}")
+        pr_jobs[run["id"]] = [_normalize_evidence_job(item, f"jobs-{run['id']}[{index}]") for index, item in enumerate(jobs_raw)]
+    merge_jobs: dict[str, list[dict[str, Any]]] = {}
+    for run in merge_runs:
+        if run["path"] != DEPENDENCY_SECURITY_WORKFLOW_PATH:
+            continue
+        jobs_raw, _ = load(f"actions/runs/{run['id']}/jobs", f"jobs-{run['id']}.json", key="jobs")
+        if run["id"] in merge_jobs:
+            raise GovernanceInputError(f"duplicate merge-push dependency-security run evidence: {run['id']}")
+        merge_jobs[run["id"]] = [_normalize_evidence_job(item, f"jobs-{run['id']}[{index}]") for index, item in enumerate(jobs_raw)]
+
+    return {
+        "schema": PUBLICATION_CHECK_EVIDENCE_SCHEMA_VERSION,
+        "repository": repository,
+        "accepted_commit": accepted_commit,
+        "merge_commit_tree_sha": tree_sha,
+        "candidate_pull_requests": pulls,
+        "pr_head_workflow_runs_total": pr_runs_total,
+        "pr_head_workflow_runs": pr_runs,
+        "pr_head_workflow_jobs": pr_jobs,
+        "pr_head_check_runs_total": pr_checks_total,
+        "pr_head_check_runs": pr_checks,
+        "merge_push_workflow_runs_total": merge_runs_total,
+        "merge_push_workflow_runs": merge_runs,
+        "merge_push_workflow_jobs": merge_jobs,
+        "merge_push_check_runs_total": merge_checks_total,
+        "merge_push_check_runs": merge_checks,
+    }
+
+
+def _require_evidence_total(value: Any, expected: int, path: str, errors: list[Finding]) -> bool:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        _finding(errors, "invalid_event_evidence", path, "expected a non-negative evidence total")
+        return False
+    if value != expected:
+        _finding(errors, "event_evidence_truncated", path, f"evidence count {expected} does not match total {value}")
+        return False
+    return True
+
+
+def _validated_evidence_entries(
+    value: Any, path: str, fields: set[str], errors: list[Finding]
+) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        _finding(errors, "invalid_event_evidence", path, "expected an evidence array")
+        return []
+    entries: list[dict[str, Any]] = []
+    for index, item in enumerate(value):
+        item_path = f"{path}[{index}]"
+        mapping = _require_mapping(item, item_path, errors)
+        if mapping is None:
+            continue
+        if not _require_exact_fields(mapping, fields, item_path, errors):
+            continue
+        entries.append(dict(mapping))
+    return entries
+
+
+def _validated_publication_check_evidence(
+    value: Any, errors: list[Finding]
+) -> Mapping[str, Any] | None:
+    start_errors = len(errors)
+    root = _require_mapping(value, "event_evidence", errors)
+    if root is None:
+        _finding(errors, "invalid_event_evidence", "event_evidence", "event-aware evidence must be a JSON object")
+        return None
+    structural_ok = _require_exact_fields(root, PUBLICATION_CHECK_EVIDENCE_FIELDS, "event_evidence", errors)
+    if root.get("schema") != PUBLICATION_CHECK_EVIDENCE_SCHEMA_VERSION:
+        _finding(errors, "unsupported_schema", "event_evidence.schema", "publication check evidence schema is unsupported")
+        structural_ok = False
+    if not isinstance(root.get("repository"), str) or not root.get("repository"):
+        _finding(errors, "invalid_event_evidence", "event_evidence.repository", "evidence repository is required")
+        structural_ok = False
+    _require_commit(root.get("accepted_commit"), "event_evidence.accepted_commit", errors)
+    _require_commit(root.get("merge_commit_tree_sha"), "event_evidence.merge_commit_tree_sha", errors)
+    if not structural_ok:
+        return None
+
+    pulls = _validated_evidence_entries(
+        root.get("candidate_pull_requests"), "event_evidence.candidate_pull_requests", PR_EVIDENCE_FIELDS, errors
+    )
+    for index, pull in enumerate(pulls):
+        path = f"event_evidence.candidate_pull_requests[{index}]"
+        _require_run_id(pull.get("number"), f"{path}.number", errors)
+        for field in ("head_sha", "base_sha", "merge_commit_sha"):
+            _require_commit(pull.get(field), f"{path}.{field}", errors)
+        for field in ("state", "base_ref", "merged_at"):
+            if not isinstance(pull.get(field), str) or not pull.get(field):
+                _finding(errors, "invalid_event_evidence", f"{path}.{field}", "pull identity field is required")
+        if pull.get("merged") is not True:
+            _finding(errors, "invalid_event_evidence", f"{path}.merged", "pull evidence must be merged")
+
+    pr_runs = _validated_evidence_entries(
+        root.get("pr_head_workflow_runs"), "event_evidence.pr_head_workflow_runs", RUN_EVIDENCE_FIELDS, errors
+    )
+    for index, run in enumerate(pr_runs):
+        path = f"event_evidence.pr_head_workflow_runs[{index}]"
+        _require_run_id(run.get("id"), f"{path}.id", errors)
+        _require_commit(run.get("head_sha"), f"{path}.head_sha", errors)
+        for field in ("name", "path", "event", "status", "head_branch"):
+            if not isinstance(run.get(field), str) or not run.get(field):
+                _finding(errors, "invalid_event_evidence", f"{path}.{field}", "run identity field is required")
+        if not isinstance(run.get("conclusion"), str):
+            _finding(errors, "invalid_event_evidence", f"{path}.conclusion", "run conclusion must be a string")
+    merge_runs = _validated_evidence_entries(
+        root.get("merge_push_workflow_runs"), "event_evidence.merge_push_workflow_runs", RUN_EVIDENCE_FIELDS, errors
+    )
+    for index, run in enumerate(merge_runs):
+        path = f"event_evidence.merge_push_workflow_runs[{index}]"
+        _require_run_id(run.get("id"), f"{path}.id", errors)
+        _require_commit(run.get("head_sha"), f"{path}.head_sha", errors)
+        for field in ("name", "path", "event", "status", "head_branch"):
+            if not isinstance(run.get(field), str) or not run.get(field):
+                _finding(errors, "invalid_event_evidence", f"{path}.{field}", "run identity field is required")
+        if not isinstance(run.get("conclusion"), str):
+            _finding(errors, "invalid_event_evidence", f"{path}.conclusion", "run conclusion must be a string")
+
+    def validated_jobs(value: Any, path: str) -> dict[str, list[dict[str, Any]]]:
+        mapping = _require_mapping(value, path, errors)
+        if mapping is None:
+            return {}
+        result: dict[str, list[dict[str, Any]]] = {}
+        for run_id, items in mapping.items():
+            if not isinstance(run_id, str) or not RUN_ID_PATTERN.fullmatch(run_id):
+                _finding(errors, "invalid_event_evidence", f"{path}.<key>", "job map keys must be run ids")
+                continue
+            entries = _validated_evidence_entries(items, f"{path}.{run_id}", JOB_EVIDENCE_FIELDS, errors)
+            for index, job in enumerate(entries):
+                item_path = f"{path}.{run_id}[{index}]"
+                _require_run_id(job.get("id"), f"{item_path}.id", errors)
+                _require_run_id(job.get("run_id"), f"{item_path}.run_id", errors)
+                for field in ("name", "status"):
+                    if not isinstance(job.get(field), str) or not job.get(field):
+                        _finding(errors, "invalid_event_evidence", f"{item_path}.{field}", "job identity field is required")
+                if not isinstance(job.get("conclusion"), str):
+                    _finding(errors, "invalid_event_evidence", f"{item_path}.conclusion", "job conclusion must be a string")
+            result[run_id] = entries
+        return result
+
+    pr_jobs = validated_jobs(root.get("pr_head_workflow_jobs"), "event_evidence.pr_head_workflow_jobs")
+    merge_jobs = validated_jobs(root.get("merge_push_workflow_jobs"), "event_evidence.merge_push_workflow_jobs")
+
+    def validated_check_runs(value: Any, path: str) -> list[dict[str, Any]]:
+        entries = _validated_evidence_entries(value, path, CHECK_RUN_EVIDENCE_FIELDS, errors)
+        for index, check in enumerate(entries):
+            item_path = f"{path}[{index}]"
+            _require_run_id(check.get("id"), f"{item_path}.id", errors)
+            _require_commit(check.get("head_sha"), f"{item_path}.head_sha", errors)
+            for field in ("name", "status", "app"):
+                if not isinstance(check.get(field), str) or not check.get(field):
+                    _finding(errors, "invalid_event_evidence", f"{item_path}.{field}", "check-run identity field is required")
+            if not isinstance(check.get("conclusion"), str):
+                _finding(errors, "invalid_event_evidence", f"{item_path}.conclusion", "check-run conclusion must be a string")
+        return entries
+
+    pr_checks = validated_check_runs(root.get("pr_head_check_runs"), "event_evidence.pr_head_check_runs")
+    merge_checks = validated_check_runs(root.get("merge_push_check_runs"), "event_evidence.merge_push_check_runs")
+
+    _require_evidence_total(
+        root.get("pr_head_workflow_runs_total"), len(pr_runs), "event_evidence.pr_head_workflow_runs_total", errors
+    )
+    _require_evidence_total(
+        root.get("pr_head_check_runs_total"), len(pr_checks), "event_evidence.pr_head_check_runs_total", errors
+    )
+    _require_evidence_total(
+        root.get("merge_push_workflow_runs_total"), len(merge_runs), "event_evidence.merge_push_workflow_runs_total", errors
+    )
+    _require_evidence_total(
+        root.get("merge_push_check_runs_total"), len(merge_checks), "event_evidence.merge_push_check_runs_total", errors
+    )
+    if len(errors) > start_errors:
+        return None
+    return {
+        "schema": root.get("schema"),
+        "repository": root.get("repository"),
+        "accepted_commit": root.get("accepted_commit"),
+        "merge_commit_tree_sha": root.get("merge_commit_tree_sha"),
+        "candidate_pull_requests": pulls,
+        "pr_head_workflow_runs_total": root.get("pr_head_workflow_runs_total"),
+        "pr_head_workflow_runs": pr_runs,
+        "pr_head_workflow_jobs": pr_jobs,
+        "pr_head_check_runs_total": root.get("pr_head_check_runs_total"),
+        "pr_head_check_runs": pr_checks,
+        "merge_push_workflow_runs_total": root.get("merge_push_workflow_runs_total"),
+        "merge_push_workflow_runs": merge_runs,
+        "merge_push_workflow_jobs": merge_jobs,
+        "merge_push_check_runs_total": root.get("merge_push_check_runs_total"),
+        "merge_push_check_runs": merge_checks,
+    }
+
+
+def _verify_event_aware_checks(
+    publication: Mapping[str, Any],
+    policy: Mapping[str, Any],
+    evidence: Mapping[str, Any],
+    errors: list[Finding],
+) -> None:
+    originating = publication.get("originating_pr")
+    check_policy = publication.get("check_policy")
+    if not isinstance(originating, Mapping) or not isinstance(check_policy, Mapping):
+        return
+    pr_bound = check_policy.get("pr_head_dependency_review")
+    merge_bound = check_policy.get("merge_push_dependency_security")
+    if not isinstance(pr_bound, Mapping) or not isinstance(merge_bound, Mapping):
+        return
+    accepted_commit = publication.get("accepted_commit")
+
+    pulls = evidence.get("candidate_pull_requests") or []
+    if not pulls:
+        _finding(errors, "candidate_pr_missing", "event_evidence.candidate_pull_requests", "accepted commit must resolve to exactly one originating PR")
+    elif len(pulls) > 1:
+        _finding(errors, "candidate_pr_multiple", "event_evidence.candidate_pull_requests", "accepted commit resolves to multiple candidate PRs")
+    pr = pulls[0] if len(pulls) == 1 else None
+
+    if pr is not None:
+        if _as_run_id(pr.get("number")) != _as_run_id(originating.get("number")):
+            _finding(errors, "candidate_pr_number_mismatch", "event_evidence.candidate_pull_requests[0].number", "originating PR number differs from accepted identity")
+        for field, code in (
+            ("head_sha", "candidate_pr_head_mismatch"),
+            ("base_sha", "candidate_pr_base_mismatch"),
+            ("merge_commit_sha", "candidate_pr_merge_commit_mismatch"),
+        ):
+            if pr.get(field) != originating.get(field):
+                _finding(errors, code, f"event_evidence.candidate_pull_requests[0].{field}", "originating PR identity differs from accepted identity")
+        if evidence.get("merge_commit_tree_sha") != originating.get("merge_tree_sha"):
+            _finding(errors, "candidate_pr_merge_tree_mismatch", "event_evidence.merge_commit_tree_sha", "merge tree differs from accepted identity")
+        if (
+            pr.get("state") != "closed"
+            or pr.get("merged") is not True
+            or pr.get("base_ref") != policy.get("originating_pr_base_ref")
+        ):
+            _finding(errors, "candidate_pr_not_merged", "event_evidence.candidate_pull_requests[0]", "originating PR is not merged from the bound base branch")
+
+    if pr is not None:
+        pr_run_id = _as_run_id(pr_bound.get("run_id"))
+        pr_job_id = _as_run_id(pr_bound.get("job_id"))
+        runs = evidence.get("pr_head_workflow_runs") or []
+        by_run_id = [run for run in runs if _as_run_id(run.get("id")) == pr_run_id]
+        if not by_run_id:
+            _finding(errors, "pr_head_dependency_review_run_missing", "event_evidence.pr_head_workflow_runs", "bound PR-head dependency review run is missing")
+        elif len(by_run_id) > 1:
+            _finding(errors, "pr_head_dependency_review_run_duplicate", "event_evidence.pr_head_workflow_runs", "bound PR-head dependency review run is duplicated")
+        else:
+            run = by_run_id[0]
+            if run.get("path") != policy.get("dependency_security_workflow_path"):
+                _finding(errors, "pr_head_dependency_review_wrong_workflow", "event_evidence.pr_head_workflow_runs", "bound PR-head run is not the dependency security workflow")
+            if run.get("event") != policy.get("pr_head_dependency_review_event"):
+                _finding(errors, "pr_head_dependency_review_wrong_event", "event_evidence.pr_head_workflow_runs", "PR-head dependency review event differs from policy")
+            if run.get("status") != "completed":
+                _finding(errors, "pr_head_dependency_review_not_completed", "event_evidence.pr_head_workflow_runs", "PR-head dependency review did not complete")
+            if run.get("conclusion") != "success":
+                _finding(errors, "pr_head_dependency_review_wrong_conclusion", "event_evidence.pr_head_workflow_runs", "PR-head dependency review must be success")
+            if run.get("head_sha") != pr.get("head_sha"):
+                _finding(errors, "pr_head_dependency_review_wrong_head", "event_evidence.pr_head_workflow_runs", "PR-head dependency review head differs from PR head")
+
+        jobs = (evidence.get("pr_head_workflow_jobs") or {}).get(pr_run_id) or []
+        by_job_id = [job for job in jobs if _as_run_id(job.get("id")) == pr_job_id]
+        if not by_job_id:
+            _finding(errors, "pr_head_dependency_review_job_missing", "event_evidence.pr_head_workflow_jobs", "bound PR-head dependency review job is missing")
+        elif len(by_job_id) > 1:
+            _finding(errors, "pr_head_dependency_review_job_duplicate", "event_evidence.pr_head_workflow_jobs", "bound PR-head dependency review job is duplicated")
+        else:
+            job = by_job_id[0]
+            if _as_run_id(job.get("run_id")) != pr_run_id:
+                _finding(errors, "pr_head_dependency_review_job_wrong_run", "event_evidence.pr_head_workflow_jobs", "bound PR-head job belongs to another run")
+            if job.get("name") != policy.get("pr_head_dependency_review_job_name"):
+                _finding(errors, "pr_head_dependency_review_job_wrong_name", "event_evidence.pr_head_workflow_jobs", "bound PR-head job name differs from policy")
+            if job.get("status") != "completed":
+                _finding(errors, "pr_head_dependency_review_job_not_completed", "event_evidence.pr_head_workflow_jobs", "bound PR-head job did not complete")
+            if job.get("conclusion") != "success":
+                _finding(errors, "pr_head_dependency_review_job_wrong_conclusion", "event_evidence.pr_head_workflow_jobs", "bound PR-head job must be success")
+
+        checks = [check for check in (evidence.get("pr_head_check_runs") or []) if check.get("name") == policy.get("pr_head_dependency_review_job_name")]
+        if not checks:
+            _finding(errors, "pr_head_dependency_review_check_missing", "event_evidence.pr_head_check_runs", "PR-head dependency review check run is missing")
+        elif len(checks) > 1:
+            _finding(errors, "pr_head_dependency_review_check_duplicate", "event_evidence.pr_head_check_runs", "PR-head dependency review check run is duplicated")
+        else:
+            check = checks[0]
+            if check.get("head_sha") != pr.get("head_sha"):
+                _finding(errors, "pr_head_dependency_review_check_wrong_head", "event_evidence.pr_head_check_runs", "PR-head dependency review check head differs from PR head")
+            if check.get("status") != "completed":
+                _finding(errors, "pr_head_dependency_review_check_not_completed", "event_evidence.pr_head_check_runs", "PR-head dependency review check did not complete")
+            if check.get("conclusion") != "success":
+                _finding(errors, "pr_head_dependency_review_check_wrong_conclusion", "event_evidence.pr_head_check_runs", "PR-head dependency review check must be success")
+            if check.get("app") != policy.get("pr_head_dependency_review_app"):
+                _finding(errors, "pr_head_dependency_review_check_wrong_app", "event_evidence.pr_head_check_runs", "PR-head dependency review app differs from policy")
+
+    merge_run_id = _as_run_id(merge_bound.get("run_id"))
+    merge_runs = evidence.get("merge_push_workflow_runs") or []
+    by_merge_run = [run for run in merge_runs if _as_run_id(run.get("id")) == merge_run_id]
+    if not by_merge_run:
+        _finding(errors, "merge_push_dependency_security_run_missing", "event_evidence.merge_push_workflow_runs", "bound merge-push dependency security run is missing")
+    elif len(by_merge_run) > 1:
+        _finding(errors, "merge_push_dependency_security_run_duplicate", "event_evidence.merge_push_workflow_runs", "bound merge-push dependency security run is duplicated")
+    else:
+        run = by_merge_run[0]
+        if run.get("path") != policy.get("dependency_security_workflow_path"):
+            _finding(errors, "merge_push_dependency_security_wrong_workflow", "event_evidence.merge_push_workflow_runs", "bound merge-push run is not the dependency security workflow")
+        if run.get("event") != policy.get("merge_push_dependency_security_event"):
+            _finding(errors, "merge_push_dependency_security_wrong_event", "event_evidence.merge_push_workflow_runs", "merge-push dependency security event differs from policy")
+        if run.get("status") != "completed":
+            _finding(errors, "merge_push_dependency_security_not_completed", "event_evidence.merge_push_workflow_runs", "merge-push dependency security did not complete")
+        if run.get("conclusion") != "success":
+            _finding(errors, "merge_push_dependency_security_wrong_conclusion", "event_evidence.merge_push_workflow_runs", "merge-push dependency security must be success")
+        if run.get("head_sha") != accepted_commit:
+            _finding(errors, "merge_push_dependency_security_wrong_head", "event_evidence.merge_push_workflow_runs", "merge-push dependency security head differs from accepted commit")
+
+    merge_jobs = (evidence.get("merge_push_workflow_jobs") or {}).get(merge_run_id) or []
+    audit_jobs = [job for job in merge_jobs if job.get("name") == policy.get("merge_push_dependency_audit_job_name")]
+    if not audit_jobs:
+        _finding(errors, "merge_push_dependency_audit_job_missing", "event_evidence.merge_push_workflow_jobs", "merge-push dependency audit job is missing")
+    elif len(audit_jobs) > 1:
+        _finding(errors, "merge_push_dependency_audit_job_duplicate", "event_evidence.merge_push_workflow_jobs", "merge-push dependency audit job is duplicated")
+    else:
+        job = audit_jobs[0]
+        if _as_run_id(job.get("run_id")) != merge_run_id:
+            _finding(errors, "merge_push_dependency_audit_job_wrong_run", "event_evidence.merge_push_workflow_jobs", "merge-push audit job belongs to another run")
+        if job.get("status") != "completed":
+            _finding(errors, "merge_push_dependency_audit_job_not_completed", "event_evidence.merge_push_workflow_jobs", "merge-push audit job did not complete")
+        if job.get("conclusion") != "success":
+            _finding(errors, "merge_push_dependency_audit_job_wrong_conclusion", "event_evidence.merge_push_workflow_jobs", "merge-push audit job must be success")
+
+    review_jobs = [job for job in merge_jobs if job.get("name") == policy.get("merge_push_dependency_review_job_name")]
+    if not review_jobs:
+        _finding(errors, "merge_push_dependency_review_job_missing", "event_evidence.merge_push_workflow_jobs", "merge-push dependency review job is missing")
+    elif len(review_jobs) > 1:
+        _finding(errors, "merge_push_dependency_review_job_duplicate", "event_evidence.merge_push_workflow_jobs", "merge-push dependency review job is duplicated")
+    else:
+        job = review_jobs[0]
+        if _as_run_id(job.get("run_id")) != merge_run_id:
+            _finding(errors, "merge_push_dependency_review_job_wrong_run", "event_evidence.merge_push_workflow_jobs", "merge-push review job belongs to another run")
+        if job.get("status") != "completed":
+            _finding(errors, "merge_push_dependency_review_job_not_completed", "event_evidence.merge_push_workflow_jobs", "merge-push review job did not complete")
+        if job.get("conclusion") != "skipped":
+            _finding(errors, "merge_push_dependency_review_job_drift", "event_evidence.merge_push_workflow_jobs", "merge-push dependency review job must be the design skip")
+
+    merge_checks = evidence.get("merge_push_check_runs") or []
+    audit_checks = [check for check in merge_checks if check.get("name") == policy.get("merge_push_dependency_audit_job_name")]
+    if not audit_checks:
+        _finding(errors, "merge_push_dependency_audit_check_missing", "event_evidence.merge_push_check_runs", "merge-push dependency audit check run is missing")
+    elif len(audit_checks) > 1:
+        _finding(errors, "merge_push_dependency_audit_check_duplicate", "event_evidence.merge_push_check_runs", "merge-push dependency audit check run is duplicated")
+    else:
+        check = audit_checks[0]
+        if check.get("head_sha") != accepted_commit:
+            _finding(errors, "merge_push_dependency_audit_check_wrong_head", "event_evidence.merge_push_check_runs", "merge-push audit check head differs from accepted commit")
+        if check.get("status") != "completed":
+            _finding(errors, "merge_push_dependency_audit_check_not_completed", "event_evidence.merge_push_check_runs", "merge-push audit check did not complete")
+        if check.get("conclusion") != "success":
+            _finding(errors, "merge_push_dependency_audit_check_wrong_conclusion", "event_evidence.merge_push_check_runs", "merge-push audit check must be success")
+        if check.get("app") != policy.get("merge_push_dependency_security_app"):
+            _finding(errors, "merge_push_dependency_audit_check_wrong_app", "event_evidence.merge_push_check_runs", "merge-push audit check app differs from policy")
+
+    review_checks = [check for check in merge_checks if check.get("name") == policy.get("merge_push_dependency_review_job_name")]
+    if not review_checks:
+        _finding(errors, "merge_push_dependency_review_check_missing", "event_evidence.merge_push_check_runs", "merge-push dependency review check run is missing")
+    elif len(review_checks) > 1:
+        _finding(errors, "merge_push_dependency_review_check_duplicate", "event_evidence.merge_push_check_runs", "merge-push dependency review check run is duplicated")
+    else:
+        check = review_checks[0]
+        if check.get("head_sha") != accepted_commit:
+            _finding(errors, "merge_push_dependency_review_check_wrong_head", "event_evidence.merge_push_check_runs", "merge-push review check head differs from accepted commit")
+        if check.get("status") != "completed":
+            _finding(errors, "merge_push_dependency_review_check_not_completed", "event_evidence.merge_push_check_runs", "merge-push review check did not complete")
+        if check.get("conclusion") != "skipped":
+            _finding(errors, "merge_push_dependency_review_check_drift", "event_evidence.merge_push_check_runs", "merge-push dependency review check must be the design skip")
+        if check.get("app") != policy.get("merge_push_dependency_security_app"):
+            _finding(errors, "merge_push_dependency_review_check_wrong_app", "event_evidence.merge_push_check_runs", "merge-push review check app differs from policy")
+
+    for name in policy.get("merge_push_required_checks") or []:
+        by_name = [check for check in merge_checks if check.get("name") == name]
+        if not by_name:
+            _finding(errors, "merge_push_required_check_missing", "event_evidence.merge_push_check_runs", f"required merge-push check is missing: {name}")
+        elif len(by_name) > 1:
+            _finding(errors, "merge_push_required_check_duplicate", "event_evidence.merge_push_check_runs", f"required merge-push check is duplicated: {name}")
+        else:
+            check = by_name[0]
+            if check.get("head_sha") != accepted_commit:
+                _finding(errors, "merge_push_required_check_wrong_head", "event_evidence.merge_push_check_runs", f"required merge-push check head differs from accepted commit: {name}")
+            if check.get("status") != "completed":
+                _finding(errors, "merge_push_required_check_not_completed", "event_evidence.merge_push_check_runs", f"required merge-push check did not complete: {name}")
+            if check.get("conclusion") != "success":
+                _finding(errors, "merge_push_required_check_wrong_conclusion", "event_evidence.merge_push_check_runs", f"required merge-push check must be success: {name}")
 
 
 def verify_release_contract(
@@ -2295,9 +3319,17 @@ def _build_parser() -> argparse.ArgumentParser:
     verify_authority.add_argument("--workflow-execution-commit")
     verify_authority.add_argument("--workflow-file-sha256")
     verify_authority.add_argument("--branch-protection-preflight-receipt-sha256")
-    verify_authority.add_argument("--required-checks-policy-digest")
     verify_authority.add_argument("--observed-branch")
     verify_authority.add_argument("--observed-at")
+    verify_authority.add_argument("--event-evidence", type=Path)
+    verify_authority.add_argument("--check-policy-json")
+
+    publication_check_evidence = commands.add_parser("publication-check-evidence")
+    publication_check_evidence.add_argument("--repository", required=True)
+    publication_check_evidence.add_argument("--accepted-commit", required=True)
+    publication_check_evidence.add_argument("--github-token-env", default="GH_TOKEN")
+    publication_check_evidence.add_argument("--evidence-root", type=Path)
+    publication_check_evidence.add_argument("--output", required=True, type=Path)
 
     publication_manifests = commands.add_parser("publication-manifests")
     publication_manifests.add_argument("--candidate-manifest", required=True, type=Path)
@@ -2316,7 +3348,15 @@ def _build_parser() -> argparse.ArgumentParser:
     publication_manifests.add_argument("--workflow-execution-commit")
     publication_manifests.add_argument("--workflow-file-sha256")
     publication_manifests.add_argument("--branch-protection-preflight-receipt-sha256")
-    publication_manifests.add_argument("--required-checks-policy-digest")
+    publication_manifests.add_argument("--check-policy-json")
+    publication_manifests.add_argument("--originating-pr-number")
+    publication_manifests.add_argument("--originating-pr-head-sha")
+    publication_manifests.add_argument("--originating-pr-base-sha")
+    publication_manifests.add_argument("--originating-pr-merge-commit-sha")
+    publication_manifests.add_argument("--originating-pr-merge-tree-sha")
+    publication_manifests.add_argument("--pr-head-dependency-review-run-id")
+    publication_manifests.add_argument("--pr-head-dependency-review-job-id")
+    publication_manifests.add_argument("--merge_push-dependency-security-run-id")
     publication_manifests.add_argument("--observed-branch")
     publication_manifests.add_argument("--observed-at")
     publication_manifests.add_argument("--authority-output", required=True, type=Path)
@@ -2418,6 +3458,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         elif args.command == "verify-publication-authority":
             authority = _read_json(args.manifest)
+            event_evidence = _read_json(args.event_evidence) if args.event_evidence else None
             result = _result_or_error(
                 verify_publication_authority,
                 authority,
@@ -2439,9 +3480,28 @@ def main(argv: Sequence[str] | None = None) -> int:
                 workflow_execution_commit=args.workflow_execution_commit,
                 workflow_file_sha256=args.workflow_file_sha256,
                 branch_protection_preflight_receipt_sha256=args.branch_protection_preflight_receipt_sha256,
-                required_checks_policy_digest=args.required_checks_policy_digest,
                 observed_branch=args.observed_branch,
                 observed_at=args.observed_at,
+                event_evidence=event_evidence,
+                check_policy_json=args.check_policy_json,
+            )
+        elif args.command == "publication-check-evidence":
+            evidence_kwargs = {
+                "repository": args.repository,
+                "github_token": os.environ.get(args.github_token_env),
+                "accepted_commit": args.accepted_commit,
+                "evidence_root": args.evidence_root,
+            }
+            evidence = collect_publication_check_evidence(**evidence_kwargs)
+            _write_json(args.output, evidence)
+            result = VerificationResult(
+                True,
+                (),
+                {
+                    "accepted_commit": args.accepted_commit,
+                    "evidence_file": str(args.output),
+                    "evidence_repository": args.repository,
+                },
             )
         elif args.command == "publication-manifests":
             candidate_manifest = _read_json(args.candidate_manifest)
@@ -2462,7 +3522,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 workflow_execution_commit=args.workflow_execution_commit,
                 workflow_file_sha256=args.workflow_file_sha256,
                 branch_protection_preflight_receipt_sha256=args.branch_protection_preflight_receipt_sha256,
-                required_checks_policy_digest=args.required_checks_policy_digest,
+                check_policy_json=args.check_policy_json,
+                originating_pr_number=args.originating_pr_number,
+                originating_pr_head_sha=args.originating_pr_head_sha,
+                originating_pr_base_sha=args.originating_pr_base_sha,
+                originating_pr_merge_commit_sha=args.originating_pr_merge_commit_sha,
+                originating_pr_merge_tree_sha=args.originating_pr_merge_tree_sha,
+                pr_head_dependency_review_run_id=args.pr_head_dependency_review_run_id,
+                pr_head_dependency_review_job_id=args.pr_head_dependency_review_job_id,
+                merge_push_dependency_security_run_id=args.merge_push_dependency_security_run_id,
                 observed_branch=args.observed_branch,
                 observed_at=args.observed_at,
             )
@@ -2542,6 +3610,8 @@ __all__ = [
     "PUBLICATION_SCHEMA_VERSION",
     "PUBLICATION_AUTHORITY_SCHEMA_VERSION",
     "PUBLICATION_AUTHORITY_SCHEMA_V2",
+    "PUBLICATION_AUTHORITY_SCHEMA_V3",
+    "PUBLICATION_CHECK_EVIDENCE_SCHEMA_VERSION",
     "HISTORY_EXPECTATION_SCHEMA_VERSION",
     "OPERATION_SCHEMA_VERSION",
     "PROVENANCE_SCHEMA_VERSION",
@@ -2556,7 +3626,9 @@ __all__ = [
     "canonical_json",
     "canonical_json_bytes",
     "build_operation_manifest",
+    "collect_publication_check_evidence",
     "main",
+    "parse_check_policy_document",
     "sha256_bytes",
     "sha256_file",
     "verify_artifact_manifest",
