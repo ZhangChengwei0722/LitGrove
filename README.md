@@ -24,8 +24,10 @@ Private Workspace
 
 Core 本身不调用 LLM、不作科研判断，也不包含任何真实论文或私有知识库内容。
 这是已经公开的 Core 基础设施仓库，不是完整的 GUI 产品。面向普通用户的产品入口由
-`research-kb-app` 承担，它是面向中文用户的 end-user product；在经过脱敏审计的 App
-公共仓库实际建立前，此处不提供未经验证的 App 下载或仓库链接。
+`research-kb-app` 承担：App `0.1.1b2` 已作为 Windows-only public beta 发布到其公共
+GitHub Releases 与 PyPI；Core `0.1.1` 已发布到本仓库 GitHub Releases 与 PyPI。
+Core 与 App 当前进入 joint-release observation，repository topology review 需积累
+2-3 个联合发布版本后再进行。
 
 ## 当前状态
 
@@ -293,5 +295,7 @@ diff review。验证层级、分片和 receipt 规则见 [Test Validation](docs/
 - external Exchange record 自动提升为本地 canonical record；
 - 私有工作区 migration、legacy write freeze 或 cutover。
 
-下一道产品门是 source-free `private_workspace_pilot_design`；只有随后获批的精确执行
-manifest 才能授权具体私有路径和案例。P0-P11 关闭不自动授权访问或迁移任何私有科研数据。
+当前状态：Core `0.1.1` 已发布，App `0.1.1b2` 为 Windows public beta；项目当前进入
+joint-release observation。Core 本身仍不是完整 GUI 产品，GUI 入口由 App 提供。
+私有工作区 migration、legacy write freeze 和 cutover 仍未授权；P0-P11 关闭不自动授权
+访问或迁移任何私有科研数据。

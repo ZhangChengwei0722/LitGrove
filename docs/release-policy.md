@@ -58,18 +58,31 @@ artifact bytes:
    never rebuilds from the tag source or replaces them with locally built files.
 
 Any commit, digest, run, tag, or manifest mismatch stops the transaction before external
-publication. The R1 publisher runs only from the immutable accepted tag and consumes the
-exact accepted candidate artifact; it never treats workflow registration or a successful
-rebuild as publication authority. Before any artifact download, the authenticated dispatch
-must supply the canonical external R1-B authority manifest and its SHA-256. That authority
-binds the exact workflow run and attempt, source commit, artifact ID/name/service digest,
-wheel/sdist digests, tag, actor and Trusted Publisher tuple. Downstream jobs download by
-artifact ID with digest mismatch configured as a hard failure and check out the accepted
-commit rather than resolving the tag again. Before download, the publisher also confirms
-that the live protected-branch required-check set is the reviewed six-check allowlist and
-that every required check completed successfully on the accepted commit. The GitHub Release
-and PyPI jobs each resolve the tag to that commit again immediately before their external
-write authority is used.
+publication. The publisher runs from protected `main` through an explicit
+`workflow_dispatch`; it verifies an existing immutable tag, it never creates the tag, and
+it never rebuilds from tag source. The dispatch is bound to an authority manifest that
+identifies:
+
+- the workflow execution commit on protected `main` (the exact commit whose publisher
+  workflow performs the event-aware verification);
+- the originating release-candidate PR, including its head commit and merged commit;
+- the accepted workflow run ID and attempt, artifact ID/name/service digest, accepted
+  source commit, and exact wheel/sdist digests;
+- the pre-existing immutable `v*` tag and its resolved commit;
+- the authorized actor and the PyPI Trusted Publisher tuple.
+
+Event-aware checks are verified separately:
+
+- originating PR head: the Dependency review run/job must have succeeded on the
+  release-candidate PR;
+- merge push: each required protected-branch check must have succeeded on the accepted
+  commit, and the merge-push Dependency security run must have succeeded with its
+  Dependency review job explicitly `skipped` as designed.
+
+Downstream jobs download the accepted artifact by ID with digest mismatch configured as a
+hard failure and check out the accepted commit rather than resolving the tag again. Before
+external write authority is used, the GitHub Release and PyPI jobs each resolve the
+existing tag to the accepted commit again.
 
 ## Reproducible Dependency Locks
 
