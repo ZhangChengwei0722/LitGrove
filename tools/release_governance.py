@@ -1176,23 +1176,33 @@ def _publication_authority_parts(
         "expected.candidate",
         errors,
     )
+    publication_required = {
+        "accepted_run_id",
+        "accepted_run_attempt",
+        "accepted_commit",
+        "accepted_artifact_name",
+        "accepted_artifact_id",
+        "accepted_artifact_service_digest",
+        "accepted_version",
+        "authorized_actor_id",
+        "tag",
+        "workflow_ref",
+        "environment",
+        "trusted_publisher",
+        "accepted_artifact_digests",
+    }
+    if schema_version == PUBLICATION_AUTHORITY_SCHEMA_V2:
+        publication_required |= {
+            "workflow_execution_commit",
+            "workflow_file_sha256",
+            "branch_protection_preflight_receipt_sha256",
+            "required_checks_policy_digest",
+            "observed_branch",
+            "observed_at",
+        }
     exact_publication = _require_exact_fields(
         publication,
-        {
-            "accepted_run_id",
-            "accepted_run_attempt",
-            "accepted_commit",
-            "accepted_artifact_name",
-            "accepted_artifact_id",
-            "accepted_artifact_service_digest",
-            "accepted_version",
-            "authorized_actor_id",
-            "tag",
-            "workflow_ref",
-            "environment",
-            "trusted_publisher",
-            "accepted_artifact_digests",
-        },
+        publication_required,
         "expected.publication",
         errors,
     )
@@ -1278,6 +1288,28 @@ def _publication_authority_parts(
             workflow_ref_message,
         )
         valid = False
+    if schema_version == PUBLICATION_AUTHORITY_SCHEMA_V2:
+        valid = _require_commit(
+            publication.get("workflow_execution_commit"),
+            "expected.publication.workflow_execution_commit",
+            errors,
+        ) and valid
+        for digest_field in (
+            "workflow_file_sha256",
+            "branch_protection_preflight_receipt_sha256",
+            "required_checks_policy_digest",
+        ):
+            valid = _require_sha256(
+                publication.get(digest_field),
+                f"expected.publication.{digest_field}",
+                errors,
+            ) and valid
+        if publication.get("observed_branch") != "main":
+            _finding(errors, "invalid_expected_authority", "expected.publication.observed_branch", "authority observed branch must be main")
+            valid = False
+        if not isinstance(publication.get("observed_at"), str) or not publication.get("observed_at"):
+            _finding(errors, "invalid_expected_authority", "expected.publication.observed_at", "authority observed timestamp is required")
+            valid = False
     trusted = publication.get("trusted_publisher")
     trusted_fields = {"owner", "repository", "workflow", "environment"}
     if not isinstance(trusted, Mapping) or set(trusted) != trusted_fields:
@@ -1364,6 +1396,12 @@ def build_publication_manifests(
     trusted_repository: str,
     trusted_workflow: str,
     trusted_environment: str,
+    workflow_execution_commit: str | None = None,
+    workflow_file_sha256: str | None = None,
+    branch_protection_preflight_receipt_sha256: str | None = None,
+    required_checks_policy_digest: str | None = None,
+    observed_branch: str | None = None,
+    observed_at: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     artifact_result = verify_artifact_manifest(artifact_manifest, artifact_paths=artifact_dir)
     if not artifact_result.ok:
@@ -1386,6 +1424,17 @@ def build_publication_manifests(
         workflow_ref = f"refs/tags/{tag}"
     if workflow_ref not in {f"refs/tags/{tag}", "refs/heads/main"}:
         raise GovernanceInputError("workflow ref must be the exact immutable release tag or refs/heads/main")
+    if workflow_ref == "refs/heads/main":
+        if not SHA256_PATTERN.fullmatch(workflow_file_sha256 or ""):
+            raise GovernanceInputError("workflow file digest is required for heads/main dispatch")
+        if not SHA256_PATTERN.fullmatch(branch_protection_preflight_receipt_sha256 or ""):
+            raise GovernanceInputError("branch protection preflight receipt digest is required for heads/main dispatch")
+        if not SHA256_PATTERN.fullmatch(required_checks_policy_digest or ""):
+            raise GovernanceInputError("required checks policy digest is required for heads/main dispatch")
+        if not COMMIT_PATTERN.fullmatch(workflow_execution_commit or ""):
+            raise GovernanceInputError("workflow execution commit must be a full commit sha")
+        if observed_branch != "main" or not isinstance(observed_at, str) or not observed_at:
+            raise GovernanceInputError("observed branch/timestamp are required for heads/main dispatch")
     if environment != "pypi" or trusted_environment != environment:
         raise GovernanceInputError("publication environment must match the protected pypi environment")
     if trusted_workflow != "publish-accepted-release.yml":
@@ -1415,6 +1464,17 @@ def build_publication_manifests(
         "trusted_publisher": trusted_publisher,
         "accepted_artifact_digests": digests,
     }
+    if workflow_ref == "refs/heads/main":
+        publication.update(
+            {
+                "workflow_execution_commit": workflow_execution_commit,
+                "workflow_file_sha256": workflow_file_sha256,
+                "branch_protection_preflight_receipt_sha256": branch_protection_preflight_receipt_sha256,
+                "required_checks_policy_digest": required_checks_policy_digest,
+                "observed_branch": observed_branch,
+                "observed_at": observed_at,
+            }
+        )
     authority = {
         "schema_version": (
             PUBLICATION_AUTHORITY_SCHEMA_V2
@@ -1471,6 +1531,12 @@ def verify_publication_authority(
     trusted_repository: str,
     trusted_workflow: str,
     trusted_environment: str,
+    workflow_execution_commit: str | None = None,
+    workflow_file_sha256: str | None = None,
+    branch_protection_preflight_receipt_sha256: str | None = None,
+    required_checks_policy_digest: str | None = None,
+    observed_branch: str | None = None,
+    observed_at: str | None = None,
 ) -> VerificationResult:
     """Verify a caller-supplied immutable authority before artifact download."""
 
@@ -1506,6 +1572,29 @@ def verify_publication_authority(
         "publication.workflow_ref": (publication.get("workflow_ref"), workflow_ref),
         "publication.environment": (publication.get("environment"), environment),
     }
+    if expected.get("schema_version") == PUBLICATION_AUTHORITY_SCHEMA_V2:
+        expected_values.update(
+            {
+                "publication.workflow_execution_commit": (
+                    publication.get("workflow_execution_commit"),
+                    workflow_execution_commit,
+                ),
+                "publication.workflow_file_sha256": (
+                    publication.get("workflow_file_sha256"),
+                    workflow_file_sha256,
+                ),
+                "publication.branch_protection_preflight_receipt_sha256": (
+                    publication.get("branch_protection_preflight_receipt_sha256"),
+                    branch_protection_preflight_receipt_sha256,
+                ),
+                "publication.required_checks_policy_digest": (
+                    publication.get("required_checks_policy_digest"),
+                    required_checks_policy_digest,
+                ),
+                "publication.observed_branch": (publication.get("observed_branch"), observed_branch),
+                "publication.observed_at": (publication.get("observed_at"), observed_at),
+            }
+        )
     trusted = publication.get("trusted_publisher")
     if isinstance(trusted, Mapping):
         expected_values.update(
@@ -1608,31 +1697,41 @@ def verify_publication_activation(
     if body is None:
         body = {}
     else:
+        activation_required = {
+            "mode",
+            "enabled",
+            "publication_authorized",
+            "authority_manifest_sha256",
+            "accepted_run_id",
+            "accepted_run_attempt",
+            "accepted_commit",
+            "accepted_artifact_name",
+            "accepted_artifact_id",
+            "accepted_artifact_service_digest",
+            "accepted_version",
+            "authorized_actor_id",
+            "tag",
+            "workflow_ref",
+            "environment",
+            "trusted_publisher",
+            "build_once",
+            "rebuild",
+            "source_artifact_only",
+            "long_lived_token",
+            "accepted_artifact_digests",
+        }
+        if expected is not None and expected.get("schema_version") == PUBLICATION_AUTHORITY_SCHEMA_V2:
+            activation_required |= {
+                "workflow_execution_commit",
+                "workflow_file_sha256",
+                "branch_protection_preflight_receipt_sha256",
+                "required_checks_policy_digest",
+                "observed_branch",
+                "observed_at",
+            }
         _require_exact_fields(
             body,
-            {
-                "mode",
-                "enabled",
-                "publication_authorized",
-                "authority_manifest_sha256",
-                "accepted_run_id",
-                "accepted_run_attempt",
-                "accepted_commit",
-                "accepted_artifact_name",
-                "accepted_artifact_id",
-                "accepted_artifact_service_digest",
-                "accepted_version",
-                "authorized_actor_id",
-                "tag",
-                "workflow_ref",
-                "environment",
-                "trusted_publisher",
-                "build_once",
-                "rebuild",
-                "source_artifact_only",
-                "long_lived_token",
-                "accepted_artifact_digests",
-            },
+            activation_required,
             "activation.activation",
             errors,
         )
@@ -2193,6 +2292,12 @@ def _build_parser() -> argparse.ArgumentParser:
     verify_authority.add_argument("--trusted-repository", required=True)
     verify_authority.add_argument("--trusted-workflow", required=True)
     verify_authority.add_argument("--trusted-environment", required=True)
+    verify_authority.add_argument("--workflow-execution-commit")
+    verify_authority.add_argument("--workflow-file-sha256")
+    verify_authority.add_argument("--branch-protection-preflight-receipt-sha256")
+    verify_authority.add_argument("--required-checks-policy-digest")
+    verify_authority.add_argument("--observed-branch")
+    verify_authority.add_argument("--observed-at")
 
     publication_manifests = commands.add_parser("publication-manifests")
     publication_manifests.add_argument("--candidate-manifest", required=True, type=Path)
@@ -2208,6 +2313,12 @@ def _build_parser() -> argparse.ArgumentParser:
     publication_manifests.add_argument("--trusted-repository", required=True)
     publication_manifests.add_argument("--trusted-workflow", required=True)
     publication_manifests.add_argument("--trusted-environment", required=True)
+    publication_manifests.add_argument("--workflow-execution-commit")
+    publication_manifests.add_argument("--workflow-file-sha256")
+    publication_manifests.add_argument("--branch-protection-preflight-receipt-sha256")
+    publication_manifests.add_argument("--required-checks-policy-digest")
+    publication_manifests.add_argument("--observed-branch")
+    publication_manifests.add_argument("--observed-at")
     publication_manifests.add_argument("--authority-output", required=True, type=Path)
     publication_manifests.add_argument("--activation-output", required=True, type=Path)
 
@@ -2325,6 +2436,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 trusted_repository=args.trusted_repository,
                 trusted_workflow=args.trusted_workflow,
                 trusted_environment=args.trusted_environment,
+                workflow_execution_commit=args.workflow_execution_commit,
+                workflow_file_sha256=args.workflow_file_sha256,
+                branch_protection_preflight_receipt_sha256=args.branch_protection_preflight_receipt_sha256,
+                required_checks_policy_digest=args.required_checks_policy_digest,
+                observed_branch=args.observed_branch,
+                observed_at=args.observed_at,
             )
         elif args.command == "publication-manifests":
             candidate_manifest = _read_json(args.candidate_manifest)
@@ -2342,6 +2459,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 trusted_repository=args.trusted_repository,
                 trusted_workflow=args.trusted_workflow,
                 trusted_environment=args.trusted_environment,
+                workflow_execution_commit=args.workflow_execution_commit,
+                workflow_file_sha256=args.workflow_file_sha256,
+                branch_protection_preflight_receipt_sha256=args.branch_protection_preflight_receipt_sha256,
+                required_checks_policy_digest=args.required_checks_policy_digest,
+                observed_branch=args.observed_branch,
+                observed_at=args.observed_at,
             )
             _write_json(args.authority_output, authority)
             _write_json(args.activation_output, activation)

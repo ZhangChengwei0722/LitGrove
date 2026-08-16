@@ -39,6 +39,14 @@ on:
         description: Existing immutable vMAJOR.MINOR.PATCH tag
         required: true
         type: string
+      branch_protection_preflight_receipt_sha256:
+        description: SHA-256 of the owner-reviewed branch-protection preflight receipt
+        required: true
+        type: string
+      preflight_observed_at:
+        description: RFC3339 timestamp recorded by the reviewed branch-protection preflight
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -96,6 +104,8 @@ jobs:
           AUTHORITY_MANIFEST_B64: ${{ inputs.authority_manifest_b64 }}
           AUTHORITY_MANIFEST_SHA256: ${{ inputs.authority_manifest_sha256 }}
           RELEASE_TAG: ${{ inputs.tag }}
+          BRANCH_PROTECTION_PREFLIGHT_RECEIPT_SHA256: ${{ inputs.branch_protection_preflight_receipt_sha256 }}
+          PREFLIGHT_OBSERVED_AT: ${{ inputs.preflight_observed_at }}
         run: |
           set -euo pipefail
           [[ "$AUTHORITY_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
@@ -103,6 +113,8 @@ jobs:
           authority="$RUNNER_TEMP/authority-manifest.json"
           printf '%s' "$AUTHORITY_MANIFEST_B64" | base64 --decode > "$authority"
           test "$(sha256sum "$authority" | cut -d' ' -f1)" = "$AUTHORITY_MANIFEST_SHA256"
+          workflow_file_sha256="$(sha256sum .github/workflows/publish-accepted-release.yml | cut -d' ' -f1)"
+          required_checks_digest="$(printf '%s' "$REQUIRED_CHECKS_JSON" | sha256sum | cut -d' ' -f1)"
           python - "$authority" <<'PY'
           import sys
           from pathlib import Path
@@ -131,7 +143,13 @@ jobs:
             --trusted-owner "$TRUSTED_PUBLISHER_OWNER" \
             --trusted-repository "$TRUSTED_PUBLISHER_REPOSITORY" \
             --trusted-workflow "$TRUSTED_PUBLISHER_WORKFLOW" \
-            --trusted-environment "$TRUSTED_PUBLISHER_ENVIRONMENT"
+            --trusted-environment "$TRUSTED_PUBLISHER_ENVIRONMENT" \
+            --workflow-execution-commit "$GITHUB_SHA" \
+            --workflow-file-sha256 "$workflow_file_sha256" \
+            --branch-protection-preflight-receipt-sha256 "$BRANCH_PROTECTION_PREFLIGHT_RECEIPT_SHA256" \
+            --required-checks-policy-digest "$required_checks_digest" \
+            --observed-branch "main" \
+            --observed-at "$PREFLIGHT_OBSERVED_AT"
 
       - name: Verify dispatch, tag, run attempt, and artifact service identity
         id: service
