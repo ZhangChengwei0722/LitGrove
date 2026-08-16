@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import copy
 import csv
+import hashlib
 import io
 import json
 import os
@@ -15,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from tools import release_governance
 from tools.release_governance import (
     ARTIFACT_SCHEMA_VERSION,
     GovernanceInputError,
@@ -594,37 +596,202 @@ def test_publication_manifests_cli_writes_canonical_verified_outputs(
     assert activation_from_external == activation
 
 
-def _v2_authority(tmp_path: Path):
-    artifact, _, _, _, _, _ = _materialize(tmp_path)
+REAL_REPOSITORY = "ZhangChengwei0722/LitGrove"
+REAL_ACCEPTED_COMMIT = "faf9e6fa9ad9167d86804df996e8cbc69592b539"
+REAL_ACCEPTED_RUN_ID = "31818169259"
+REAL_ACCEPTED_ARTIFACT_ID = "9225857347"
+REAL_ACCEPTED_ARTIFACT_SERVICE_DIGEST = "a4b852e6de292a93e0c565422d312c41b6f29fae2afbee4df3a1d77467b0a8b2"
+REAL_PR_NUMBER = "81"
+REAL_PR_HEAD = "dfcad32e54a617104a33cae78bb889ecd1c382b0"
+REAL_PR_BASE = "a5fa65583ffff3e9153a2506d778b12b43ecf7ab"
+REAL_MERGE_TREE = "d5beff9b5d2c7d3907326840d32eee3c3b24fb49"
+REAL_PR_REVIEW_RUN_ID = "31817009916"
+REAL_PR_REVIEW_JOB_ID = "94821010718"
+REAL_MERGE_SECURITY_RUN_ID = "31818169245"
+REAL_MERGE_AUDIT_JOB_ID = "94824742760"
+REAL_MERGE_REVIEW_JOB_ID = "94824743865"
+
+# Frozen event-aware policy document.  These values are real GitHub API
+# identities captured for PR #81 on 2026-08-16 Asia/Shanghai from public
+# endpoints; the raw captures are kept outside this repository under the
+# PPWB-R4 campaign control root.  The authority stores the SHA-256 of this
+# exact string, so the string must never be reformatted silently.
+EVENT_AWARE_CHECK_POLICY_JSON = (
+    '{"dependency_security_workflow_path":".github/workflows/dependency-security.yml",'
+    '"originating_pr_base_ref":"main",'
+    '"pr_head_dependency_review_job_name":"Dependency review",'
+    '"pr_head_dependency_review_event":"pull_request",'
+    '"pr_head_dependency_review_app":"github-actions",'
+    '"merge_push_dependency_audit_job_name":"Python dependency audit",'
+    '"merge_push_dependency_review_job_name":"Dependency review",'
+    '"merge_push_dependency_security_event":"push",'
+    '"merge_push_dependency_security_app":"github-actions",'
+    '"merge_push_required_checks":["CodeQL","Governance validation",'
+    '"Linux validation","Python dependency audit","Windows validation"]}'
+)
+
+
+def _policy_digest(policy: str = EVENT_AWARE_CHECK_POLICY_JSON) -> str:
+    return hashlib.sha256(policy.encode("utf-8")).hexdigest()
+
+
+def _real_candidate(tmp_path: Path) -> dict:
+    dist = tmp_path / "real-dist"
+    dist.mkdir()
+    _write_archives(dist)
+    return build_artifact_manifest(
+        dist,
+        repository=REAL_REPOSITORY,
+        source_commit=REAL_ACCEPTED_COMMIT,
+        workflow_run_id=REAL_ACCEPTED_RUN_ID,
+        workflow_run_attempt="1",
+        version="0.1.1",
+        artifact_name=f"accepted-release-candidate-{REAL_ACCEPTED_RUN_ID}-1-{REAL_ACCEPTED_COMMIT}",
+    )
+
+
+def _v3_authority(tmp_path: Path):
+    candidate = _real_candidate(tmp_path)
     authority, activation = build_publication_manifests(
-        artifact,
-        artifact_dir=tmp_path / "dist",
+        candidate,
+        artifact_dir=tmp_path / "real-dist",
         actor_id="237524179",
         authorized_actor_id="237524179",
-        artifact_id="99001",
-        artifact_service_digest="5" * 64,
+        artifact_id=REAL_ACCEPTED_ARTIFACT_ID,
+        artifact_service_digest=REAL_ACCEPTED_ARTIFACT_SERVICE_DIGEST,
         tag="v0.1.1",
         workflow_ref="refs/heads/main",
         environment="pypi",
-        trusted_owner="synthetic.example",
+        trusted_owner="ZhangChengwei0722",
         trusted_repository="LitGrove",
         trusted_workflow="publish-accepted-release.yml",
         trusted_environment="pypi",
-        workflow_execution_commit="1" * 40,
+        workflow_execution_commit="3e307623e531d275691a45761834f776517e7734",
         workflow_file_sha256="2" * 64,
         branch_protection_preflight_receipt_sha256="3" * 64,
-        required_checks_policy_digest="4" * 64,
+        check_policy_json=EVENT_AWARE_CHECK_POLICY_JSON,
+        originating_pr_number=REAL_PR_NUMBER,
+        originating_pr_head_sha=REAL_PR_HEAD,
+        originating_pr_base_sha=REAL_PR_BASE,
+        originating_pr_merge_commit_sha=REAL_ACCEPTED_COMMIT,
+        originating_pr_merge_tree_sha=REAL_MERGE_TREE,
+        pr_head_dependency_review_run_id=REAL_PR_REVIEW_RUN_ID,
+        pr_head_dependency_review_job_id=REAL_PR_REVIEW_JOB_ID,
+        merge_push_dependency_security_run_id=REAL_MERGE_SECURITY_RUN_ID,
         observed_branch="main",
-        observed_at="2026-08-15T00:00:00Z",
+        observed_at="2026-08-14T16:15:00Z",
     )
     assert verify_publication_activation(
-        activation, expected=authority, downloaded_manifest=artifact, downloaded_artifact_dir=tmp_path / "dist"
+        activation,
+        expected=authority,
+        downloaded_manifest=candidate,
+        downloaded_artifact_dir=tmp_path / "real-dist",
     ).ok
-    return artifact, authority
+    return candidate, authority
 
 
-def _verify_v2(authority, **overrides):
+def _real_pr_entry() -> dict:
+    return {
+        "number": REAL_PR_NUMBER,
+        "state": "closed",
+        "merged": True,
+        "base_ref": "main",
+        "head_sha": REAL_PR_HEAD,
+        "base_sha": REAL_PR_BASE,
+        "merge_commit_sha": REAL_ACCEPTED_COMMIT,
+        "merged_at": "2026-08-14T16:11:38Z",
+    }
+
+
+def _real_run_entry(run_id: str, name: str, path: str, event: str, conclusion: str, head_sha: str, head_branch: str) -> dict:
+    return {
+        "id": run_id,
+        "name": name,
+        "path": path,
+        "event": event,
+        "status": "completed",
+        "conclusion": conclusion,
+        "head_sha": head_sha,
+        "head_branch": head_branch,
+    }
+
+
+def _real_job_entry(job_id: str, run_id: str, name: str, conclusion: str) -> dict:
+    return {"id": job_id, "run_id": run_id, "name": name, "status": "completed", "conclusion": conclusion}
+
+
+def _real_check_run_entry(check_id: str, name: str, conclusion: str, head_sha: str, app: str = "github-actions") -> dict:
+    return {"id": check_id, "name": name, "status": "completed", "conclusion": conclusion, "head_sha": head_sha, "app": app}
+
+
+def _real_event_evidence() -> dict:
+    return {
+        "schema": "ppwb.g1.publication_check_evidence.v1",
+        "repository": REAL_REPOSITORY,
+        "accepted_commit": REAL_ACCEPTED_COMMIT,
+        "merge_commit_tree_sha": REAL_MERGE_TREE,
+        "candidate_pull_requests": [_real_pr_entry()],
+        "pr_head_workflow_runs_total": 1,
+        "pr_head_workflow_runs": [
+            _real_run_entry(
+                REAL_PR_REVIEW_RUN_ID,
+                "Dependency security",
+                ".github/workflows/dependency-security.yml",
+                "pull_request",
+                "success",
+                REAL_PR_HEAD,
+                "feat/r1-core-publication-v0.1.1",
+            )
+        ],
+        "pr_head_workflow_jobs": {
+            REAL_PR_REVIEW_RUN_ID: [
+                _real_job_entry("94821010489", REAL_PR_REVIEW_RUN_ID, "Python dependency audit", "success"),
+                _real_job_entry(REAL_PR_REVIEW_JOB_ID, REAL_PR_REVIEW_RUN_ID, "Dependency review", "success"),
+            ]
+        },
+        "pr_head_check_runs_total": 1,
+        "pr_head_check_runs": [
+            _real_check_run_entry(REAL_PR_REVIEW_JOB_ID, "Dependency review", "success", REAL_PR_HEAD)
+        ],
+        "merge_push_workflow_runs_total": 1,
+        "merge_push_workflow_runs": [
+            _real_run_entry(
+                REAL_MERGE_SECURITY_RUN_ID,
+                "Dependency security",
+                ".github/workflows/dependency-security.yml",
+                "push",
+                "success",
+                REAL_ACCEPTED_COMMIT,
+                "main",
+            )
+        ],
+        "merge_push_workflow_jobs": {
+            REAL_MERGE_SECURITY_RUN_ID: [
+                _real_job_entry(REAL_MERGE_AUDIT_JOB_ID, REAL_MERGE_SECURITY_RUN_ID, "Python dependency audit", "success"),
+                _real_job_entry(REAL_MERGE_REVIEW_JOB_ID, REAL_MERGE_SECURITY_RUN_ID, "Dependency review", "skipped"),
+            ]
+        },
+        "merge_push_check_runs_total": 6,
+        "merge_push_check_runs": [
+            _real_check_run_entry("94825828806", "Windows validation", "success", REAL_ACCEPTED_COMMIT),
+            _real_check_run_entry("94825468491", "Governance validation", "success", REAL_ACCEPTED_COMMIT),
+            _real_check_run_entry(REAL_MERGE_REVIEW_JOB_ID, "Dependency review", "skipped", REAL_ACCEPTED_COMMIT),
+            _real_check_run_entry("94824743389", "Linux validation", "success", REAL_ACCEPTED_COMMIT),
+            _real_check_run_entry("94824742783", "CodeQL", "success", REAL_ACCEPTED_COMMIT),
+            _real_check_run_entry(REAL_MERGE_AUDIT_JOB_ID, "Python dependency audit", "success", REAL_ACCEPTED_COMMIT),
+        ],
+    }
+
+
+_MISSING = object()
+
+
+def _verify_v3(authority, evidence=_MISSING, policy_json=_MISSING, **overrides):
     context = authority["publication"]
+    if evidence is _MISSING:
+        evidence = _real_event_evidence()
+    if policy_json is _MISSING:
+        policy_json = EVENT_AWARE_CHECK_POLICY_JSON
     kwargs = dict(
         repository=authority["candidate"]["repository"],
         actor_id=context["authorized_actor_id"],
@@ -644,32 +811,389 @@ def _verify_v2(authority, **overrides):
         workflow_execution_commit=context["workflow_execution_commit"],
         workflow_file_sha256=context["workflow_file_sha256"],
         branch_protection_preflight_receipt_sha256=context["branch_protection_preflight_receipt_sha256"],
-        required_checks_policy_digest=context["required_checks_policy_digest"],
         observed_branch=context["observed_branch"],
         observed_at=context["observed_at"],
+        event_evidence=evidence,
+        check_policy_json=policy_json,
     )
     kwargs.update(overrides)
     return verify_publication_authority(authority, **kwargs)
 
 
-def test_v2_authority_rejects_wrong_workflow_execution_commit(tmp_path: Path) -> None:
-    _, authority = _v2_authority(tmp_path)
-    result = _verify_v2(authority, workflow_execution_commit="f" * 40)
+def _entry(items, key: str, value):
+    return next(item for item in items if item[key] == value)
+
+
+def test_v3_positive_event_aware_policy_accepts_skipped_push_side_dependency_review(tmp_path: Path) -> None:
+    _, authority = _v3_authority(tmp_path)
+    result = _verify_v3(authority)
+    assert result.ok, result.to_dict()
+    check_policy = authority["publication"]["check_policy"]
+    assert "Dependency review" not in check_policy["merge_push_required_checks"]
+    merge_review = _entry(_real_event_evidence()["merge_push_check_runs"], "name", "Dependency review")
+    assert merge_review["conclusion"] == "skipped"
+    assert authority["schema_version"] == "ppwb.g1.publication_authority.v3"
+
+
+def test_v3_rejects_pr_head_dependency_review_failure_or_skipped(tmp_path: Path) -> None:
+    _, authority = _v3_authority(tmp_path)
+    for conclusion in ("failure", "skipped"):
+        evidence = _real_event_evidence()
+        _entry(evidence["pr_head_workflow_runs"], "id", REAL_PR_REVIEW_RUN_ID)["conclusion"] = conclusion
+        result = _verify_v3(authority, evidence)
+        assert not result.ok
+        assert "pr_head_dependency_review_wrong_conclusion" in result.codes
+
+
+def test_v3_rejects_pr_head_dependency_review_run_missing_or_duplicate(tmp_path: Path) -> None:
+    _, authority = _v3_authority(tmp_path)
+    missing = _real_event_evidence()
+    missing["pr_head_workflow_runs"] = []
+    missing["pr_head_workflow_runs_total"] = 0
+    missing["pr_head_workflow_jobs"] = {}
+    assert "pr_head_dependency_review_run_missing" in _verify_v3(authority, missing).codes
+
+    duplicate = _real_event_evidence()
+    duplicate["pr_head_workflow_runs"].append(copy.deepcopy(duplicate["pr_head_workflow_runs"][0]))
+    duplicate["pr_head_workflow_runs_total"] = 2
+    assert "pr_head_dependency_review_run_duplicate" in _verify_v3(authority, duplicate).codes
+
+
+def test_v3_rejects_pr_head_dependency_review_wrong_event_job_and_app(tmp_path: Path) -> None:
+    _, authority = _v3_authority(tmp_path)
+
+    wrong_event = _real_event_evidence()
+    _entry(wrong_event["pr_head_workflow_runs"], "id", REAL_PR_REVIEW_RUN_ID)["event"] = "push"
+    assert "pr_head_dependency_review_wrong_event" in _verify_v3(authority, wrong_event).codes
+
+    wrong_job = _real_event_evidence()
+    _entry(wrong_job["pr_head_workflow_jobs"][REAL_PR_REVIEW_RUN_ID], "id", REAL_PR_REVIEW_JOB_ID)["conclusion"] = "skipped"
+    assert "pr_head_dependency_review_job_wrong_conclusion" in _verify_v3(authority, wrong_job).codes
+
+    wrong_app = _real_event_evidence()
+    _entry(wrong_app["pr_head_check_runs"], "name", "Dependency review")["app"] = "github-advanced-security"
+    assert "pr_head_dependency_review_check_wrong_app" in _verify_v3(authority, wrong_app).codes
+
+
+def test_v3_rejects_pr_head_dependency_review_check_missing_or_duplicate(tmp_path: Path) -> None:
+    _, authority = _v3_authority(tmp_path)
+    missing = _real_event_evidence()
+    missing["pr_head_check_runs"] = []
+    missing["pr_head_check_runs_total"] = 0
+    assert "pr_head_dependency_review_check_missing" in _verify_v3(authority, missing).codes
+
+    duplicate = _real_event_evidence()
+    duplicate["pr_head_check_runs"].append(copy.deepcopy(duplicate["pr_head_check_runs"][0]))
+    duplicate["pr_head_check_runs_total"] = 2
+    assert "pr_head_dependency_review_check_duplicate" in _verify_v3(authority, duplicate).codes
+
+
+def test_v3_rejects_merge_push_required_check_failure_skipped_missing_duplicate(tmp_path: Path) -> None:
+    _, authority = _v3_authority(tmp_path)
+    for conclusion in ("failure", "skipped"):
+        evidence = _real_event_evidence()
+        _entry(evidence["merge_push_check_runs"], "name", "Windows validation")["conclusion"] = conclusion
+        result = _verify_v3(authority, evidence)
+        assert not result.ok
+        assert "merge_push_required_check_wrong_conclusion" in result.codes
+
+    missing = _real_event_evidence()
+    missing["merge_push_check_runs"] = [
+        item for item in missing["merge_push_check_runs"] if item["name"] != "CodeQL"
+    ]
+    missing["merge_push_check_runs_total"] = 5
+    assert "merge_push_required_check_missing" in _verify_v3(authority, missing).codes
+
+    duplicate = _real_event_evidence()
+    duplicate["merge_push_check_runs"].append(
+        copy.deepcopy(_entry(duplicate["merge_push_check_runs"], "name", "Windows validation"))
+    )
+    duplicate["merge_push_check_runs_total"] = 7
+    assert "merge_push_required_check_duplicate" in _verify_v3(authority, duplicate).codes
+
+
+def test_v3_rejects_merge_push_dependency_security_failure_missing_duplicate_wrong_event(tmp_path: Path) -> None:
+    _, authority = _v3_authority(tmp_path)
+    failure = _real_event_evidence()
+    _entry(failure["merge_push_workflow_runs"], "id", REAL_MERGE_SECURITY_RUN_ID)["conclusion"] = "failure"
+    assert "merge_push_dependency_security_wrong_conclusion" in _verify_v3(authority, failure).codes
+
+    missing = _real_event_evidence()
+    missing["merge_push_workflow_runs"] = []
+    missing["merge_push_workflow_runs_total"] = 0
+    missing["merge_push_workflow_jobs"] = {}
+    assert "merge_push_dependency_security_run_missing" in _verify_v3(authority, missing).codes
+
+    duplicate = _real_event_evidence()
+    duplicate["merge_push_workflow_runs"].append(copy.deepcopy(duplicate["merge_push_workflow_runs"][0]))
+    duplicate["merge_push_workflow_runs_total"] = 2
+    assert "merge_push_dependency_security_run_duplicate" in _verify_v3(authority, duplicate).codes
+
+    wrong_event = _real_event_evidence()
+    _entry(wrong_event["merge_push_workflow_runs"], "id", REAL_MERGE_SECURITY_RUN_ID)["event"] = "pull_request"
+    assert "merge_push_dependency_security_wrong_event" in _verify_v3(authority, wrong_event).codes
+
+
+def test_v3_rejects_merge_push_dependency_review_job_drift(tmp_path: Path) -> None:
+    _, authority = _v3_authority(tmp_path)
+    drifted = _real_event_evidence()
+    _entry(drifted["merge_push_workflow_jobs"][REAL_MERGE_SECURITY_RUN_ID], "name", "Dependency review")["conclusion"] = "success"
+    assert "merge_push_dependency_review_job_drift" in _verify_v3(authority, drifted).codes
+
+    check_drifted = _real_event_evidence()
+    _entry(check_drifted["merge_push_check_runs"], "name", "Dependency review")["conclusion"] = "success"
+    assert "merge_push_dependency_review_check_drift" in _verify_v3(authority, check_drifted).codes
+
+
+def test_v3_rejects_merge_push_dependency_audit_check_wrong_app_or_missing(tmp_path: Path) -> None:
+    _, authority = _v3_authority(tmp_path)
+    wrong_app = _real_event_evidence()
+    _entry(wrong_app["merge_push_check_runs"], "name", "Python dependency audit")["app"] = "third-party"
+    assert "merge_push_dependency_audit_check_wrong_app" in _verify_v3(authority, wrong_app).codes
+
+    missing = _real_event_evidence()
+    missing["merge_push_check_runs"] = [
+        item for item in missing["merge_push_check_runs"] if item["name"] != "Python dependency audit"
+    ]
+    missing["merge_push_check_runs_total"] = 5
+    codes = _verify_v3(authority, missing).codes
+    assert "merge_push_dependency_audit_check_missing" in codes
+    assert "merge_push_required_check_missing" in codes
+
+
+def test_v3_rejects_wrong_originating_pr_identity(tmp_path: Path) -> None:
+    _, authority = _v3_authority(tmp_path)
+    cases = {
+        "number": ("82", "candidate_pr_number_mismatch"),
+        "head_sha": ("1" * 40, "candidate_pr_head_mismatch"),
+        "base_sha": ("2" * 40, "candidate_pr_base_mismatch"),
+        "merge_commit_sha": ("3" * 40, "candidate_pr_merge_commit_mismatch"),
+    }
+    for field, (value, code) in cases.items():
+        evidence = _real_event_evidence()
+        evidence["candidate_pull_requests"][0][field] = value
+        assert code in _verify_v3(authority, evidence).codes
+
+    wrong_tree = _real_event_evidence()
+    wrong_tree["merge_commit_tree_sha"] = "4" * 40
+    assert "candidate_pr_merge_tree_mismatch" in _verify_v3(authority, wrong_tree).codes
+
+
+def test_v3_rejects_multiple_candidate_pull_requests(tmp_path: Path) -> None:
+    _, authority = _v3_authority(tmp_path)
+    evidence = _real_event_evidence()
+    evidence["candidate_pull_requests"].append(copy.deepcopy(evidence["candidate_pull_requests"][0]))
+    assert "candidate_pr_multiple" in _verify_v3(authority, evidence).codes
+
+
+def test_v3_rejects_stale_v2_authority_schema(tmp_path: Path) -> None:
+    _, authority = _v3_authority(tmp_path)
+    stale = copy.deepcopy(authority)
+    stale["schema_version"] = "ppwb.g1.publication_authority.v2"
+    result = _verify_v3(stale)
+    assert not result.ok
+    assert "unsupported_publication_authority_schema" in result.codes
+
+
+def test_v3_requires_event_evidence_and_exact_policy_digest(tmp_path: Path) -> None:
+    _, authority = _v3_authority(tmp_path)
+    assert "missing_event_evidence" in _verify_v3(authority, evidence=None).codes
+    assert "missing_check_policy" in _verify_v3(authority, policy_json=None).codes
+    changed = EVENT_AWARE_CHECK_POLICY_JSON.replace('"push"', '"workflow_dispatch"', 1)
+    assert "check_policy_digest_mismatch" in _verify_v3(authority, policy_json=changed).codes
+
+
+def test_v3_rejects_evidence_context_and_head_drift(tmp_path: Path) -> None:
+    _, authority = _v3_authority(tmp_path)
+    wrong_repository = _real_event_evidence()
+    wrong_repository["repository"] = "example/other"
+    assert "event_evidence_context_mismatch" in _verify_v3(authority, wrong_repository).codes
+
+    wrong_head = _real_event_evidence()
+    _entry(wrong_head["merge_push_workflow_runs"], "id", REAL_MERGE_SECURITY_RUN_ID)["head_sha"] = "5" * 40
+    assert "merge_push_dependency_security_wrong_head" in _verify_v3(authority, wrong_head).codes
+
+
+def _raw_run_entry(run_id: str, name: str, path: str, event: str, conclusion: str, head_sha: str, head_branch: str) -> dict:
+    return {
+        "id": int(run_id),
+        "name": name,
+        "path": path,
+        "event": event,
+        "status": "completed",
+        "conclusion": conclusion,
+        "head_sha": head_sha,
+        "head_branch": head_branch,
+    }
+
+
+def _raw_job_entry(job_id: str, run_id: str, name: str, conclusion: str) -> dict:
+    return {"id": int(job_id), "run_id": int(run_id), "name": name, "status": "completed", "conclusion": conclusion}
+
+
+def _raw_check_run_entry(check_id: str, name: str, conclusion: str, head_sha: str, app: str = "github-actions") -> dict:
+    return {"id": int(check_id), "name": name, "status": "completed", "conclusion": conclusion, "head_sha": head_sha, "app": {"slug": app}}
+
+
+def _write_offline_evidence_root(root: Path) -> None:
+    (root / "commits-pulls.json").write_text(
+        json.dumps(
+            [
+                {
+                    "number": 81,
+                    "state": "closed",
+                    "merged": True,
+                    "merged_at": "2026-08-14T16:11:38Z",
+                    "merge_commit_sha": REAL_ACCEPTED_COMMIT,
+                    "base": {"ref": "main", "sha": REAL_PR_BASE},
+                    "head": {"ref": "feat/r1-core-publication-v0.1.1", "sha": REAL_PR_HEAD},
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (root / "commit-merge.json").write_text(
+        json.dumps({"sha": REAL_ACCEPTED_COMMIT, "commit": {"tree": {"sha": REAL_MERGE_TREE}}}),
+        encoding="utf-8",
+    )
+    (root / "runs-pr-head.json").write_text(
+        json.dumps(
+            {
+                "total_count": 1,
+                "workflow_runs": [
+                    _raw_run_entry(
+                        REAL_PR_REVIEW_RUN_ID,
+                        "Dependency security",
+                        ".github/workflows/dependency-security.yml",
+                        "pull_request",
+                        "success",
+                        REAL_PR_HEAD,
+                        "feat/r1-core-publication-v0.1.1",
+                    )
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / "runs-merge-push.json").write_text(
+        json.dumps(
+            {
+                "total_count": 1,
+                "workflow_runs": [
+                    _raw_run_entry(
+                        REAL_MERGE_SECURITY_RUN_ID,
+                        "Dependency security",
+                        ".github/workflows/dependency-security.yml",
+                        "push",
+                        "success",
+                        REAL_ACCEPTED_COMMIT,
+                        "main",
+                    )
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / f"jobs-{REAL_PR_REVIEW_RUN_ID}.json").write_text(
+        json.dumps(
+            {
+                "total_count": 2,
+                "jobs": [
+                    _raw_job_entry("94821010489", REAL_PR_REVIEW_RUN_ID, "Python dependency audit", "success"),
+                    _raw_job_entry(REAL_PR_REVIEW_JOB_ID, REAL_PR_REVIEW_RUN_ID, "Dependency review", "success"),
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / f"jobs-{REAL_MERGE_SECURITY_RUN_ID}.json").write_text(
+        json.dumps(
+            {
+                "total_count": 2,
+                "jobs": [
+                    _raw_job_entry(REAL_MERGE_AUDIT_JOB_ID, REAL_MERGE_SECURITY_RUN_ID, "Python dependency audit", "success"),
+                    _raw_job_entry(REAL_MERGE_REVIEW_JOB_ID, REAL_MERGE_SECURITY_RUN_ID, "Dependency review", "skipped"),
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / "check-runs-pr-head.json").write_text(
+        json.dumps(
+            {
+                "total_count": 1,
+                "check_runs": [
+                    _raw_check_run_entry(REAL_PR_REVIEW_JOB_ID, "Dependency review", "success", REAL_PR_HEAD)
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / "check-runs-merge.json").write_text(
+        json.dumps(
+            {
+                "total_count": 6,
+                "check_runs": [
+                    _raw_check_run_entry("94825828806", "Windows validation", "success", REAL_ACCEPTED_COMMIT),
+                    _raw_check_run_entry("94825468491", "Governance validation", "success", REAL_ACCEPTED_COMMIT),
+                    _raw_check_run_entry(REAL_MERGE_REVIEW_JOB_ID, "Dependency review", "skipped", REAL_ACCEPTED_COMMIT),
+                    _raw_check_run_entry("94824743389", "Linux validation", "success", REAL_ACCEPTED_COMMIT),
+                    _raw_check_run_entry("94824742783", "CodeQL", "success", REAL_ACCEPTED_COMMIT),
+                    _raw_check_run_entry(REAL_MERGE_AUDIT_JOB_ID, "Python dependency audit", "success", REAL_ACCEPTED_COMMIT),
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_v3_offline_collector_reproduces_real_evidence_and_passes(tmp_path: Path) -> None:
+    root = tmp_path / "evidence"
+    root.mkdir()
+    _write_offline_evidence_root(root)
+    collected = release_governance.collect_publication_check_evidence(
+        repository=REAL_REPOSITORY,
+        github_token=None,
+        accepted_commit=REAL_ACCEPTED_COMMIT,
+        evidence_root=root,
+    )
+    assert collected == _real_event_evidence()
+    _, authority = _v3_authority(tmp_path)
+    assert _verify_v3(authority, collected).ok
+
+
+def test_v3_collector_fails_closed_on_unresolvable_evidence(tmp_path: Path) -> None:
+    root = tmp_path / "evidence"
+    root.mkdir()
+    _write_offline_evidence_root(root)
+    (root / "commits-pulls.json").unlink()
+    with pytest.raises(GovernanceInputError, match="unresolvable"):
+        release_governance.collect_publication_check_evidence(
+            repository=REAL_REPOSITORY,
+            github_token=None,
+            accepted_commit=REAL_ACCEPTED_COMMIT,
+            evidence_root=root,
+        )
+
+
+def test_v3_authority_rejects_wrong_workflow_execution_commit(tmp_path: Path) -> None:
+    _, authority = _v3_authority(tmp_path)
+    result = _verify_v3(authority, workflow_execution_commit="f" * 40)
     assert not result.ok
     assert "authority_context_mismatch" in result.codes
 
 
-def test_v2_authority_rejects_workflow_file_digest_mismatch(tmp_path: Path) -> None:
-    _, authority = _v2_authority(tmp_path)
-    result = _verify_v2(authority, workflow_file_sha256="e" * 64)
+def test_v3_authority_rejects_workflow_file_digest_mismatch(tmp_path: Path) -> None:
+    _, authority = _v3_authority(tmp_path)
+    result = _verify_v3(authority, workflow_file_sha256="e" * 64)
     assert not result.ok
     assert "authority_context_mismatch" in result.codes
 
 
-def test_v2_authority_rejects_missing_or_stale_preflight_receipt(tmp_path: Path) -> None:
-    _, authority = _v2_authority(tmp_path)
-    assert not _verify_v2(authority, branch_protection_preflight_receipt_sha256=None).ok
-    assert not _verify_v2(authority, branch_protection_preflight_receipt_sha256="d" * 64).ok
+def test_v3_authority_rejects_missing_or_stale_preflight_receipt(tmp_path: Path) -> None:
+    _, authority = _v3_authority(tmp_path)
+    assert not _verify_v3(authority, branch_protection_preflight_receipt_sha256=None).ok
+    assert not _verify_v3(authority, branch_protection_preflight_receipt_sha256="d" * 64).ok
 
 
 def test_publication_authority_rejects_context_drift_and_unsafe_asset_names(tmp_path: Path) -> None:
@@ -1015,10 +1539,14 @@ def test_workflows_are_pinned_and_release_candidate_artifacts_are_separated() ->
     assert "needs.verify-accepted-bytes.outputs.source_commit" in publication
     assert '/git/tags/{tag_target}' in publication
     assert "tag_does_not_resolve_to_commit" in publication
-    assert "REQUIRED_CHECKS_JSON" in publication
+    assert "EVENT_AWARE_CHECK_POLICY_JSON" in publication
+    assert "REQUIRED_CHECKS_JSON" not in publication
+    assert "publication-check-evidence" in publication
+    assert "--event-evidence" in publication
+    assert "--check-policy-json" in publication
+    assert publication.index("publication-check-evidence") < publication.index("Download the exact accepted candidate artifact")
     assert "/branches/main/protection/required_status_checks" not in publication
     assert "git/ref/tags/${RELEASE_TAG}" in publication
-    assert "/check-runs?filter=latest&per_page=100" in publication
     assert publication.count("/commits/${RELEASE_TAG}") == 2
     assert "accepted_run_attempt" in publication
     assert '--expected "$publication_root/authority-manifest.json"' in publication
