@@ -1567,6 +1567,8 @@ def test_workflows_are_pinned_and_release_candidate_artifacts_are_separated() ->
     assert "pre-existing Release asset drifted" in publication
     assert "accepted byte asset mismatch" in publication
     assert "new Release asset identity mismatch" in publication
+    assert "exact accepted wheel/sdist bytes only" in publication
+    assert "for attempt in range(18)" in publication
     assert "if: always()" in publication
     assert 'test "$PUBLICATION_STATE" = "publication_complete_pending_public_route"' in publication
     assert "existing PyPI version contains yanked files" in publication
