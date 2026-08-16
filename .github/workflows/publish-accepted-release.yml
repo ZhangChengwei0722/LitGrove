@@ -355,7 +355,13 @@ jobs:
               --notes-file CHANGELOG.md
           fi
 
+          # Immutable snapshot of every asset that already exists before any write.
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq \
+            '.assets[] | .name + " " + (.digest // "" | sub("^sha256:"; ""))' \
+            > "$RUNNER_TEMP/preexisting-release-assets.txt"
+
           existing_names="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          printf '%s\n' "$existing_names" > "$RUNNER_TEMP/existing-release-asset-names.txt"
           while IFS= read -r name; do
             if printf '%s\n' "$existing_names" | grep -Fxq "$name"; then
               continue
@@ -368,7 +374,7 @@ jobs:
           rm -rf "$publication_root/release-download"
           mkdir -p "$publication_root/release-download"
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$publication_root/release-download"
-          python - "$publication_root/expected-release-assets.json" "$publication_root/release-download" <<'PY'
+          python - "$publication_root/expected-release-assets.json" "$publication_root/release-download" "$RUNNER_TEMP/preexisting-release-assets.txt" "$RUNNER_TEMP/existing-release-asset-names.txt" <<'PY'
           import json
           import sys
           from pathlib import Path
@@ -382,8 +388,30 @@ jobs:
               for path in root.iterdir()
               if path.is_file() and not path.is_symlink()
           }
-          if actual != expected:
-              raise SystemExit(f"GitHub Release asset identity mismatch: {sorted(actual)}")
+          if sorted(actual) != sorted(expected):
+              raise SystemExit(f"GitHub Release asset set mismatch: {sorted(actual)}")
+          preexisting = {}
+          for line in Path(sys.argv[3]).read_text(encoding="utf-8").splitlines():
+              name, separator, digest = line.partition(" ")
+              if not separator or not digest:
+                  raise SystemExit(f"pre-existing Release asset lacks a digest snapshot: {line}")
+              preexisting[name] = digest
+          existing = {
+              name
+              for name in Path(sys.argv[4]).read_text(encoding="utf-8").splitlines()
+              if name
+          }
+          if existing != set(preexisting):
+              raise SystemExit("pre-existing Release asset digest snapshot is incomplete")
+          for name, expected_digest in expected.items():
+              actual_digest = actual[name]
+              if name in preexisting:
+                  if actual_digest != preexisting[name]:
+                      raise SystemExit(f"pre-existing Release asset drifted: {name}")
+                  if name.endswith((".whl", ".tar.gz")) and actual_digest != expected_digest:
+                      raise SystemExit(f"accepted byte asset mismatch: {name}")
+              elif actual_digest != expected_digest:
+                  raise SystemExit(f"new Release asset identity mismatch: {name}")
           PY
 
   publish-pypi:

@@ -1561,6 +1561,12 @@ def test_workflows_are_pinned_and_release_candidate_artifacts_are_separated() ->
     assert "partial_publication_pypi_only" in publication
     assert "publication_complete_pending_public_route" in publication
     assert "unknown_fail_closed" in publication
+    assert "preexisting-release-assets.txt" in publication
+    assert "existing-release-asset-names.txt" in publication
+    assert "pre-existing Release asset digest snapshot is incomplete" in publication
+    assert "pre-existing Release asset drifted" in publication
+    assert "accepted byte asset mismatch" in publication
+    assert "new Release asset identity mismatch" in publication
     assert "if: always()" in publication
     assert 'test "$PUBLICATION_STATE" = "publication_complete_pending_public_route"' in publication
     assert "existing PyPI version contains yanked files" in publication
