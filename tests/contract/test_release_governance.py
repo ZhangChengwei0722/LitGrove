@@ -541,6 +541,8 @@ def test_publication_manifests_cli_writes_canonical_verified_outputs(
             "5" * 64,
             "--tag",
             "v0.1.1",
+            "--workflow-ref",
+            "refs/tags/v0.1.1",
             "--environment",
             "pypi",
             "--trusted-owner",
@@ -590,6 +592,84 @@ def test_publication_manifests_cli_writes_canonical_verified_outputs(
         artifact_dir=tmp_path / "dist",
     )
     assert activation_from_external == activation
+
+
+def _v2_authority(tmp_path: Path):
+    artifact, _, _, _, _, _ = _materialize(tmp_path)
+    authority, activation = build_publication_manifests(
+        artifact,
+        artifact_dir=tmp_path / "dist",
+        actor_id="237524179",
+        authorized_actor_id="237524179",
+        artifact_id="99001",
+        artifact_service_digest="5" * 64,
+        tag="v0.1.1",
+        workflow_ref="refs/heads/main",
+        environment="pypi",
+        trusted_owner="synthetic.example",
+        trusted_repository="LitGrove",
+        trusted_workflow="publish-accepted-release.yml",
+        trusted_environment="pypi",
+        workflow_execution_commit="1" * 40,
+        workflow_file_sha256="2" * 64,
+        branch_protection_preflight_receipt_sha256="3" * 64,
+        required_checks_policy_digest="4" * 64,
+        observed_branch="main",
+        observed_at="2026-08-15T00:00:00Z",
+    )
+    assert verify_publication_activation(
+        activation, expected=authority, downloaded_manifest=artifact, downloaded_artifact_dir=tmp_path / "dist"
+    ).ok
+    return artifact, authority
+
+
+def _verify_v2(authority, **overrides):
+    context = authority["publication"]
+    kwargs = dict(
+        repository=authority["candidate"]["repository"],
+        actor_id=context["authorized_actor_id"],
+        accepted_run_id=context["accepted_run_id"],
+        accepted_run_attempt=context["accepted_run_attempt"],
+        accepted_commit=context["accepted_commit"],
+        accepted_artifact_name=context["accepted_artifact_name"],
+        accepted_artifact_id=context["accepted_artifact_id"],
+        accepted_artifact_service_digest=context["accepted_artifact_service_digest"],
+        tag=context["tag"],
+        workflow_ref=context["workflow_ref"],
+        environment=context["environment"],
+        trusted_owner=context["trusted_publisher"]["owner"],
+        trusted_repository=context["trusted_publisher"]["repository"],
+        trusted_workflow=context["trusted_publisher"]["workflow"],
+        trusted_environment=context["trusted_publisher"]["environment"],
+        workflow_execution_commit=context["workflow_execution_commit"],
+        workflow_file_sha256=context["workflow_file_sha256"],
+        branch_protection_preflight_receipt_sha256=context["branch_protection_preflight_receipt_sha256"],
+        required_checks_policy_digest=context["required_checks_policy_digest"],
+        observed_branch=context["observed_branch"],
+        observed_at=context["observed_at"],
+    )
+    kwargs.update(overrides)
+    return verify_publication_authority(authority, **kwargs)
+
+
+def test_v2_authority_rejects_wrong_workflow_execution_commit(tmp_path: Path) -> None:
+    _, authority = _v2_authority(tmp_path)
+    result = _verify_v2(authority, workflow_execution_commit="f" * 40)
+    assert not result.ok
+    assert "authority_context_mismatch" in result.codes
+
+
+def test_v2_authority_rejects_workflow_file_digest_mismatch(tmp_path: Path) -> None:
+    _, authority = _v2_authority(tmp_path)
+    result = _verify_v2(authority, workflow_file_sha256="e" * 64)
+    assert not result.ok
+    assert "authority_context_mismatch" in result.codes
+
+
+def test_v2_authority_rejects_missing_or_stale_preflight_receipt(tmp_path: Path) -> None:
+    _, authority = _v2_authority(tmp_path)
+    assert not _verify_v2(authority, branch_protection_preflight_receipt_sha256=None).ok
+    assert not _verify_v2(authority, branch_protection_preflight_receipt_sha256="d" * 64).ok
 
 
 def test_publication_authority_rejects_context_drift_and_unsafe_asset_names(tmp_path: Path) -> None:
@@ -916,7 +996,10 @@ def test_workflows_are_pinned_and_release_candidate_artifacts_are_separated() ->
     assert publication.count("contents: write") == 1
     assert "G1_PUBLICATION_ENABLED" not in publication
     assert "github.actor_id == '237524179'" in publication
-    assert "github.ref_type == 'tag'" in publication
+    assert "refs/heads/main" in publication
+    assert "github.ref_type" not in publication
+    assert "required_status_checks" not in publication
+    assert "accepted_commit" in publication
     assert "authority_manifest_b64" in publication
     assert "authority_manifest_sha256" in publication
     assert "verify-publication-authority" in publication
@@ -933,7 +1016,8 @@ def test_workflows_are_pinned_and_release_candidate_artifacts_are_separated() ->
     assert '/git/tags/{tag_target}' in publication
     assert "tag_does_not_resolve_to_commit" in publication
     assert "REQUIRED_CHECKS_JSON" in publication
-    assert "/branches/main/protection/required_status_checks" in publication
+    assert "/branches/main/protection/required_status_checks" not in publication
+    assert "git/ref/tags/${RELEASE_TAG}" in publication
     assert "/check-runs?filter=latest&per_page=100" in publication
     assert publication.count("/commits/${RELEASE_TAG}") == 2
     assert "accepted_run_attempt" in publication
