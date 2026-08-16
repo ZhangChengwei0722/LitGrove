@@ -654,15 +654,25 @@ jobs:
                           actual_release_assets[name] = hashlib.sha256(response.read()).hexdigest()
                   except (OSError, TimeoutError) as error:
                       observation_errors.append(f"release_asset_{type(error).__name__}")
+          expected_release_names = set(expected_release_assets)
+          # Immutable pre-existing governance assets may belong to an earlier frozen
+          # authority identity; their drift is enforced by the Release step. For the
+          # publication-state classification we require the full name set and the
+          # exact accepted wheel/sdist bytes only.
           release_ok = (
               expected_available
               and release_present
-              and actual_release_assets == expected_release_assets
+              and set(actual_release_assets) == expected_release_names
+              and all(
+                  actual_release_assets.get(name) == expected_release_assets[name]
+                  for name in expected_release_names
+                  if name.endswith((".whl", ".tar.gz"))
+              )
           )
 
           pypi_files = []
           status = None
-          for attempt in range(6):
+          for attempt in range(18):
               status, pypi_payload = get_json(
                   "https://pypi.org/pypi/research-kb-core/json",
                   label=f"pypi_attempt_{attempt + 1}",
@@ -670,7 +680,9 @@ jobs:
               )
               if status == 200:
                   pypi_files = pypi_payload.get("releases", {}).get(expected_version, [])
-              if pypi_files or os.environ["PYPI_RESULT"] != "success" or attempt == 5:
+              if os.environ["PYPI_RESULT"] != "success" or attempt == 17:
+                  break
+              if expected_dist and len(pypi_files) >= len(expected_dist) and pypi_files:
                   break
               time.sleep(10)
           pypi_present = bool(pypi_files)
