@@ -216,7 +216,7 @@ jobs:
           echo "artifact_service_digest=$service_digest" >> "$GITHUB_OUTPUT"
 
       - name: Download the exact accepted candidate artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ steps.service.outputs.artifact_id }}
           run-id: ${{ inputs.accepted_run_id }}
@@ -319,7 +319,7 @@ jobs:
           persist-credentials: false
 
       - name: Download verified publication payload
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.verify-accepted-bytes.outputs.payload_id }}
           run-id: ${{ github.run_id }}
@@ -437,7 +437,7 @@ jobs:
           persist-credentials: false
 
       - name: Download verified publication payload
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.verify-accepted-bytes.outputs.payload_id }}
           run-id: ${{ github.run_id }}
@@ -531,7 +531,7 @@ jobs:
 
       - name: Download verified payload when authority verification succeeded
         if: needs.verify-accepted-bytes.result == 'success'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.verify-accepted-bytes.outputs.payload_id }}
           run-id: ${{ github.run_id }}
